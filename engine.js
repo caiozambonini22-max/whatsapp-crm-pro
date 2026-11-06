@@ -137,7 +137,7 @@
       const tr = rule.trigger || {};
       const okKind = ev.kind === 'enter' ? (tr.mode === 'enter' || tr.mode === 'delay') : (tr.mode === 'leave');
       if (!okKind || !(rule.funnel || []).some(f => fkey(f) === ev.key)) return;
-      const open = e => e.ruleId === rule.id && e.nk === ev.nk && ['waiting', 'stale', 'asked', 'approval'].includes(e.state);
+      const open = e => e.ruleId === rule.id && e.nk === ev.nk && ['waiting', 'stale', 'asked', 'approval', 'sending'].includes(e.state);
       if (enrs.some(open) || out.some(open)) return;
       out.push({ id: 'e' + now + Math.floor(Math.random() * 99999), ruleId: rule.id, contact: ev.n, nk: ev.nk, state: 'waiting', enteredAt: now, dueAt: dueAtFor(rule, now), ignoreInUntil: 0, fails: 0, history: [], from: ev.key });
     }));
@@ -452,7 +452,7 @@
     let created = 0;
     await mutateEnr(list => {
       r.left.forEach(ev => list.forEach(e => {
-        if (!['waiting', 'stale', 'asked', 'approval'].includes(e.state) || e.nk !== ev.nk) return;
+        if (!['waiting', 'stale', 'asked', 'approval', 'sending'].includes(e.state) || e.nk !== ev.nk) return;
         const rule = rules.find(x => x.id === e.ruleId); if (!rule || (rule.trigger || {}).mode === 'leave' || !safetyOf(rule).stopOnFunnelExit) return;
         if (!(rule.funnel || []).some(f => fkey(f) === ev.key)) return;
         const still = (rule.funnel || []).some(f => r.state.m[fkey(f)] && r.state.m[fkey(f)][e.nk]);
@@ -599,8 +599,10 @@
     return out;
   }
   async function sendOne(W, enr, st, rot) {
-    // devolve {ok, sent:boolean, text}
-    const before = (await readMsgs(enr.contact, 60)).filter(m => m.from === 'out').length;
+    // devolve {ok, sent:boolean, text}. Confirma pelo ID das mensagens (não pela contagem: a janela de 60 mensagens "anda").
+    const outIds = async () => new Set((await readMsgs(enr.contact, 120)).filter(m => m.from === 'out').map(m => m.id));
+    const beforeIds = await outIds();
+    const gotNew = async tries => { for (let i = 0; i < tries; i++) { await sleep(i ? 2500 : 1500); const now = await outIds(); for (const id of now) if (!beforeIds.has(id)) return true; } return false; };
     let ok = false, text = '';
     if (['text', 'pix', 'invite', 'contact', 'banner', 'list'].includes(st.type)) {
       text = st.type === 'text' ? pickVariation(st.variations, rot) : templateText(st);
@@ -611,10 +613,10 @@
       if (st.type === 'audio') { await actBridge('recording', enr.contact); await sleep(rndMs(3000, 6500)); await actBridge('paused', enr.contact); }   // “gravando áudio…” antes de mandar
       ok = await sendMedia(W, st); text = '[' + st.type + '] ' + (st.name || '');
     }
-    await sleep(2600);
-    const after = (await readMsgs(enr.contact, 60)).filter(m => m.from === 'out').length;
-    if (!ok || after <= before) return { ok: false, sent: false, why: 'Não consegui confirmar o envio (' + st.type + ')' };
-    return { ok: true, sent: true, text };
+    if (ok) { if (!(await gotNew(2))) await addLog('⚠️ Envio para "' + enr.contact + '" aceito pelo WhatsApp, mas não vi a mensagem na conversa — NÃO reenviei (confira)'); return { ok: true, sent: true, text }; }
+    // o envio disse que falhou: só confirma que realmente NÃO saiu antes de permitir nova tentativa
+    if (await gotNew(5)) return { ok: true, sent: true, text };
+    return { ok: false, sent: false, why: 'Não consegui confirmar o envio (' + st.type + ')' };
   }
   async function execAux(W, st, contact) {
     const t = st.type;
@@ -682,7 +684,19 @@
 
   // ── processa UM inscrito (um envio) ──
   let busy = false;
+  const INST = Math.random().toString(36).slice(2, 8);
   async function processEnrollment(enrId) {
+    // TRAVA: reserva o contato ("sending") antes de mexer em qualquer coisa → impossível enviar 2x o mesmo follow-up
+    const myId = INST + '-' + Date.now(); let claimed = false;
+    await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x && ['waiting', 'stale'].includes(x.state)) { x.state = 'sending'; x.claim = myId; x.claimAt = Date.now(); claimed = true; } });
+    if (!claimed) return;
+    await sleep(450 + Math.random() * 350);
+    const chk = (await getEnrs()).find(e => e.id === enrId);
+    if (!chk || chk.claim !== myId || chk.state !== 'sending') return;   // outra cópia reservou primeiro
+    try { await processEnrollmentInner(enrId); }
+    finally { await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x && x.claim === myId) { if (x.state === 'sending') x.state = 'waiting'; delete x.claim; } }); }
+  }
+  async function processEnrollmentInner(enrId) {
     const W = root.__wcrm; if (!W) return;
     const cfg = await getCfg();
     const enr = (await getEnrs()).find(e => e.id === enrId); if (!enr) return;
@@ -762,6 +776,7 @@
       else if (cfg.on && !wasOn) { wasOn = true; await markStale(now - (cfg.staleMin || 120) * 60e3); }
       else if (!cfg.on) wasOn = false;
       await mutateRt(r => { r.lastAlive = now; });
+      await mutateEnr(l => { l.forEach(e => { if (e.state === 'sending' && now - (e.claimAt || 0) > 15 * 60e3) { e.state = 'stale'; delete e.claim; } }); });
       await trackAndEnroll();
       await replyScan();
       const enrs = await getEnrs(), rt = await getRt();
@@ -879,6 +894,7 @@
   }
   async function bulkTick() {
     if (busy) return;
+    let mine = false;
     try {
       if (!root.__wcrm || !document.querySelector('#pane-side')) return;
       const b = await getBulk(); const job = b.jobs.find(j => j.status === 'running'); if (!job) return;
@@ -886,8 +902,8 @@
       const g = bulkGate(job, rt, cfg, Date.now());
       if (job.waitWhy !== (g.go ? '' : g.why)) await mutateBulk(x => { const j = x.jobs.find(y => y.id === job.id); if (j) j.waitWhy = g.go ? '' : g.why; });
       if (!g.go) return;
-      busy = true; await bulkProcess(job.id);
-    } catch (e) { console.error('[WCRM][massa] erro', e); } finally { busy = false; }
+      if (busy) return; busy = true; mine = true; await bulkProcess(job.id);
+    } catch (e) { console.error('[WCRM][massa] erro', e); } finally { if (mine) busy = false; }
   }
   // lista de contatos disponíveis para escolher (vem da ponte do WhatsApp)
   async function bulkSources() {

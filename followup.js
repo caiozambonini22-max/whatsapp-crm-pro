@@ -259,7 +259,7 @@
     let eta = Math.max(now, rt.nextSendAfter || 0);
     const rn = id => (cfg.rules.find(r => r.id === id) || {}).name || '(apagado)';
     const items = waiting.map(e => { const when = Math.max(eta, e.dueAt); eta = when + avg * 60e3; return { e, when }; });
-    $bd.innerHTML = '<div class="card"><div class="meta"><b>' + (cfg.on ? '▶ Ligado' : '⏸ Desligado') + '</b> · Hoje: <b>' + sentToday + '/' + cfg.dailyCap + '</b> · Janela ' + esc(cfg.winStart) + '–' + esc(cfg.winEnd) + ' · Intervalo: <b>' + (q.mode === 'fixed' ? q.fixedMin + ' min (fixo)' : q.minMin + '–' + q.maxMin + ' min (aleatório)') + '</b>'
+    $bd.innerHTML = '<div class="card"><div class="meta"><b>' + (cfg.on ? '▶ Ligado' : '⏸ Desligado') + '</b> · Hoje: <b>' + sentToday + '/' + cfg.dailyCap + '</b> · Janela ' + esc(cfg.winStart) + '–' + esc(cfg.winEnd) + ' · Intervalo: <b>' + (q.mode === 'fixed' ? fmtMin(q.fixedMin) + ' (sempre igual)' : 'varia entre ' + fmtMin(q.minMin) + ' e ' + fmtMin(q.maxMin)) + '</b>'
       + '<br>Estado: ' + esc(rt.state || '—') + (rt.nextSendAfter > now ? ' · próximo envio após <b>' + hm(rt.nextSendAfter) + '</b>' : '') + '</div></div>'
       + (appr.length ? '<div class="h3">✅ Aguardando sua aprovação (' + appr.length + ')</div>' + appr.map(e => '<div class="qi"><div class="g"><div class="t">' + esc(e.contact) + '</div><div class="s">' + esc(rn(e.ruleId)) + '</div></div><button class="pri sm" data-a="dec" data-id="' + e.id + '" data-c="approve" style="padding:6px 14px;font-size:12px">Aprovar envio</button><button class="sec sm red" data-a="dec" data-id="' + e.id + '" data-c="cancel">Cancelar</button></div>').join('') : '')
       + (stale.length ? '<div class="h3">⏰ Atrasados — aguardam sua decisão (' + stale.length + ')</div><div class="warn">O computador ficou desligado ou o envio ficou parado. <b>Nada disso foi enviado.</b> Escolha o que fazer:<div class="row" style="margin-top:8px"><button class="pri sm" data-a="all" data-from="stale" data-c="release" style="padding:6px 14px;font-size:12px">Liberar todos na fila (espaçados)</button><button class="sec sm" data-a="all" data-from="stale" data-c="reset">Resetar o tempo de todos</button><button class="sec sm red" data-a="all" data-from="stale" data-c="cancel">Cancelar todos</button></div></div>'
@@ -289,6 +289,7 @@
 
   // ── ajustes ──
   // campo de intervalo com unidade (segundos/minutos); guarda sempre em minutos
+  const fmtMin = m => { const t = Math.round((+m || 0) * 60); const mm = Math.floor(t / 60), ss = t % 60; return mm ? (mm + ' min' + (ss ? ' ' + ss + ' s' : '')) : ss + ' s'; };
   function qf(key, q) {
     const u = (q.units || {})[key] === 's' ? 's' : 'm'; const v = u === 's' ? Math.round((q[key] || 0) * 60) : q[key];
     return '<input type="number" min="1" step="1" data-s="' + key + '" value="' + esc(v) + '" style="width:80px"> <select data-su="' + key + '" style="width:105px"><option value="m"' + (u === 'm' ? ' selected' : '') + '>minutos</option><option value="s"' + (u === 's' ? ' selected' : '') + '>segundos</option></select>';
@@ -296,10 +297,11 @@
   function renderSettings() {
     const c = cache.cfg, q = c.queue;
     $bd.innerHTML = '<div class="info" style="margin-top:0">Estas regras valem para <b>todos</b> os follow ups. Elas existem para NUNCA sair vários envios de uma vez.</div>'
-      + '<div class="h3">Intervalo entre envios (fila)</div><div class="card">'
-      + '<label class="rad"><input type="radio" name="qm" data-s="qmode" value="random"' + (q.mode === 'random' ? ' checked' : '') + '>Aleatório entre ' + qf('minMin', q) + ' e ' + qf('maxMin', q) + '</label>'
-      + '<label class="rad"><input type="radio" name="qm" data-s="qmode" value="fixed"' + (q.mode === 'fixed' ? ' checked' : '') + '>Manual: sempre ' + qf('fixedMin', q) + ' entre um envio e outro</label>'
-      + '<div class="meta">Mínimo absoluto: 10 segundos.</div></div>'
+      + '<div class="h3">Intervalo entre um contato e o próximo (fila única)</div><div class="card">'
+      + '<div class="meta" style="margin:0 0 10px">Existe <b>uma fila só</b> para todos os follow ups: o robô atende <b>um contato por vez</b> e só começa o próximo depois que o anterior terminou <b>todo o roteiro</b> e o intervalo abaixo passou. Dois envios nunca saem juntos, nem de follow ups diferentes.</div>'
+      + '<label class="rad"><input type="radio" name="qm" data-s="qmode" value="random"' + (q.mode === 'random' ? ' checked' : '') + '>🎲 <b>Variável (recomendado)</b> — cada espera é sorteada entre ' + qf('minMin', q) + ' e ' + qf('maxMin', q) + '</label>'
+      + '<label class="rad"><input type="radio" name="qm" data-s="qmode" value="fixed"' + (q.mode === 'fixed' ? ' checked' : '') + '>⏱ <b>Fixo</b> — sempre ' + qf('fixedMin', q) + ' entre um contato e o outro</label>'
+      + '<div class="meta">Variável parece mais natural para o WhatsApp (ninguém manda mensagem em intervalo exato de relógio). Mesmo no variável, o sorteio nunca fica abaixo do mínimo. Mínimo absoluto: 10 segundos.</div></div>'
       + '<div class="h3">Horário permitido</div><div class="card"><label class="rad" style="padding-top:0"><input type="checkbox" data-s="win24"' + (c.win24 ? ' checked' : '') + '>Sem limite de horário (24 h — enviar a qualquer hora, inclusive de madrugada)</label><div class="row">Das <input type="time" data-s="winStart" value="' + esc(c.winStart) + '"> às <input type="time" data-s="winEnd" value="' + esc(c.winEnd) + '"></div><div style="margin-top:10px">'
       + DAYS.map((d, i) => '<span class="chip' + (c.days.includes(i) ? '' : '" style="opacity:.4') + '" data-a="day" data-d="' + i + '" style="cursor:pointer;' + '">' + d + '</span>').join('') + '</div></div>'
       + '<div class="h3">Limites</div><div class="card"><div class="row"><input type="number" min="1" data-s="dailyCap" value="' + esc(c.dailyCap) + '" style="width:90px"> por dia &nbsp;·&nbsp; <input type="number" min="1" data-s="hourlyCap" value="' + esc(c.hourlyCap) + '" style="width:90px"> por hora</div></div>'
