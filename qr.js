@@ -54,7 +54,7 @@
   .sw{width:46px;height:24px;border-radius:99px;background:#3a444a;position:relative;cursor:pointer;flex:none} .sw::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.15s} .sw.on{background:var(--acc)} .sw.on::after{left:25px}
   html,body{min-width:0} .sec>.scroll,.cr-body,#msgs-body{min-height:0!important} .creator{position:fixed!important;inset:0;height:100vh;max-height:100vh;overflow:hidden} .creator{display:none} .creator.open{display:block!important} .creator .cr-hdr{position:absolute;top:0;left:0;right:0;height:46px;box-sizing:border-box} .creator .cr-body{position:absolute!important;top:46px;bottom:0;left:0;right:0;overflow-y:scroll!important;padding:12px 6px 90px 14px!important;box-sizing:border-box;min-height:0} #msgs-body{overflow-y:scroll!important}
   .qc .ctr{position:sticky;bottom:-12px;padding:10px 0 6px;background:linear-gradient(transparent,#1a2530 35%);z-index:5}
-  .qr-row{font-size:15.5px!important;padding:9px 8px!important;cursor:pointer} .qr-row .nm{font-size:15.5px!important;font-weight:500} .qg-h{font-size:15.5px!important} .qr-row .ic{font-size:17px} .qr-row button{font-size:17px!important}
+  .qr-row.picked{background:color-mix(in srgb,var(--acc) 25%,transparent)} #msgs-body{padding-bottom:70px} .qr-row{font-size:15.5px!important;padding:9px 8px!important;cursor:pointer} .qr-row .nm{font-size:15.5px!important;font-weight:500} .qg-h{font-size:15.5px!important} .qr-row .ic{font-size:17px} .qr-row button{font-size:17px!important}
   .qr-pills .chip{font-size:14px!important;padding:6px 14px!important} .qc .btn,.qr-pills .chip{color:var(--acc-fg,#fff)!important}
   html.th-light,html.th-white{filter:invert(1) hue-rotate(180deg)} html.th-light img,html.th-light video,html.th-light audio,html.th-white img,html.th-white video,html.th-white audio{filter:invert(1) hue-rotate(180deg)}
   html.th-black,html.th-black body,html.th-black .app,html.th-black .creator,html.th-black .qc .card,html.th-black .qg{background-color:#000}
@@ -73,6 +73,7 @@
   try { chrome.storage.local.get('wcrm_acc', o => { if (o.wcrm_acc) window.__applyAcc(o.wcrm_acc); }); chrome.storage.onChanged.addListener((c, a) => { if (a === 'local' && c.wcrm_acc && c.wcrm_acc.newValue) window.__applyAcc(c.wcrm_acc.newValue); if (0) document.documentElement.style.setProperty('--acc', c.wcrm_acc.newValue); }); } catch (e) {}
 
   // ── mídia fora do estado (cada arquivo numa chave própria do chrome.storage; o estado fica leve) ──
+  let selMode = false; const sel = new Set();
   const MK = 'wcrm_mf_';
   const mediaPut = (key, d) => new Promise(r => { try { chrome.storage.local.set({ [key]: d }, () => r(!chrome.runtime.lastError)); } catch (e) { r(false); } });
   const mediaGet = key => new Promise(r => { try { chrome.storage.local.get(key, o => r(o && o[key])); } catch (e) { r(null); } });
@@ -111,10 +112,11 @@
       + '<select class="chip' + (typeFilter !== 'all' ? ' on' : '') + '" id="flt-type">' + TYPE_OPTS.map(([v, l]) => '<option value="' + v + '"' + (typeFilter === v ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>'
       + '<button class="chip' + (activeFilter === 'nocat' ? ' on' : '') + '" data-filter="nocat">Sem Categoria</button>'
       + '<select class="chip' + (isCat ? ' on' : '') + '" id="flt-cat"><option value="">Por Categoria</option>' + catOpts + '</select>'
-      + '<button class="chip' + (activeFilter === 'top' ? ' on' : '') + '" data-filter="top">Mais Usadas</button>';
+      + '<button class="chip' + (activeFilter === 'top' ? ' on' : '') + '" data-filter="top">Mais Usadas</button>'
+      + '<button class="chip' + (selMode ? ' on' : '') + '" data-selmode="1">☑ Selecionar</button>';
   };
   window.renderMC = function (m) {
-    return '<div class="qr-row" data-id="' + m.id + '"><span class="ic">' + TYPE_ICO(m.actions) + '</span><span class="nm" title="' + E(m.label) + '">' + E(m.label) + '</span>'
+    return '<div class="qr-row' + (selMode && sel.has(m.id) ? ' picked' : '') + '" data-id="' + m.id + '">' + (selMode ? '<input type="checkbox" class="qr-ck" ' + (sel.has(m.id) ? 'checked' : '') + ' style="width:18px;height:18px;flex:none;accent-color:var(--acc)">' : '') + '<span class="ic">' + TYPE_ICO(m.actions) + '</span><span class="nm" title="' + E(m.label) + '">' + E(m.label) + '</span>'
       + '<button data-dots="' + m.id + '" title="Mais opções">•••</button><button data-eye="' + m.id + '" title="Pré-visualizar">👁</button><button class="go" data-send="' + m.id + '" title="Enviar">▷</button></div>'
       + '<div class="qr-prev" id="mc-exp-' + m.id + '" style="display:none"></div>';
   };
@@ -143,8 +145,30 @@
         + (k.indexOf('__') === 0 ? '' : '<button data-editcat="' + k + '" title="Editar categoria">✏️</button>') + '<span>' + (closed ? '▾' : '▴') + '</span></div><div class="qg-b">' + items.map(renderMC).join('') + '</div></div>';
     }).join('');
   };
+  function drawSelBar() {
+    let b = document.getElementById('qr-selbar');
+    if (!selMode) { if (b) b.remove(); return; }
+    if (!b) { b = document.createElement('div'); b.id = 'qr-selbar'; b.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:90;display:flex;gap:8px;align-items:center;padding:10px 12px;background:#0d1114;border-top:1px solid #384046;font-size:14px;color:#e9edef'; document.body.appendChild(b); }
+    b.innerHTML = '<span style="flex:1"><b>' + sel.size + '</b> selecionada(s)</span><button class="btn g" data-sb="all" style="padding:7px 10px">Todas</button><button class="btn" data-sb="del" style="padding:7px 12px;background:#e53935;color:#fff"' + (sel.size ? '' : ' disabled') + '>🗑 Excluir</button><button class="btn g" data-sb="off" style="padding:7px 10px">Cancelar</button>';
+  }
+  document.addEventListener('click', async e => {
+    const t = e.target.closest('[data-selmode],[data-sb]'); if (!t) return;
+    if (t.dataset.selmode !== undefined) { selMode = !selMode; sel.clear(); renderPills(); renderMsgs(); drawSelBar(); return; }
+    const a = t.dataset.sb;
+    if (a === 'off') { selMode = false; sel.clear(); renderPills(); renderMsgs(); drawSelBar(); }
+    if (a === 'all') { const ids = [...document.querySelectorAll('#msgs-body .qr-row')].map(r => +r.dataset.id); const all = ids.every(i => sel.has(i)); ids.forEach(i => all ? sel.delete(i) : sel.add(i)); renderMsgs(); drawSelBar(); }
+    if (a === 'del' && sel.size) {
+      if (!confirm('Excluir ' + sel.size + ' resposta(s) rápida(s)? Não dá para desfazer.')) return;
+      const gone = msgs.filter(m => sel.has(m.id)); msgs = msgs.filter(m => !sel.has(m.id));
+      const still = new Set(); msgs.forEach(m => (m.actions || []).forEach(x => { if (x.fileKey) still.add(x.fileKey); }));
+      const keys = []; gone.forEach(m => (m.actions || []).forEach(x => { if (x.fileKey && !still.has(x.fileKey)) keys.push(x.fileKey); }));
+      try { if (keys.length) await new Promise(r => chrome.storage.local.remove(keys, r)); } catch (x) {}
+      selMode = false; sel.clear(); renderPills(); renderMsgs(); drawSelBar(); try { saveAutoBackup(); } catch (x) {} toast('🗑 ' + gone.length + ' excluída(s)');
+    }
+  }, true);
   // clique em cabeçalho/itens da lista (captura antes do handler antigo)
   $q('msgs-body').addEventListener('click', e => {
+    if (selMode) { const rw = e.target.closest('.qr-row'); if (rw) { e.stopImmediatePropagation(); e.preventDefault(); const id = +rw.dataset.id; if (sel.has(id)) sel.delete(id); else sel.add(id); renderMsgs(); drawSelBar(); return; } }
     const rowTxt = e.target.closest('.qr-row .nm, .qr-row .ic'); if (rowTxt) { e.stopImmediatePropagation(); const rw = rowTxt.closest('.qr-row'); window.parent.postMessage({ type: 'QUICK_RUN', id: +rw.dataset.id }, '*'); return; }
     const ec = e.target.closest('[data-editcat]'); if (ec) { e.stopImmediatePropagation(); openCreator(null, 'cat', ec.dataset.editcat); return; }
     const tg = e.target.closest('[data-toggle]'); if (tg) { e.stopImmediatePropagation(); const k = tg.dataset.toggle; window.__qrClosed = window.__qrClosed || {}; window.__qrClosed[k] = !window.__qrClosed[k]; renderMsgs(); return; }
