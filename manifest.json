@@ -1,0 +1,65 @@
+{
+  "manifest_version": 3,
+  "name": "WhatsApp CRM Pro",
+  "version": "4.47",
+  "description": "CRM completo para WhatsApp Web",
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "downloads",
+    "unlimitedStorage"
+  ],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "https://zambonini-crm.vercel.app/*",
+    "https://api.github.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "content.js",
+        "engine.js",
+        "layout.js",
+        "followup.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "inject.js"
+      ],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "crm.html",
+        "icons/*"
+      ],
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ]
+    }
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwCqmaakYuMyJU8+e8nZFfnEy1etrqUIF/VwuYPcLYKZNYKiRrEHv5LxllNaLRCUOTWaZMZSuDDdgpqAVFaEiQIAK/guFFlUcicae5q2pdYiCt3/otO1w/xt/C+JndQEVOEhVYI5VW6t/gGaM+Z8rlm75lTp3nDKO1yHkjZJMl/lHgYpXARFudw39wPkR8eWsf7yVoX+qWchmy7Naoge40CtuBg5/z12MvHBxziSf86gKQzH6KsFZzDnAimhu8E/HOToNT/hr/fFIVvI5TPopqoBLpx5NXRivbOyaFa4deS7bS5vZ/bc5dr1q63HW4vr9fQIPyAu+eiQQr18nTKPr6wIDAQAB"
+}

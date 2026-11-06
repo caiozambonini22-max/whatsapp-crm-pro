@@ -1,0 +1,24 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Atualizar extensão</title>
+<style>
+body{margin:0;background:#0d0f11;color:#e9edef;font-family:'Segoe UI',Arial,sans-serif;display:flex;justify-content:center;padding:30px 16px}
+.box{width:min(640px,100%);background:#14181c;border:1px solid #2a3238;border-radius:16px;padding:22px}
+h1{margin:0 0 4px;font-size:22px;color:#d4af37} p{color:#aebac1;font-size:14px;line-height:1.5}
+label{display:block;font-size:12px;color:#8696a0;margin:14px 0 4px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+input{width:100%;box-sizing:border-box;background:#0f1316;color:#e9edef;border:1px solid #38424a;border-radius:9px;padding:10px 12px;font-size:14px}
+button{background:#d4af37;color:#111;border:none;border-radius:10px;padding:11px 20px;font-weight:800;font-size:14px;cursor:pointer;margin:10px 8px 0 0}
+button.sec{background:#222a30;color:#e9edef;border:1px solid #38424a;font-weight:600}
+button:disabled{opacity:.5;cursor:default}
+.st{margin-top:16px;padding:12px 14px;border-radius:10px;background:#1a2025;border:1px solid #2a3238;font-size:14px;white-space:pre-wrap;line-height:1.55}
+.ok{border-color:#166534;color:#bbf7d0}.bad{border-color:#7f1d1d;color:#fecaca}.new{border-color:#d4af37;color:#fde68a}
+</style></head><body><div class="box">
+<h1>🔄 Atualizar extensão</h1>
+<p>Versão instalada: <b id="cur"></b>. Aqui você baixa a versão mais nova direto do GitHub e a extensão se recarrega sozinha — sem excluir nada, e seus dados (etiquetas, follow ups, mensagens) ficam como estão.</p>
+<label>Repositório no GitHub (dono/nome)</label><input id="repo" placeholder="seu-usuario/whatsapp-crm-ext">
+<label>Branch</label><input id="branch" placeholder="main">
+<label>Token do GitHub (só se o repositório for privado — permissão "Contents: Read-only")</label><input id="token" type="password" placeholder="github_pat_…  (deixe vazio se for público)">
+<label>Pasta da extensão no seu computador</label>
+<div id="dir" style="font-size:14px;color:#aebac1">Nenhuma pasta escolhida</div>
+<button class="sec" id="pick">📁 Escolher a pasta da extensão</button>
+<div><button id="check">🔍 Verificar atualização</button><button id="go" disabled>⬇️ Atualizar agora</button></div>
+<div class="st" id="st">Preencha o repositório, escolha a pasta (uma vez só) e clique em Verificar.</div>
+</div><script src="update.js"></script></body></html>

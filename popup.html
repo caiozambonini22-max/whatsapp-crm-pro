@@ -1,0 +1,17 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<style>*{box-sizing:border-box;margin:0;padding:0;}body{width:220px;background:#1a2530;font-family:'Segoe UI',sans-serif;color:#e9edef;}.hdr{background:linear-gradient(135deg,#00a884,#017d63);padding:13px 14px;display:flex;align-items:center;gap:9px;}.ht{font-weight:700;font-size:13px;}.hs{font-size:10px;opacity:.8;margin-top:2px;}.body{padding:10px;}.btn{display:flex;align-items:center;gap:7px;width:100%;padding:9px 11px;border:none;border-radius:8px;color:white;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:6px;font-family:'Segoe UI',sans-serif;transition:filter .15s;}.btn:hover{filter:brightness(1.1);}.g{background:#00a884;}.b{background:#2563eb;}.p{background:#7c3aed;}.o{background:#ea580c;}.div{height:1px;background:#2a3942;margin:7px 0;}.row{display:flex;align-items:center;justify-content:space-between;padding:4px 2px;font-size:11px;color:#8696a0;}.dot{width:7px;height:7px;border-radius:50%;background:#00a884;}.foot{padding:7px 10px;font-size:10px;color:#8696a0;text-align:center;border-top:1px solid #2a3942;}</style>
+</head><body>
+<div class="hdr"><span style="font-size:20px;">⚡</span><div><div class="ht">WhatsApp CRM Pro</div><div class="hs">v2.0 — Ativo</div></div></div>
+<div class="body">
+<button class="btn g" onclick="go()">💬 Abrir WhatsApp Web</button>
+<button class="btn b" onclick="go()">📢 Envio em Massa</button>
+<button class="btn p" onclick="go()">🤖 Auto Atendimento</button>
+<button class="btn o" onclick="go()">🟢 Postar Status</button>
+<button class="btn" style="background:#d4af37;color:#111" onclick="chrome.tabs.create({url:chrome.runtime.getURL('update.html')});window.close();">🔄 Atualizar extensão</button>
+<div class="div"></div>
+<div class="row"><span>CRM ativo</span><span class="dot"></span></div>
+<div class="row"><span>Dados salvos localmente</span><span>🔒</span></div>
+</div>
+<div class="foot">Nenhum dado enviado para servidores externos</div>
+<script>function go(){chrome.tabs.query({url:'https://web.whatsapp.com/*'},t=>{if(t.length)chrome.tabs.update(t[0].id,{active:true});else chrome.tabs.create({url:'https://web.whatsapp.com'});window.close();});}</script>
+</body></html>

@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>WhatsApp CRM Pro</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',Arial,sans-serif;font-size:13px;background:#1a2530;color:#e9edef;}
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+/* HEADER */
+.hdr{background:#202c33;padding:9px 10px;display:flex;align-items:center;gap:6px;border-bottom:1px solid #2a3942;flex-shrink:0;}
+.hdr-title{color:#e9edef;font-weight:700;font-size:13px;flex:1;}
+#hdr-contact{color:#00a884;font-size:11px;font-weight:500;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.icon-btn{background:none;border:none;border-radius:6px;color:#8696a0;cursor:pointer;font-size:15px;padding:5px 7px;transition:all .15s;}
+.icon-btn:hover,.icon-btn.active{background:#00a884;color:white;}
+/* NAV */
+.nav{display:flex;background:#161d22;border-bottom:1px solid #2a3942;flex-shrink:0;}
+.ntab{flex:1;padding:9px 4px;text-align:center;color:#8696a0;font-size:10px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;user-select:none;}
+.ntab:hover{color:#e9edef;}.ntab.active{color:#00a884;border-bottom-color:#00a884;background:#1a2530;}
+/* SECTIONS */
+.sec{display:none;flex:1;flex-direction:column;overflow:hidden;}
+.sec.active{display:flex;}
+.scroll{flex:1;overflow-y:auto;padding:8px;}
+.scroll::-webkit-scrollbar{width:3px;}.scroll::-webkit-scrollbar-thumb{background:#2a3942;}
+/* FIELDS */
+.lbl{font-size:10px;color:#8696a0;text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin:10px 0 4px;}
+.lbl:first-child{margin-top:0;}
+.fi,.fs,.ft{width:100%;background:#202c33;border:1px solid #2a3942;border-radius:8px;padding:8px 10px;color:#e9edef;font-size:12px;font-family:inherit;outline:none;transition:border-color .15s;}
+.fi:focus,.fs:focus,.ft:focus{border-color:#00a884;}
+.fi::placeholder,.ft::placeholder{color:#8696a0;}
+.ft{resize:vertical;min-height:60px;}
+.fs{appearance:none;cursor:pointer;}.fs option{background:#202c33;}
+.btn{width:100%;padding:10px;background:#00a884;border:none;border-radius:9px;color:white;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;transition:background .15s;margin-top:10px;}
+.btn:hover{background:#017d63;}
+.btn.blue{background:#2563eb;}.btn.blue:hover{background:#1d4ed8;}
+.btn.red{background:#e74c3c;}.btn.red:hover{background:#c0392b;}
+.btn.outline{background:transparent;border:1px solid #00a884;color:#00a884;margin-top:6px;}.btn.outline:hover{background:#00a88420;}
+.btn.sm{padding:6px 12px;width:auto;font-size:11px;margin-top:0;}
+.divider{height:1px;background:#2a3942;margin:10px 0;}
+/* SEARCH */
+.sbar{padding:8px 10px;border-bottom:1px solid #2a3942;display:flex;gap:6px;flex-shrink:0;background:#202c33;}
+.sbar input{flex:1;background:#2a3942;border:none;border-radius:8px;padding:7px 10px;color:#e9edef;font-size:12px;outline:none;font-family:inherit;}
+.sbar input::placeholder{color:#8696a0;}
+.add-btn{background:#00a884;border:none;border-radius:7px;color:white;font-size:16px;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.add-btn:hover{background:#017d63;}
+/* PILLS — coloridas como WaSpeed */
+.pills{padding:7px 8px;display:flex;gap:5px;flex-wrap:wrap;border-bottom:1px solid #2a3942;flex-shrink:0;background:#161d22;}
+.pill{
+  padding:4px 10px;border-radius:20px;
+  border:1px solid transparent;
+  font-size:10px;font-weight:600;cursor:pointer;
+  font-family:inherit;transition:all .15s;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:4px;
+}
+.pill.p-all    {background:#00a88420;border-color:#00a88450;color:#00a884;}
+.pill.p-saudacao{background:#f59e0b20;border-color:#f59e0b50;color:#f59e0b;}
+.pill.p-produto {background:#3b82f620;border-color:#3b82f650;color:#60a5fa;}
+.pill.p-posVenda{background:#8b5cf620;border-color:#8b5cf650;color:#a78bfa;}
+.pill.p-garantia{background:#ef444420;border-color:#ef444450;color:#f87171;}
+.pill.p-promo   {background:#f9731620;border-color:#f9731650;color:#fb923c;}
+.pill.p-funil   {background:#06b6d420;border-color:#06b6d450;color:#22d3ee;}
+.pill.p-followup{background:#fbbf2420;border-color:#fbbf2450;color:#fbbf24;}
+/* estado ativo — sólido */
+.pill.active,.pill.p-all.active    {background:#00a884;border-color:#00a884;color:white;}
+.pill.p-saudacao.active{background:#f59e0b;border-color:#f59e0b;color:white;}
+.pill.p-produto.active {background:#3b82f6;border-color:#3b82f6;color:white;}
+.pill.p-posVenda.active{background:#8b5cf6;border-color:#8b5cf6;color:white;}
+.pill.p-garantia.active{background:#ef4444;border-color:#ef4444;color:white;}
+.pill.p-promo.active   {background:#f97316;border-color:#f97316;color:white;}
+.pill.p-funil.active   {background:#06b6d4;border-color:#06b6d4;color:white;}
+.pill.p-followup.active{background:#fbbf24;border-color:#fbbf24;color:black;}
+/* CATEGORY GROUPS */
+.cg{margin-bottom:1px;}
+.cg-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:pointer;transition:background .15s;user-select:none;}
+.cg-hdr:hover{background:#202c33;}
+.cg-title{display:flex;align-items:center;gap:6px;color:#e9edef;font-weight:500;font-size:12px;}
+.cg-chev{color:#8696a0;font-size:11px;transition:transform .2s;}
+.cg:not(.open) .cg-chev{transform:rotate(-90deg);}
+.cg-items{display:none;padding:0 6px 4px;}
+.cg.open .cg-items{display:block;}
+/* MSG CARD */
+.mc{background:#202c33;border-radius:8px;padding:9px 10px;margin-bottom:5px;border:1px solid transparent;transition:border-color .15s;}
+.mc:hover{border-color:#00a884;}
+.mc-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;}
+.mc-label{color:#e9edef;font-weight:500;font-size:12px;}
+.mc-right{display:flex;align-items:center;gap:3px;}
+.mc-badge{font-size:10px;background:#2a3942;color:#aebac1;padding:1px 6px;border-radius:10px;}
+.mc.script .mc-badge{background:#1a3a4a;color:#64b5f6;}
+.mc-prev{color:#8696a0;font-size:11px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:6px;}
+.mc-acts{display:flex;gap:3px;flex-wrap:wrap;margin-bottom:6px;}
+.atag{font-size:10px;background:#1a3a4a;color:#64b5f6;border-radius:4px;padding:2px 5px;}
+.mc-btns{display:flex;gap:5px;justify-content:flex-end;}
+.send-btn{background:#00a884;border:none;border-radius:6px;color:white;padding:5px 12px;font-size:11px;cursor:pointer;font-family:inherit;font-weight:600;transition:background .15s;}
+.send-btn:hover{background:#017d63;}
+.edit-btn{background:#2a3942;border:none;border-radius:6px;color:#aebac1;padding:5px 8px;font-size:11px;cursor:pointer;font-family:inherit;transition:background .15s;}
+.edit-btn:hover{background:#374952;}
+/* DROPDOWN */
+.dots-btn{background:none;border:none;color:#8696a0;cursor:pointer;font-size:15px;padding:2px 5px;border-radius:5px;letter-spacing:1px;transition:background .15s;line-height:1;}
+.dots-btn:hover{background:#2a3942;color:#e9edef;}
+.dd{position:fixed;background:#202c33;border:1px solid #2a3942;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.55);min-width:200px;z-index:9999;display:none;overflow:hidden;}
+.dd.open{display:block;}
+.ddi{display:flex;align-items:center;gap:10px;padding:10px 14px;color:#e9edef;font-size:12px;cursor:pointer;transition:background .12s;border-bottom:1px solid #1a2830;}
+.ddi:last-child{border-bottom:none;}
+.ddi:hover{background:#2a3942;}.ddi.danger{color:#e74c3c;}
+/* CONTACT */
+.cc-card{background:#202c33;border-radius:9px;padding:11px;margin-bottom:10px;display:flex;align-items:center;gap:9px;}
+.cc-av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;background:linear-gradient(135deg,#3498db,#2980b9);}
+.cc-name{color:#e9edef;font-weight:600;font-size:13px;}
+.cc-badge{display:none;margin-top:3px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;width:fit-content;}
+.tags-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;}
+.tag{border-radius:20px;padding:3px 9px;font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;}
+.tag-x{cursor:pointer;color:#8696a0;font-size:11px;}.tag-x:hover{color:#e74c3c;}
+.add-row{display:flex;gap:5px;margin-top:6px;}
+.add-row input{flex:1;background:#202c33;border:1px solid #2a3942;border-radius:6px;padding:6px 9px;color:#e9edef;font-size:11px;outline:none;font-family:inherit;}
+.add-row input:focus{border-color:#00a884;}
+.add-row button{background:#00a884;border:none;border-radius:6px;color:white;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;}
+.util-btn{display:block;width:100%;text-align:left;background:#202c33;border:1px solid #2a3942;border-radius:7px;color:#e9edef;font-size:12px;padding:9px 11px;cursor:pointer;font-family:inherit;margin-bottom:5px;transition:background .15s;}
+.util-btn:hover{background:#2a3942;}.util-btn.danger{color:#e74c3c;}
+/* CREATOR */
+.creator{display:none;position:absolute;inset:0;background:#1a2530;z-index:100;flex-direction:column;}
+.creator.open{display:flex;}
+.cr-hdr{background:#202c33;padding:10px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #2a3942;flex-shrink:0;}
+.cr-back{background:none;border:none;color:#00a884;font-size:17px;cursor:pointer;}
+.cr-title{color:#e9edef;font-weight:600;font-size:13px;}
+.cr-body{flex:1;overflow-y:auto;padding:12px;}
+/* ACTION CARD */
+.ac{background:#202c33;border-radius:9px;border:1px solid #2a3942;margin-bottom:7px;overflow:hidden;}
+.ac-hdr{display:flex;align-items:center;gap:7px;padding:8px 10px;background:#1a2d38;}
+.ac-ico{font-size:13px;}.ac-ttl{color:#e9edef;font-weight:600;font-size:12px;flex:1;}
+.ac-del{background:none;border:none;color:#c0392b;cursor:pointer;font-size:12px;font-family:inherit;}
+.ac-body{padding:9px 10px;}
+.tr{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:11px;color:#8696a0;flex-wrap:wrap;}
+.ti{width:48px;background:#2a3942;border:1px solid #374952;border-radius:6px;padding:4px 6px;color:#e9edef;font-size:12px;text-align:center;outline:none;font-family:inherit;}
+.ti:focus{border-color:#00a884;}
+.add-act-btn{width:100%;padding:7px;background:transparent;border:1px dashed #2a3942;border-radius:8px;color:#8696a0;font-size:12px;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;margin-top:4px;}
+.add-act-btn:hover{border-color:#00a884;color:#00a884;background:#00a88410;}
+.act-menu{background:#202c33;border:1px solid #2a3942;border-radius:9px;overflow:hidden;margin-top:4px;display:none;}
+.act-menu.open{display:block;}
+.am-sec{padding:6px 12px 2px;font-size:10px;color:#8696a0;text-transform:uppercase;letter-spacing:.5px;font-weight:600;}
+.am-opt{display:flex;align-items:center;gap:7px;padding:8px 12px;cursor:pointer;color:#aebac1;font-size:11px;transition:background .1s;border-bottom:1px solid #1a2830;background:#161d22;}
+.am-opt:last-child{border-bottom:none;}.am-opt:hover{background:#1e2b34;color:#e9edef;}
+/* MEDIA */
+.mg{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:8px;}
+.mt{position:relative;border-radius:8px;overflow:hidden;aspect-ratio:1;cursor:pointer;border:2px solid transparent;transition:border-color .15s;background:#202c33;}
+.mt:hover{border-color:#00a884;}
+.mt img,.mt video{width:100%;height:100%;object-fit:cover;}
+.mt .vo{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);font-size:18px;}
+.mt .md{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.65);border:none;border-radius:50%;width:18px;height:18px;color:white;font-size:10px;cursor:pointer;display:none;align-items:center;justify-content:center;font-family:inherit;}
+.mt:hover .md{display:flex;}
+.mt .mn{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.65);color:white;font-size:9px;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.drop{border:2px dashed #2a3942;border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:all .15s;margin-bottom:10px;}
+.drop:hover,.drop.ov{border-color:#00a884;background:#00a88412;}
+.sb2{background:#202c33;border-radius:8px;padding:9px 11px;margin-bottom:9px;}
+.sb-lbl{display:flex;justify-content:space-between;font-size:11px;color:#8696a0;margin-bottom:5px;}
+.sb-lbl span{color:#e9edef;font-weight:600;}
+.sb-trk{height:5px;background:#2a3942;border-radius:3px;overflow:hidden;}
+.sb-fill{height:100%;background:linear-gradient(90deg,#00a884,#00d4a8);border-radius:3px;transition:width .4s;}
+.tbar{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;}
+.tb{padding:4px 8px;border-radius:20px;border:1px solid #2a3942;background:transparent;color:#8696a0;font-size:10px;cursor:pointer;font-family:inherit;transition:all .15s;}
+.tb.active,.tb:hover{background:#00a884;border-color:#00a884;color:white;}
+/* MASS */
+.seg-list{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;}
+.seg-btn{padding:8px 11px;border-radius:8px;border:1px solid #2a3942;background:#202c33;color:#e9edef;font-size:12px;font-weight:500;cursor:pointer;text-align:left;font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:8px;}
+.seg-btn:hover{background:#2a3942;}.seg-btn.active{background:#2563eb20;border-color:#2563eb;color:#60a5fa;}
+.cc-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #1a2830;cursor:pointer;transition:background .12s;}
+.cc-row:hover{background:#202c33;}.cc-row.sel{background:#1d3a5f;}
+.chk{width:16px;height:16px;border-radius:50%;border:2px solid #2a3942;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;transition:all .15s;}
+.cc-row.sel .chk{background:#2563eb;border-color:#2563eb;color:white;}
+.cfg-card{background:#202c33;border-radius:8px;padding:10px;margin-bottom:8px;}
+.cfg-lbl2{font-size:10px;color:#8696a0;font-weight:600;text-transform:uppercase;margin-bottom:6px;}
+.cfg-row{display:flex;align-items:center;gap:6px;font-size:11px;color:#8696a0;flex-wrap:wrap;}
+.prow{display:flex;gap:6px;margin-bottom:10px;}
+.preset{padding:5px 11px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:all .15s;}
+.preset.g{background:#16a34a20;color:#4ade80;border-color:#16a34a40;}
+.preset.y{background:#ca8a0420;color:#fbbf24;border-color:#ca8a0440;}
+.preset.r{background:#dc262620;color:#f87171;border-color:#dc262640;}
+.preset.on{box-shadow:0 0 0 2px currentColor;}
+.prog-wrap{display:none;margin-top:8px;}
+.prog-wrap.show{display:block;}
+.prog-trk{height:5px;background:#1f2937;border-radius:3px;overflow:hidden;margin:5px 0;}
+.prog-fill{height:100%;background:linear-gradient(90deg,#2563eb,#60a5fa);border-radius:3px;transition:width .4s;}
+.prog-lbl{display:flex;justify-content:space-between;font-size:10px;color:#8696a0;}
+/* AUTO */
+.aa-item{background:#202c33;border-radius:9px;border:1px solid #2a3942;padding:12px;margin-bottom:7px;}
+.aa-name{color:#e9edef;font-weight:600;font-size:12px;margin-bottom:4px;}
+.aa-meta{color:#8696a0;font-size:11px;line-height:1.6;margin-bottom:8px;}
+.aa-meta strong{color:#aebac1;}
+.aa-foot{display:flex;align-items:center;gap:7px;}
+.tog{position:relative;display:inline-block;width:34px;height:18px;cursor:pointer;}
+.tog input{opacity:0;width:0;height:0;}
+.tog-sl{position:absolute;inset:0;background:#2a3942;border-radius:20px;transition:background .2s;}
+.tog-sl::before{content:'';position:absolute;width:12px;height:12px;left:3px;top:3px;background:white;border-radius:50%;transition:transform .2s;}
+.tog input:checked~.tog-sl{background:#00a884;}
+.tog input:checked~.tog-sl::before{transform:translateX(16px);}
+.tog-lbl{color:#8696a0;font-size:11px;}
+.aa-acts-row{margin-left:auto;display:flex;gap:5px;}
+.aa-act-btn{background:#2a3942;border:none;border-radius:6px;color:#aebac1;padding:4px 8px;font-size:11px;cursor:pointer;transition:background .15s;font-family:inherit;}
+.aa-act-btn:hover{background:#374952;color:#e9edef;}
+.aa-act-btn.del:hover{background:#e74c3c20;color:#e74c3c;}
+/* FU */
+.fu-item{background:#202c33;border-radius:9px;border:1px solid #2a3942;padding:12px;margin-bottom:7px;}
+.fu-badge{display:inline-flex;align-items:center;gap:4px;background:#1a3a4a;color:#64b5f6;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:600;margin-bottom:6px;}
+.fu-tag{background:#2563eb20;color:#60a5fa;border-radius:20px;padding:1px 8px;font-size:10px;font-weight:600;}
+/* SCHED */
+.si{background:#202c33;border-radius:9px;border:1px solid #2a3942;padding:11px;margin-bottom:6px;display:flex;align-items:center;gap:9px;}
+.si-ico{font-size:18px;flex-shrink:0;}
+.si-info{flex:1;min-width:0;}
+.si-title{color:#e9edef;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.si-meta{color:#8696a0;font-size:10px;margin-top:2px;}
+.si-time{background:#2563eb20;color:#60a5fa;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:600;flex-shrink:0;}
+.si-del{background:none;border:none;color:#8696a0;cursor:pointer;font-size:13px;padding:3px;border-radius:5px;transition:all .15s;font-family:inherit;}
+.si-del:hover{color:#e74c3c;background:#e74c3c20;}
+/* STATUS */
+.st-types{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;}
+.st-btn{flex:1;min-width:60px;padding:7px 4px;border-radius:8px;border:1px solid #2a3942;background:#202c33;color:#8696a0;font-size:10px;font-weight:600;cursor:pointer;text-align:center;transition:all .15s;font-family:inherit;}
+.st-btn.active{background:#00a88420;border-color:#00a884;color:#00a884;}
+.phone-pr{width:110px;height:194px;background:#0b141a;border-radius:16px;border:3px solid #374952;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;}
+.ph-in{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#8696a0;text-align:center;padding:8px;position:relative;}
+.ph-in img,.ph-in video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+.ph-ovl{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.75));color:white;padding:7px 6px 9px;font-size:9px;line-height:1.4;word-break:break-word;}
+.bg-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;align-items:center;}
+.bg-sw{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s;flex-shrink:0;}
+.bg-sw.on{border-color:#e9edef;transform:scale(1.15);}
+.aud-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;}
+.aud-btn{padding:4px 11px;border-radius:20px;border:1px solid #2a3942;background:transparent;color:#8696a0;font-size:10px;cursor:pointer;font-family:inherit;transition:all .15s;}
+.aud-btn.active{background:#00a884;border-color:#00a884;color:white;}
+.sch-row{display:flex;align-items:flex-start;gap:9px;background:#202c33;border-radius:8px;padding:10px;margin-bottom:10px;cursor:pointer;border:1px solid #2a3942;transition:border-color .15s;}
+.sch-row.on{border-color:#00a884;background:#00a88415;}
+.sch-dt{display:none;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.sch-dt.show{display:flex;}
+.sch-dt input{background:#161d22;border:1px solid #2a3942;border-radius:6px;padding:6px 8px;color:#e9edef;font-size:11px;outline:none;font-family:inherit;flex:1;min-width:90px;}
+.sch-dt input:focus{border-color:#00a884;}
+/* VAR CARDS */
+.var-card{background:#202c33;border-radius:8px;border:1px solid #2a3942;padding:10px;margin-bottom:6px;position:relative;}
+.var-num{position:absolute;top:8px;left:8px;background:#00a884;color:white;border-radius:50%;width:18px;height:18px;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.var-card textarea{width:100%;background:#161d22;border:1px solid #2a3942;border-radius:6px;padding:7px 9px 7px 28px;color:#e9edef;font-size:11px;font-family:inherit;outline:none;resize:vertical;min-height:55px;transition:border-color .15s;}
+.var-card textarea:focus{border-color:#00a884;}
+.var-card textarea::placeholder{color:#8696a0;}
+.var-foot{display:flex;justify-content:space-between;margin-top:5px;}
+/* KW */
+.kw-wrap{display:flex;flex-wrap:wrap;gap:4px;background:#202c33;border:1px solid #2a3942;border-radius:8px;padding:6px;min-height:36px;cursor:text;}
+.kw-wrap:focus-within{border-color:#00a884;}
+.kw-tag{background:#00a88430;color:#00a884;border-radius:20px;padding:2px 8px;font-size:11px;display:flex;align-items:center;gap:3px;}
+.kw-x{cursor:pointer;color:#8696a0;font-size:10px;}.kw-x:hover{color:#e74c3c;}
+.kw-inp{border:none;background:transparent;color:#e9edef;font-size:12px;outline:none;font-family:inherit;flex:1;min-width:70px;}
+.kw-inp::placeholder{color:#8696a0;}
+.time-inp{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:7px;}
+.t-unit{display:flex;align-items:center;gap:4px;}
+.t-unit input{width:50px;background:#202c33;border:1px solid #2a3942;border-radius:6px;padding:5px 7px;color:#e9edef;font-size:12px;text-align:center;outline:none;font-family:inherit;}
+.t-unit input:focus{border-color:#00a884;}
+.t-unit select{background:#202c33;border:1px solid #2a3942;border-radius:6px;padding:5px 6px;color:#e9edef;font-size:12px;outline:none;font-family:inherit;}
+.t-unit label{color:#8696a0;font-size:11px;}
+.mtabs{display:flex;border-bottom:1px solid #2a3942;margin-bottom:9px;}
+.mtab{flex:1;padding:8px;text-align:center;color:#8696a0;font-size:11px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;}
+.mtab.active{color:#00a884;border-bottom-color:#00a884;}
+.info-box{background:#1a3a4a;border:1px solid #2196f320;border-radius:7px;padding:9px 11px;margin-bottom:10px;font-size:11px;color:#8696a0;line-height:1.6;}
+.info-box strong{color:#64b5f6;}
+.empty{text-align:center;color:#8696a0;font-size:12px;padding:20px 12px;}
+.empty div{font-size:24px;margin-bottom:6px;}
+/* NOTIF */
+.notifs{position:fixed;bottom:12px;right:4px;width:330px;display:flex;flex-direction:column;gap:6px;z-index:99999;pointer-events:none;}
+.notif{background:#202c33;border:1px solid #00a884;border-radius:10px;padding:12px;pointer-events:all;animation:nIn .3s ease;}
+@keyframes nIn{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
+.notif.out{animation:nOut .25s ease forwards;}
+@keyframes nOut{to{opacity:0;transform:translateX(20px);}}
+.n-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;}
+.n-badge{background:#00a884;color:white;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;}
+.n-x{background:none;border:none;color:#8696a0;cursor:pointer;font-size:13px;font-family:inherit;}
+.n-name{color:#e9edef;font-weight:600;font-size:12px;margin-bottom:5px;}
+.n-msg{background:#161d22;border-radius:6px;padding:7px;color:#aebac1;font-size:11px;line-height:1.5;margin-bottom:8px;max-height:60px;overflow:hidden;}
+.n-btns{display:flex;gap:5px;}
+.n-open{flex:1;background:#00a884;border:none;border-radius:6px;color:white;padding:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
+.n-open:hover{background:#017d63;}
+.n-skip{background:#2a3942;border:none;border-radius:6px;color:#aebac1;padding:7px 10px;font-size:11px;cursor:pointer;font-family:inherit;}
+.mc-expanded{margin-top:6px;animation:fadeIn .15s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
+.mc-full-text{background:#161d22;border-radius:7px;padding:9px 10px;color:#e9edef;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow-y:auto;margin-bottom:4px;}
+.mc-full-text::-webkit-scrollbar{width:2px;}.mc-full-text::-webkit-scrollbar-thumb{background:#2a3942;}
+.mc-eye-btn{background:#2a3942;border:none;border-radius:6px;color:#aebac1;padding:5px 8px;font-size:13px;cursor:pointer;transition:background .15s;flex-shrink:0;}
+.mc-eye-btn:hover{background:#374952;color:#e9edef;}
+/* CRM TABS & LABELS SECTION */
+.crm-subnav{display:flex;background:#161d22;border-bottom:1px solid #2a3942;flex-shrink:0;}
+.crm-subtab{flex:1;padding:10px;text-align:center;color:#8696a0;font-size:11px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;}
+.crm-subtab:hover{color:#e9edef;}
+.crm-subtab.active{color:#00a884;border-bottom-color:#00a884;background:#1a2530;}
+/* CRM aba pills */
+.aba-pill{
+  padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;
+  cursor:pointer;border:1px solid transparent;transition:all .15s;
+  display:inline-flex;align-items:center;gap:5px;font-family:inherit;
+}
+.aba-pill:hover{filter:brightness(1.2);}
+.aba-pill.active{box-shadow:0 0 0 2px white;}
+/* Contact list items in CRM view */
+.crm-c-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-bottom:1px solid #1a2830;
+  cursor:pointer;transition:background .12s;
+}
+.crm-c-item:hover{background:#202c33;}
+.crm-c-av{
+  width:36px;height:36px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;color:white;
+}
+.crm-c-info{flex:1;min-width:0;}
+.crm-c-name{color:#e9edef;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.crm-c-meta{color:#8696a0;font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.crm-c-badges{display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;}
+.crm-c-badge{font-size:9px;padding:1px 6px;border-radius:10px;font-weight:600;}
+.crm-c-actions{display:flex;flex-direction:column;gap:4px;flex-shrink:0;}
+.crm-c-open{background:#00a884;border:none;border-radius:6px;color:white;padding:4px 8px;font-size:10px;cursor:pointer;font-family:inherit;font-weight:600;white-space:nowrap;}
+.crm-c-open:hover{background:#017d63;}
+.crm-c-move{background:#2a3942;border:none;border-radius:6px;color:#aebac1;padding:4px 8px;font-size:10px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.crm-c-move:hover{background:#374952;}
+/* New aba dialog */
+.aba-create{background:#202c33;border-radius:10px;border:1px solid #2a3942;padding:12px;margin:10px;}
+.aa-accord{border:1px solid #2a3942;border-radius:9px;margin-bottom:7px;overflow:hidden;}
+.aa-accord-hdr{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;cursor:pointer;background:#202c33;color:#e9edef;font-size:12px;font-weight:600;user-select:none;transition:background .15s;}
+.aa-accord-hdr:hover{background:#253038;}
+.aa-chev{color:#8696a0;font-size:11px;}
+.aa-accord-body{padding:10px 12px;background:#1a2530;}
+.aa-rules-section-title{font-size:10px;color:#8696a0;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:6px 0 6px;padding-bottom:4px;border-bottom:1px solid #2a3942;}
+.aa-rule-chk{display:flex;align-items:flex-start;gap:8px;color:#e9edef;font-size:12px;margin-bottom:7px;cursor:pointer;line-height:1.4;}
+.aa-rule-chk input{flex-shrink:0;margin-top:2px;accent-color:#00a884;}
+.aa-rule-radio{display:flex;align-items:flex-start;gap:8px;color:#e9edef;font-size:12px;margin-bottom:7px;cursor:pointer;line-height:1.4;}
+.aa-rule-radio input{flex-shrink:0;margin-top:2px;accent-color:#00a884;}
+/* Emoji picker */
+.emoji-picker-wrap{position:relative;display:inline-block;}
+.emoji-picker-btn{background:#2a3942;border:none;border-radius:6px;color:#e9edef;padding:5px 8px;font-size:14px;cursor:pointer;font-family:inherit;transition:background .15s;}
+.emoji-picker-btn:hover{background:#374952;}
+.emoji-picker{position:absolute;bottom:36px;left:0;background:#202c33;border:1px solid #2a3942;border-radius:10px;padding:8px;width:260px;display:none;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.5);}
+.emoji-picker.open{display:block;}
+.emoji-cats{display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap;}
+.emoji-cat{padding:3px 7px;border-radius:20px;border:1px solid #2a3942;background:transparent;color:#8696a0;font-size:10px;cursor:pointer;font-family:inherit;transition:all .15s;}
+.emoji-cat.active,.emoji-cat:hover{background:#00a884;border-color:#00a884;color:white;}
+.emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;max-height:140px;overflow-y:auto;}
+.emoji-grid::-webkit-scrollbar{width:2px;}.emoji-grid::-webkit-scrollbar-thumb{background:#2a3942;}
+.eitem{font-size:18px;cursor:pointer;padding:3px;border-radius:4px;text-align:center;transition:background .1s;}
+.eitem:hover{background:#2a3942;}
+#toast{position:fixed;bottom:12px;left:50%;transform:translateX(-50%) translateY(0);background:#00a884;color:white;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;z-index:99998;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(-6px);}
+::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-thumb{background:#2a3942;border-radius:2px;}
+
+/* ═══ SKIN v4.31 — layout em ícones, lista compacta, dourado da marca ═══ */
+:root{--gold:#d4af37;--gold2:#f1d77a;--bg:#14181c;--card:#1c2329;--line:#2a3238;}
+html,body{background:var(--bg);}
+.hdr{background:#0d0f11;border-bottom:1px solid var(--line);padding:8px 10px;gap:8px;}
+.hdr-logo{height:24px;width:auto;display:block;flex-shrink:0;}
+#hdr-contact{flex:1;text-align:right;color:var(--gold2);}
+.icon-btn:hover,.icon-btn.active{background:var(--gold);color:#111;}
+.nav{background:#0d0f11;padding:6px 6px 0;gap:2px;overflow-x:auto;border-bottom:1px solid var(--line);}
+.nav::-webkit-scrollbar{height:0;}
+.ntab{flex:0 0 auto;width:31px;height:31px;padding:0;display:flex;align-items:center;justify-content:center;font-size:15px;border-radius:9px 9px 0 0;border-bottom:2px solid transparent;filter:grayscale(.35);opacity:.8;}
+.ntab:hover{opacity:1;background:#1a2026;}
+.ntab.active{background:#1c2329;border-bottom-color:var(--gold);opacity:1;filter:none;}
+.sbar{background:#14181c;border-bottom:none;padding:10px 10px 4px;}
+.sbar input{background:#1c2329;border:1px solid var(--line);border-radius:10px;padding:9px 12px;}
+.add-btn{background:var(--gold);color:#111;border-radius:10px;width:34px;height:34px;font-weight:700;}
+.add-btn:hover{background:var(--gold2);}
+.pills{background:transparent;border:none;padding:4px 10px 8px;gap:6px;}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:9px;border:1px solid var(--line);background:#1c2329;color:#cfd6db;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.chip:hover{border-color:var(--gold);}
+.chip.on{background:var(--gold);border-color:var(--gold);color:#111;}
+select.chip{appearance:none;-webkit-appearance:none;padding-right:12px;}
+select.chip option{background:#1c2329;color:#e9edef;}
+/* lista compacta */
+.cg{margin:0 6px 4px;border-radius:10px;background:#181e23;border:1px solid var(--line);overflow:hidden;}
+.cg-hdr{padding:9px 11px;background:#1c2329;}
+.cg-title{font-size:12.5px;color:var(--gold2);}
+.cg-items{padding:0;}
+.mr{border-top:1px solid #20272d;}
+.mr-row{display:flex;align-items:center;gap:6px;padding:7px 8px 7px 10px;}
+.mr-row:hover{background:#1f272e;}
+.mr-ico{font-size:14px;width:20px;text-align:center;flex-shrink:0;}
+.mr-label{flex:1;min-width:0;color:#e9edef;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mr .dots-btn{color:#9aa5ad;font-size:15px;}
+.mr .mc-eye-btn{background:none;color:#9aa5ad;padding:3px 5px;}
+.mr .mc-eye-btn:hover{background:#2a3238;}
+.mr .send-btn{background:none;color:var(--gold);font-size:16px;padding:2px 7px;border-radius:7px;}
+.mr .send-btn:hover{background:var(--gold);color:#111;}
+.mr .mc-expanded{margin:0;padding:0 10px 9px 36px;}
+.tag-nome{background:#d4af3730;color:var(--gold2);border-radius:4px;padding:0 4px;font-size:11px;}
+/* acentos dourados nos botões principais */
+.btn{background:var(--gold);color:#111;}
+.btn:hover{background:var(--gold2);}
+.btn.blue,.btn.red,.btn.outline{color:#fff;}
+.btn.outline{color:var(--gold);border-color:var(--gold);background:transparent;}
+.btn.outline:hover{background:#d4af3718;}
+.lbl{color:#9aa5ad;}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <!-- HEADER -->
+  <div class="hdr">
+    <img src="icons/logo-wide.png" alt="Zambonini Imports" class="hdr-logo">
+    <div id="hdr-contact">Nenhum contato</div>
+    <button class="icon-btn" id="min-btn" title="Minimizar/expandir tudo">⊟</button>
+    <button class="icon-btn" id="close-panel" title="Fechar painel">✕</button>
+  </div>
+  <!-- NAV TABS -->
+  <div class="nav" id="main-nav">
+    <div class="ntab active" data-tab="msgs" title="Respostas rápidas">⚡</div>
+    <div class="ntab" data-tab="contact" title="Ficha do cliente e etiquetas">👤</div>
+    <div class="ntab" data-tab="crm-tabs" title="CRM: abas e etiquetas">📋</div>
+    <div class="ntab" data-tab="ladder" title="Follow-up em escada">🪜</div>
+    <div class="ntab" data-tab="mass" title="Envio em massa">📢</div>
+    <div class="ntab" data-tab="auto" title="Auto atendimento">🤖</div>
+    <div class="ntab" data-tab="followup" title="Follow-up por aviso">🔔</div>
+    <div class="ntab" data-tab="sched" title="Agendamentos">🕐</div>
+    <div class="ntab" data-tab="status" title="Status">🟢</div>
+    <div class="ntab" data-tab="media" title="Mídia">🖼️</div>
+    <div class="ntab" data-tab="backup" title="Backup">💾</div>
+  </div>
+  <!-- MSGS SECTION -->
+  <div class="sec active" id="sec-msgs">
+    <div class="sbar">
+      <input id="msg-search" placeholder="🔍 Pesquisar mensagem...">
+      <button class="add-btn" id="btn-new-msg" title="Nova">＋</button>
+    </div>
+    <div class="pills" id="pills"></div>
+    <!-- WA Labels pills (loaded from WA Business) -->
+    <div id="wa-labels-pills" style="padding:5px 8px;display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid #2a3942;flex-shrink:0;background:#1a2530;min-height:0;"></div>
+    <div class="scroll" id="msgs-body"></div>
+  </div>
+  <!-- CRM TABS & LABELS SECTION -->
+  <div class="sec" id="sec-crm-tabs">
+    <!-- Sub-nav: Abas / Etiquetas -->
+    <div class="crm-subnav" id="crm-subnav">
+      <div class="crm-subtab active" data-subtab="abas">📂 Abas CRM</div>
+      <div class="crm-subtab" data-subtab="etiquetas">🏷️ Etiquetas WA</div>
+    </div>
+    <!-- Search + Add Aba -->
+    <div class="sbar" id="crm-tabs-sbar">
+      <input id="crm-tabs-search" placeholder="🔍 Pesquisar contato...">
+      <button class="add-btn" id="btn-new-crm-tab" title="Nova aba">＋</button>
+    </div>
+    <!-- Active filter banner -->
+    <div id="crm-active-filter" style="display:none;padding:6px 10px;background:#00a88415;border-bottom:1px solid #00a88430;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <span id="crm-filter-label" style="color:#00a884;font-size:11px;font-weight:600;"></span>
+      <button id="crm-clear-filter" style="background:none;border:none;color:#8696a0;cursor:pointer;font-size:12px;font-family:inherit;">✕ Limpar</button>
+    </div>
+    <div id="wa-sync-bar" style="display:none;padding:7px 10px;align-items:center;gap:8px;border-bottom:1px solid #2a3942;background:#161d22;flex-shrink:0;">
+      <button id="btn-sync-labels" class="add-btn" style="width:auto;padding:5px 10px;font-size:11px;" title="Ler as etiquetas do WhatsApp agora">🔄 Sincronizar etiquetas</button>
+      <span id="wa-sync-status" style="font-size:10.5px;color:#8696a0;flex:1;">Automático a cada poucos segundos</span>
+    </div>
+    <!-- Abas pills -->
+    <div id="crm-abas-pills" style="padding:8px;display:flex;flex-wrap:wrap;gap:5px;border-bottom:1px solid #2a3942;flex-shrink:0;background:#161d22;"></div>
+    <!-- Etiquetas pills (hidden by default) -->
+    <div id="crm-labels-pills" style="display:none;padding:8px;flex-wrap:wrap;gap:5px;border-bottom:1px solid #2a3942;flex-shrink:0;background:#161d22;"></div>
+    <!-- Contact list -->
+    <div class="scroll" id="crm-contact-list"></div>
+  </div>
+
+  <!-- MEDIA SECTION -->
+  <div class="sec" id="sec-media">
+    <div class="scroll">
+      <div class="sb2">
+        <div class="sb-lbl"><span>Armazenamento local</span><span id="stor-used">0 MB</span></div>
+        <div class="sb-trk"><div class="sb-fill" id="stor-fill" style="width:0%"></div></div>
+      </div>
+      <div class="drop" id="drop-zone">
+        <div style="font-size:24px;margin-bottom:5px;">📁</div>
+        <p style="color:#8696a0;font-size:11px;line-height:1.6;"><strong style="color:#00a884;">Clique ou arraste</strong><br>Imagens · Vídeos · Áudios · Docs</p>
+        <input type="file" id="file-inp" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx" style="display:none">
+      </div>
+      <div class="tbar" id="media-type-bar">
+        <button class="tb active" data-mf="all">Todos</button>
+        <button class="tb" data-mf="image">🖼️</button>
+        <button class="tb" data-mf="video">🎥</button>
+        <button class="tb" data-mf="audio">🎤</button>
+        <button class="tb" data-mf="doc">📄</button>
+      </div>
+      <div class="mg" id="media-grid"></div>
+    </div>
+  </div>
+  <!-- CONTACT SECTION -->
+  <div class="sec" id="sec-contact">
+    <div class="scroll">
+      <div class="cc-card">
+        <div class="cc-av" id="cc-av">👤</div>
+        <div><div class="cc-name" id="cc-name">Nenhum contato</div><div class="cc-badge" id="cc-badge"></div></div>
+      </div>
+      <div class="lbl">Aba do CRM</div>
+      <select class="fs" id="cc-tab">
+        <option value="">Sem aba</option>
+        <option>Primeiro Contato</option><option>Follow UP</option>
+        <option>Fechado ✅</option><option>Pós-venda</option><option>Frio ❄️</option>
+      </select>
+      <div class="lbl">Status</div>
+      <select class="fs" id="cc-status">
+        <option value="">Sem status</option>
+        <option value="lead">🟡 Lead</option><option value="negociando">🔵 Negociando</option>
+        <option value="comprou">🟢 Comprou</option><option value="posVenda">🟣 Pós-venda</option>
+        <option value="inativo">🔴 Inativo</option>
+      </select>
+      <div class="lbl">Anotações</div>
+      <textarea class="ft" id="cc-notes" placeholder="Interesse, histórico, preferências..."></textarea>
+      <button class="btn" id="btn-save-contact">💾 Salvar Cliente</button>
+      <div class="divider"></div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <button class="btn blue sm" id="btn-open-note" style="flex:1;margin-top:0;">📝 Anotações</button>
+        <button class="btn sm" id="btn-open-reminder" style="flex:1;margin-top:0;background:#7c3aed;">🔔 Lembrete</button>
+        <button class="btn sm" id="btn-open-sched-msg" style="flex:1;margin-top:0;background:#ea580c;">🕐 Agendar</button>
+      </div>
+      <div class="lbl">Etiquetas do contato</div>
+      <div id="cc-labels-cur"></div>
+      <div class="divider"></div>
+      <div class="lbl">Todas as etiquetas</div>
+      <div id="cc-labels-all"></div>
+      <div class="add-row"><input id="new-label" placeholder="Nova etiqueta..."><button id="btn-add-label">＋</button></div>
+      <div class="divider"></div>
+      <div class="lbl">Ações rápidas</div>
+      <button class="util-btn" data-util="pin">📌 Fixar Conversa</button>
+      <button class="util-btn" data-util="archive">📁 Arquivar Contato</button>
+      <button class="util-btn" data-util="unread">✉️ Marcar como não lido</button>
+      <button class="util-btn danger" data-util="block">🚫 Bloquear Contato</button>
+    </div>
+  </div>
+  <!-- MASS SECTION -->
+  <div class="sec" id="sec-mass">
+    <div class="scroll">
+      <div class="lbl" style="margin-top:0">Segmento</div>
+      <div class="seg-list" id="seg-list">
+        <button class="seg-btn active" data-seg="saved">💾 Contatos Salvos</button>
+        <button class="seg-btn" data-seg="labels">🏷️ Etiquetas</button>
+        <button class="seg-btn" data-seg="crm">📋 CRM / Abas</button>
+        <button class="seg-btn" data-seg="inbox">📥 Inbox</button>
+      </div>
+      <div style="display:flex;gap:5px;margin-bottom:8px;">
+        <input class="fi" id="mass-search" placeholder="Pesquisar contato..." style="flex:1;">
+        <button class="btn sm blue" id="btn-sel-all">Sel. Todos</button>
+      </div>
+      <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;" id="quick-sel-btns">
+        <button class="btn sm" style="background:#16a34a" data-qs="50">+50</button>
+        <button class="btn sm red" data-qs="-50">-50</button>
+        <button class="btn sm" style="background:#16a34a" data-qs="10">+10</button>
+        <button class="btn sm red" data-qs="-10">-10</button>
+      </div>
+      <div style="max-height:180px;overflow-y:auto;border:1px solid #2a3942;border-radius:8px;margin-bottom:10px;" id="mass-list"></div>
+      <div style="font-size:11px;color:#8696a0;margin-bottom:8px;">Selecionados: <strong id="sel-count" style="color:#00a884;">0</strong></div>
+      <div class="divider"></div>
+      <div class="lbl">🛡️ Anti-Bloqueio</div>
+      <div class="prow" id="preset-row">
+        <span class="preset g on" data-preset="safe">🟢 Seguro</span>
+        <span class="preset y" data-preset="balanced">🟡 Balanceado</span>
+        <span class="preset r" data-preset="fast">🔴 Rápido</span>
+      </div>
+      <div class="cfg-card"><div class="cfg-lbl2">Intervalo entre mensagens</div>
+        <div class="cfg-row">De <input class="ti" id="cfg-min" value="25" type="number" min="5"> a <input class="ti" id="cfg-max" value="55" type="number" min="10"> seg</div></div>
+      <div class="cfg-card"><div class="cfg-lbl2">Tempo "digitando"</div>
+        <div class="cfg-row">De <input class="ti" id="cfg-typ" value="4" type="number" min="1"> a <input class="ti" id="cfg-typm" value="9" type="number" min="2"> seg</div></div>
+      <div class="cfg-card"><div class="cfg-lbl2">Pausa a cada</div>
+        <div class="cfg-row"><input class="ti" id="cfg-batch" value="20" type="number" min="5"> msgs → <input class="ti" id="cfg-pause" value="5" type="number" min="1"> min</div></div>
+      <div class="lbl">Mensagem</div>
+      <select class="fs" id="mass-msg-sel" style="margin-bottom:10px;"></select>
+      <button class="btn blue" id="btn-start-mass">📢 Iniciar Disparo</button>
+      <div class="prog-wrap" id="prog-wrap">
+        <div class="prog-lbl"><span id="prog-lbl">Enviando...</span><span id="prog-nums">0/0</span></div>
+        <div class="prog-trk"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="btn red sm" id="btn-stop-mass" style="margin-top:6px;">⏹ Parar</button>
+      </div>
+    </div>
+  </div>
+  <!-- AUTO ATEND -->
+  <div class="sec" id="sec-auto">
+    <div class="sbar">
+      <span style="color:#e9edef;font-size:12px;font-weight:600;">🤖 Auto Atendimento</span>
+      <button class="add-btn" id="btn-new-aa" title="Novo">＋</button>
+    </div>
+    <div class="scroll" id="aa-list"></div>
+  </div>
+  <!-- ESCADA -->
+  <div class="sec" id="sec-ladder"><div class="scroll" id="ladder-root"></div></div>
+  <!-- FOLLOW UP -->
+  <div class="sec" id="sec-followup">
+    <div class="sbar">
+      <span style="color:#e9edef;font-size:12px;font-weight:600;">🔔 Follow Up</span>
+      <button class="add-btn" id="btn-new-fu" title="Novo">＋</button>
+    </div>
+    <div class="scroll" id="fu-list"></div>
+  </div>
+  <!-- STATUS -->
+  <div class="sec" id="sec-status">
+    <div class="nav mtabs" id="status-nav">
+      <div class="mtab active" data-stab="new">✏️ Novo</div>
+      <div class="mtab" data-stab="sched">🕐 Agendados</div>
+      <div class="mtab" data-stab="hist">📋 Histórico</div>
+    </div>
+    <div class="scroll" id="stab-new">
+      <div class="lbl" style="margin-top:0;">Tipo</div>
+      <div class="st-types" id="st-types">
+        <button class="st-btn active" data-stype="text">📝 Texto</button>
+        <button class="st-btn" data-stype="image">🖼️ Imagem</button>
+        <button class="st-btn" data-stype="video">🎥 Vídeo</button>
+        <button class="st-btn" data-stype="link">🔗 Link</button>
+      </div>
+      <div id="st-media-area" style="display:none;">
+        <div class="drop" id="st-drop">
+          <div id="st-drop-ico" style="font-size:22px;margin-bottom:4px;">🖼️</div>
+          <p style="color:#8696a0;font-size:11px;"><strong style="color:#00a884;">Clique ou arraste</strong></p>
+          <input type="file" id="st-file-inp" style="display:none">
+        </div>
+      </div>
+      <div id="st-link-area" style="display:none;">
+        <div class="lbl">URL</div>
+        <input class="fi" id="st-url" placeholder="https://..." style="margin-bottom:8px;">
+      </div>
+      <div class="phone-pr"><div class="ph-in" id="ph-in">Pré-visualização</div></div>
+      <div class="lbl" id="st-text-lbl">Texto do status</div>
+      <textarea class="ft" id="st-text" placeholder="O que quer compartilhar? Use #primeiroNome..." maxlength="700" style="margin-bottom:4px;"></textarea>
+      <div style="text-align:right;font-size:10px;color:#8696a0;margin-bottom:10px;"><span id="st-chars">0</span>/700</div>
+      <div id="st-bg-area">
+        <div class="lbl">Cor de fundo</div>
+        <div class="bg-row" id="bg-row"></div>
+      </div>
+      <div class="lbl">Audiência</div>
+      <div class="aud-row" id="aud-row">
+        <button class="aud-btn active" data-aud="all">🌐 Todos</button>
+        <button class="aud-btn" data-aud="contacts">👥 Contatos</button>
+        <button class="aud-btn" data-aud="only">⭐ Selecionados</button>
+      </div>
+      <div class="sch-row" id="st-sch-toggle">
+        <span style="font-size:16px;">🕐</span>
+        <div style="flex:1;">
+          <div style="color:#e9edef;font-size:12px;font-weight:500;">Programar publicação</div>
+          <div style="color:#8696a0;font-size:11px;margin-top:2px;">Defina data e hora</div>
+          <div class="sch-dt" id="st-dt">
+            <input type="date" id="st-date"><input type="time" id="st-time" value="09:00">
+          </div>
+        </div>
+        <span id="st-sch-chk" style="font-size:18px;color:#8696a0;">○</span>
+      </div>
+      <button class="btn" id="btn-post-status">🟢 Publicar Agora</button>
+    </div>
+    <div class="scroll" id="stab-sched" style="display:none;"><div id="sched-st-list"></div></div>
+    <div class="scroll" id="stab-hist" style="display:none;"><div id="hist-st-list"></div></div>
+  </div>
+  <!-- SCHED -->
+  <div class="sec" id="sec-sched">
+    <div class="sbar"><span style="color:#e9edef;font-size:12px;font-weight:600;">🕐 Agendamentos</span></div>
+    <div class="scroll" id="sched-list"></div>
+  </div>
+  <!-- BACKUP SECTION -->
+  <div class="sec" id="sec-backup">
+    <div class="scroll">
+      <div style="background:linear-gradient(135deg,#00a884,#017d63);border-radius:10px;padding:14px;margin-bottom:14px;text-align:center;">
+        <div style="font-size:28px;margin-bottom:6px;">💾</div>
+        <div style="color:white;font-weight:700;font-size:13px;">Backup & Restauração</div>
+        <div style="color:rgba(255,255,255,.75);font-size:11px;margin-top:3px;">Salve e restaure todas as suas configurações</div>
+      </div>
+
+      <!-- O QUE É SALVO -->
+      <div style="background:#202c33;border-radius:9px;padding:12px;margin-bottom:12px;">
+        <div style="color:#e9edef;font-weight:600;font-size:12px;margin-bottom:8px;">📦 O que é incluído no backup:</div>
+        <div id="backup-summary" style="display:flex;flex-direction:column;gap:5px;"></div>
+      </div>
+
+      <!-- EXPORTAR -->
+      <div class="lbl" style="margin-top:0;">Exportar Backup</div>
+      <div style="background:#202c33;border-radius:9px;padding:12px;margin-bottom:10px;">
+        <div style="color:#8696a0;font-size:11px;line-height:1.6;margin-bottom:10px;">Salva um arquivo <strong style="color:#e9edef;">.json</strong> no seu computador com todas as mensagens rápidas, scripts, follow ups, auto atendimentos, etiquetas, abas do CRM e configurações.</div>
+        <button class="btn" id="btn-export-backup">⬇️ Exportar Backup Completo</button>
+        <button class="btn outline" id="btn-export-msgs-only" style="margin-top:6px;">⬇️ Exportar só Mensagens/Scripts</button>
+      </div>
+
+      <!-- IMPORTAR -->
+      <div class="lbl">Importar Backup</div>
+      <div style="background:#202c33;border-radius:9px;padding:12px;margin-bottom:10px;">
+        <div style="color:#8696a0;font-size:11px;line-height:1.6;margin-bottom:10px;">Restaura um backup salvo anteriormente. Você pode escolher <strong style="color:#e9edef;">mesclar</strong> com o que já tem ou <strong style="color:#e74c3c;">substituir</strong> tudo.</div>
+        <div class="drop" id="backup-drop" style="padding:14px;margin-bottom:0;">
+          <div style="font-size:22px;margin-bottom:4px;">📂</div>
+          <p style="color:#8696a0;font-size:11px;"><strong style="color:#00a884;">Clique ou arraste</strong> o arquivo .json aqui</p>
+          <input type="file" id="backup-file-inp" accept=".json" style="display:none">
+        </div>
+        <div id="backup-preview" style="display:none;background:#161d22;border-radius:8px;padding:10px;margin-top:8px;">
+          <div style="color:#e9edef;font-weight:600;font-size:12px;margin-bottom:6px;" id="backup-preview-title">Arquivo carregado</div>
+          <div id="backup-preview-content" style="color:#8696a0;font-size:11px;line-height:1.8;"></div>
+          <div style="display:flex;gap:6px;margin-top:10px;">
+            <button class="btn" id="btn-import-merge" style="flex:1;padding:8px;font-size:12px;">🔀 Mesclar</button>
+            <button class="btn red" id="btn-import-replace" style="flex:1;padding:8px;font-size:12px;">🔄 Substituir tudo</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- HISTÓRICO DE BACKUPS LOCAIS -->
+      <div class="lbl">Backups automáticos locais</div>
+      <div style="background:#202c33;border-radius:9px;padding:12px;margin-bottom:10px;">
+        <div style="color:#8696a0;font-size:11px;line-height:1.6;margin-bottom:8px;">O CRM salva automaticamente um backup local a cada vez que você faz alterações. Últimas versões salvas:</div>
+        <div id="auto-backup-list"></div>
+        <button class="btn outline" id="btn-save-auto" style="margin-top:8px;">💾 Salvar snapshot agora</button>
+      </div>
+
+      <!-- RESET -->
+      <div class="lbl">Zerar configurações</div>
+      <div style="background:#202c33;border-radius:9px;padding:12px;">
+        <div style="color:#8696a0;font-size:11px;margin-bottom:8px;">Remove todas as mensagens, scripts, follow ups e configurações. <strong style="color:#e74c3c;">Não pode ser desfeito!</strong></div>
+        <button class="btn red" id="btn-reset-all">🗑 Zerar tudo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATOR -->
+  <div class="creator" id="creator">
+    <div class="cr-hdr">
+      <button class="cr-back" id="btn-close-creator">←</button>
+      <div class="cr-title" id="cr-title">Criar Resposta Rápida</div>
+    </div>
+    <div class="cr-body" id="cr-body"></div>
+  </div>
+  <!-- AA FORM -->
+  <div class="creator" id="aa-form">
+    <div class="cr-hdr">
+      <button class="cr-back" id="btn-close-aa">←</button>
+      <div class="cr-title">🤖 Criar Auto Atendimento</div>
+    </div>
+    <div class="cr-body" id="aa-form-body"></div>
+  </div>
+  <!-- FU FORM -->
+  <div class="creator" id="fu-form">
+    <div class="cr-hdr">
+      <button class="cr-back" id="btn-close-fu">←</button>
+      <div class="cr-title">🔔 Criar Follow Up</div>
+    </div>
+    <div class="cr-body" id="fu-form-body"></div>
+  </div>
+  <!-- DROPDOWN -->
+  <div class="dd" id="dd"></div>
+  <!-- NOTIFICATIONS -->
+  <div class="notifs" id="notifs"></div>
+  <!-- NOTE MODAL -->
+  <div class="creator" id="note-modal">
+    <div class="cr-hdr">
+      <button class="cr-back" id="btn-close-note">←</button>
+      <div class="cr-title">📝 Criar Anotação</div>
+    </div>
+    <div class="cr-body" id="note-body"></div>
+  </div>
+
+  <!-- REMINDER MODAL -->
+  <div class="creator" id="reminder-modal">
+    <div class="cr-hdr">
+      <button class="cr-back" id="btn-close-reminder">←</button>
+      <div class="cr-title">🔔 Criar Lembrete</div>
+    </div>
+    <div class="cr-body" id="reminder-body"></div>
+  </div>
+
+  <!-- SCHED MSG MODAL -->
+  <div class="creator" id="sched-msg-modal">
+    <div class="cr-hdr">
+      <button class="cr-back" id="btn-close-sched-msg">←</button>
+      <div class="cr-title">🕐 Agendar Mensagem</div>
+    </div>
+    <div class="cr-body" id="sched-msg-body"></div>
+  </div>
+
+</div><!-- /.app -->
+<div id="toast"></div>
+<script src="crm.js"></script>
+<script src="persist.js"></script>
+<script src="ladder.js"></script>
+</body>
+</html>
