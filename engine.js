@@ -579,9 +579,10 @@
       if (a.db) out.push({ type: 'wait', seconds: a.db });
       if (a.ty && ['text', 'image', 'video', 'doc', 'pix', 'invite', 'contact', 'banner', 'list', 'sticker'].includes(a.k)) out.push({ type: 'typing', seconds: a.ty });
       if (a.k === 'text' && a.txt) out.push({ type: 'text', variations: [a.txt] });
-      else if (['image', 'video', 'audio', 'doc', 'sticker'].includes(a.k) && a.fileDataUrl) {
+      else if (['image', 'video', 'audio', 'doc', 'sticker'].includes(a.k) && (a.fileDataUrl || a.fileKey)) {
+        const du = a.fileDataUrl || (await sget(a.fileKey)); if (!du) { await addLog('Mídia não encontrada (' + (a.fileName || a.k) + ') — pulei'); continue; }
         if (a.k === 'audio' && a.ty) out.push({ type: 'recording', seconds: a.ty });
-        out.push({ type: a.k === 'doc' ? 'document' : a.k, dataUrl: a.fileDataUrl, name: a.fileName, mime: a.fileMime, caption: a.cap || '' });
+        out.push({ type: a.k === 'doc' ? 'document' : a.k, dataUrl: du, name: a.fileName, mime: a.fileMime, caption: a.cap || '' });
       }
       else if (a.k === 'pix') out.push({ type: 'pix', name: a.name, keyType: a.keyType, key: a.key, value: a.value, note: a.note });
       else if (a.k === 'invite') out.push({ type: 'invite', text: a.txt || (a.group ? 'Entre no grupo ' + a.group + ':' : ''), link: a.link });

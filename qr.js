@@ -56,6 +56,17 @@
   document.head.appendChild(css);
   try { chrome.storage.local.get('wcrm_acc', o => { if (o.wcrm_acc) document.documentElement.style.setProperty('--acc', o.wcrm_acc); }); chrome.storage.onChanged.addListener((c, a) => { if (a === 'local' && c.wcrm_acc && c.wcrm_acc.newValue) document.documentElement.style.setProperty('--acc', c.wcrm_acc.newValue); }); } catch (e) {}
 
+  // ── mídia fora do estado (cada arquivo numa chave própria do chrome.storage; o estado fica leve) ──
+  const MK = 'wcrm_mf_';
+  const mediaPut = (key, d) => new Promise(r => { try { chrome.storage.local.set({ [key]: d }, () => r(!chrome.runtime.lastError)); } catch (e) { r(false); } });
+  const mediaGet = key => new Promise(r => { try { chrome.storage.local.get(key, o => r(o && o[key])); } catch (e) { r(null); } });
+  const newKey = () => MK + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const hasFile = a => !!(a.fileKey || a.fileDataUrl);
+  const pvOf = a => a._pv || a.fileDataUrl || '';
+  async function loadPreviews() { let ch = false; for (const a of (Q && Q.actions) || []) { if (a.fileKey && !a._pv) { a._pv = (await mediaGet(a.fileKey)) || ''; ch = a._pv ? true : ch; } } if (ch && Q) renderCreator(); }
+  // migra mídias antigas (guardadas dentro da mensagem) para o armazenamento separado
+  (async function migrate() { let n = 0; for (const m of msgs) for (const a of (m.actions || [])) if (a.fileDataUrl && !a.fileKey) { const k = newKey(); if (await mediaPut(k, a.fileDataUrl)) { a.fileKey = k; delete a.fileDataUrl; n++; } } if (n) { console.log('[WCRM] ' + n + ' mídia(s) movida(s) para o armazenamento separado'); try { saveAutoBackup(); } catch (e) {} } })();
+
   const catList = () => Object.entries(CATS).filter(([k]) => k !== 'all');
   const catColor = k => (CATS[k] && CATS[k].c) || '#8aa0ad';
   const closeMenus = () => document.querySelectorAll('.qr-menu').forEach(m => m.remove());
@@ -140,7 +151,7 @@
     if (mode === 'cat') { const c = catKey && CATS[catKey]; Q = { mode: 'cat', catKey: catKey || '', catName: c ? c.l : '', catColor: c ? (c.c || PALETTE[0]) : PALETTE[0] }; }
     else Q = { mode: mode || (ex && ex.type === 'script' ? 'script' : 'msg'), id: id || null, label: ex ? ex.label : '', cat: ex ? (ex.cat || '') : '', actions: ex ? JSON.parse(JSON.stringify(ex.actions || [])) : [] };
     $q('cr-title').textContent = Q.mode === 'cat' ? (catKey ? 'Editar Categoria' : 'Criar Categoria') : Q.mode === 'script' ? (id ? 'Editar Script' : 'Criar Script') : (id ? 'Editar Resposta Rápida' : 'Criar Respostas Rápidas');
-    $q('creator').classList.add('open'); renderCreator();
+    $q('creator').classList.add('open'); renderCreator(); loadPreviews();
   };
   const fval = (a, k, d) => (a[k] == null || a[k] === '' ? (d == null ? '' : d) : a[k]);
   const sec = (a, k, lbl, d) => '<div class="sec2">' + lbl + ' <input type="number" min="0" max="3600" data-f="' + k + '" value="' + fval(a, k, d) + '"> Segundos</div>';
@@ -150,8 +161,8 @@
     const k = a.k; const info = KIND[k] || { i: '❓', l: k }; let body = '';
     if (k === 'text') body = sec(a, 'ty', 'Exibir para o cliente que a mensagem está sendo digitada por', 5) + '<textarea data-f="txt" id="qa-txt-' + i + '" placeholder="Digite o texto">' + E(a.txt || '') + '</textarea><div id="qa-emo-' + i + '"></div>' + sec(a, 'da', 'Aguarde para chamar a próxima ação por', 5);
     else if (FILEK[k]) {
-      const has = !!a.fileDataUrl; const pv = !has ? '<button class="btn g" data-pick="' + i + '" type="button">📎 Escolher ' + info.l.toLowerCase() + ' do PC</button>'
-        : (k === 'image' || k === 'sticker' ? '<img class="pv" src="' + a.fileDataUrl + '">' : k === 'video' ? '<video class="pv" controls src="' + a.fileDataUrl + '"></video>' : k === 'audio' ? '<audio controls src="' + a.fileDataUrl + '" style="width:100%"></audio>' : '<div class="note">📄 ' + E(a.fileName || 'arquivo') + '</div>') + '<div class="note">' + E(a.fileName || '') + ' · <a href="#" data-pick="' + i + '" style="color:var(--acc)">trocar</a></div>';
+      const has = hasFile(a); const pv = !has ? '<button class="btn g" data-pick="' + i + '" type="button">📎 Escolher ' + info.l.toLowerCase() + ' do PC</button>'
+        : (k === 'image' || k === 'sticker' ? '<img class="pv" src="' + pvOf(a) + '">' : k === 'video' ? '<video class="pv" controls src="' + pvOf(a) + '"></video>' : k === 'audio' ? '<audio controls src="' + pvOf(a) + '" style="width:100%"></audio>' : '<div class="note">📄 ' + E(a.fileName || 'arquivo') + '</div>') + '<div class="note">' + E(a.fileName || '') + ' · <a href="#" data-pick="' + i + '" style="color:var(--acc)">trocar</a></div>';
       body = pv + '<input type="file" data-file="' + i + '" accept="' + FILEK[k] + '" style="display:none">'
         + (k === 'audio' ? (has && !/ogg|opus/i.test((a.fileMime || '') + (a.fileName || '')) ? '<div class="warn">⚠ Para sair como áudio gravado (voz) o arquivo precisa ser .ogg/.opus.</div>' : '') + sec(a, 'ty', 'Exibir que um áudio está sendo gravado por', 5)
           : (k === 'image' || k === 'video' || k === 'doc') ? '<label>Legenda (opcional)</label><textarea data-f="cap" style="min-height:60px" placeholder="Legenda">' + E(a.cap || '') + '</textarea>' : '')
@@ -211,7 +222,7 @@
     const row = t.closest('[data-i]'); if (!row) return; const i = +row.dataset.i, a = Q.actions[i];
     if (t.dataset.file != null && t.files && t.files[0]) {
       const f = t.files[0]; const d = await new Promise((res, rej) => { const r = new FileReader(); r.onload = ev => res(ev.target.result); r.onerror = rej; r.readAsDataURL(f); });
-      a.fileDataUrl = d; a.fileMime = f.type; a.fileName = f.name; try { if (db) await dbSave(f, d); } catch (x) {} renderCreator(); toast('✅ ' + f.name);
+      const k = a.fileKey || newKey(); if (!(await mediaPut(k, d))) { toast('⚠️ Não consegui guardar o arquivo (armazenamento)', '#e74c3c'); return; } a.fileKey = k; a._pv = d; delete a.fileDataUrl; a.fileMime = f.type; a.fileName = f.name; renderCreator(); toast('✅ ' + f.name);
     } else if (t.dataset.f) a[t.dataset.f] = t.type === 'number' ? +t.value : t.value;
   });
   cb.addEventListener('click', e => {
@@ -252,7 +263,8 @@
     }
     const title = (Q.label || '').trim(); if (!title) { toast('⚠️ Digite um título!', '#e74c3c'); return; }
     if (!Q.actions.length) { toast('⚠️ ' + (Q.mode === 'script' ? 'Adicione ao menos 1 resposta rápida' : 'Adicione ao menos 1 ação') + '!', '#e74c3c'); return; }
-    const bad = Q.actions.find(a => FILEK[a.k] && !a.fileDataUrl); if (bad) { toast('⚠️ Escolha o arquivo de ' + KIND[bad.k].l, '#e74c3c'); return; }
+    const bad = Q.actions.find(a => FILEK[a.k] && !hasFile(a)); if (bad) { toast('⚠️ Escolha o arquivo de ' + KIND[bad.k].l, '#e74c3c'); return; }
+    Q.actions.forEach(a => { delete a._pv; });
     const type = Q.mode === 'script' ? 'script' : 'msg';
     if (Q.id) { const i = msgs.findIndex(m => m.id === Q.id); if (i >= 0) msgs[i] = Object.assign({}, msgs[i], { label: title, cat: Q.cat, type, actions: Q.actions }); }
     else msgs.push({ id: Date.now(), label: title, cat: Q.cat, type, actions: Q.actions, uses: 0 });
@@ -271,11 +283,29 @@
       + '<div class="cfgrow"><span>Desativar a assinatura</span><div class="sw' + (ui.noSig ? ' on' : '') + '" data-sw="noSig"></div></div>'
       + '<div class="cfgrow"><span>Personalizar o nome da assinatura</span><div class="sw' + (ui.sigName ? ' on' : '') + '" data-sw="sigOn"></div></div>' + (ui.sigName !== '' || s.dataset.sig ? '<input type="text" id="cfg-sig" placeholder="Nome na assinatura" value="' + E(ui.sigName) + '">' : '')
       + '<div style="margin:16px 4px 4px;font-size:14px">Tamanho do Menu Lateral: <b id="cfg-wv">' + ui.w + ' px</b></div><input type="range" id="cfg-w" min="300" max="700" step="10" value="' + ui.w + '" style="width:100%">'
+      + '<div style="margin:18px 0 6px;font-weight:700;font-size:14px">📥 Importar backup do WaSpeed</div><div class="note">Escolha o arquivo .json do backup. Entram as ações das respostas rápidas (texto, imagem, áudio, vídeo, link) com as mídias. Títulos, categorias e abas do WaSpeed vêm criptografados e não são lidos.</div><button class="btn" id="ws-pick" style="margin-top:8px">Escolher arquivo…</button><input type="file" id="ws-file" accept=".json,application/json" style="display:none"><div id="ws-out" class="note" style="white-space:pre-wrap;margin-top:8px"></div>'
       + '<div class="note" style="margin-top:14px">O monitor de envios é a faixa “Ação (1/9)” com o botão Cancelar Envio. A assinatura, quando ligada, vai em negrito antes do texto.</div>'
       + '<div class="ctr"><button class="btn g" id="cfg-close" style="color:#ff6b6b;border:1px solid #ff6b6b;background:transparent">Fechar Menu</button></div></div>'; };
     s.addEventListener('click', e => {
       const sw = e.target.closest('[data-sw]'); if (sw) { const k = sw.dataset.sw; if (k === 'sigOn') { if (ui.sigName) ui.sigName = ''; else { ui.sigName = ' '; ui.noSig = false; } s.dataset.sig = ui.sigName ? '1' : ''; } else ui[k] = !ui[k]; save(); draw(); return; }
       if (e.target.id === 'cfg-close') window.parent.postMessage({ type: 'TOGGLE_PANEL' }, '*');
+      if (e.target.id === 'ws-pick') document.getElementById('ws-file').click();
+    });
+    s.addEventListener('change', async e => {
+      if (e.target.id !== 'ws-file' || !e.target.files[0]) return; const out = document.getElementById('ws-out'); const say = t => { out.textContent = t; };
+      try {
+        say('Lendo o arquivo…'); let json = JSON.parse(await e.target.files[0].text()); const r = WCRM_WSIMPORT.convert(json); json = null;
+        const have = new Set(msgs.map(m => m.wsId).filter(Boolean)); let added = 0, dup = 0, media = 0, fail = 0;
+        if (!CATS.wsimp) CATS.wsimp = { l: 'Importado WaSpeed', e: '🗂️', c: '#4fc3f7' };
+        for (let i = 0; i < r.items.length; i++) {
+          const it = r.items[i]; if (have.has(it.wsId)) { dup++; continue; } say('Importando ' + (i + 1) + '/' + r.items.length + '…  (mídias: ' + media + ')');
+          const acts = []; let ok = true;
+          for (const a of it.actions) { const x = Object.assign({}, a); if (x.media) { const k = newKey(); if (!(await mediaPut(k, x.media))) { ok = false; fail++; break; } x.fileKey = k; media++; } delete x.media; acts.push(x); a.media = null; }
+          if (!ok) continue; msgs.push({ id: Date.now() + i, wsId: it.wsId, type: 'msg', label: it.title, cat: 'wsimp', actions: acts, uses: 0 }); added++;
+        }
+        renderPills(); renderMsgs(); try { saveAutoBackup(); } catch (x) {}
+        say('✅ Importadas ' + added + ' respostas rápidas (' + media + ' mídias)' + (dup ? ' · ' + dup + ' já existiam' : '') + (fail ? ' · ' + fail + ' falharam (espaço)' : '') + '\nNão importado: ' + r.skipped.labelActions + ' ações de etiqueta e ' + r.skipped.crmActions + ' de aba (os nomes vêm criptografados), ' + r.skipped.emptyMedia + ' mídia vazia.\nElas estão na categoria “Importado WaSpeed” — renomeie e reorganize como quiser.');
+      } catch (err) { say('⚠️ Falhou: ' + (err && err.message || err)); }
     });
     s.addEventListener('input', e => { if (e.target.id === 'cfg-w') { ui.w = +e.target.value; $q('cfg-wv').textContent = ui.w + ' px'; save(); } if (e.target.id === 'cfg-sig') { ui.sigName = e.target.value; save(); } });
     try { chrome.storage.local.get('wcrm_ui', o => { ui = Object.assign(ui, o.wcrm_ui || {}); s.dataset.sig = ui.sigName ? '1' : ''; draw(); }); } catch (e) { draw(); }
