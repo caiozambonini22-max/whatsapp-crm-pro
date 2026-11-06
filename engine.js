@@ -1008,6 +1008,56 @@
   });
   setInterval(() => bulkTick(), 4000);
 
+
+  // ── Notificação no canto da tela: aprovar follow up sem abrir a janela ──
+  (function alertCards() {
+    const css = document.createElement('style');
+    css.textContent = '#wcrm-ac{position:fixed;right:16px;bottom:96px;z-index:2147482000;display:flex;flex-direction:column;gap:10px;width:330px;max-height:70vh;overflow:auto;font-family:system-ui,Segoe UI,sans-serif}'
+      + '#wcrm-ac .ac{background:#171b1f;color:#e9edef;border:1px solid var(--wcrm-acc,#d4af37);border-radius:14px;padding:12px 14px;box-shadow:0 10px 30px #000b;animation:acin .25s ease-out}@keyframes acin{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}'
+      + '#wcrm-ac .t{display:flex;gap:8px;align-items:center;font-weight:700;font-size:14px}#wcrm-ac .t b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#wcrm-ac .x{cursor:pointer;color:#8696a0;font-size:16px;border:0;background:none}'
+      + '#wcrm-ac .m{font-size:13px;color:#cfd6db;margin:6px 0 8px;line-height:1.35;max-height:78px;overflow:hidden}#wcrm-ac .r{font-size:12px;color:#8696a0;margin-bottom:8px}'
+      + '#wcrm-ac .b{display:flex;gap:6px;flex-wrap:wrap}#wcrm-ac .b button{border:1px solid #384046;background:#242b31;color:#e9edef;border-radius:8px;padding:6px 10px;font-size:12.5px;cursor:pointer;font-weight:600}'
+      + '#wcrm-ac .b .go{background:var(--wcrm-acc,#d4af37);color:#000;border-color:transparent}#wcrm-ac .b .no{color:#ff6b6b;border-color:#6b2b2b}';
+    document.head.appendChild(css);
+    const box = document.createElement('div'); box.id = 'wcrm-ac'; document.body.appendChild(box);
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const hidden = new Set();
+    let busyDraw = false;
+    async function draw() {
+      if (busyDraw) return; busyDraw = true;
+      try {
+        const rt = await getRt(), enrs = await getEnrs(); const cards = [];
+        for (const a of (rt.alerts || [])) {
+          if (hidden.has(a.id)) continue;
+          const enr = enrs.find(x => x.id === a.enrId); if (!enr) continue;
+          if (a.kind === 'replied' && a.ask && enr.state === 'asked') cards.push({ a, kind: 'ask' });
+          else if (a.kind === 'approve' && enr.state === 'approval') cards.push({ a, kind: 'apv' });
+        }
+        box.style.display = cards.length ? 'flex' : 'none';
+        box.innerHTML = cards.slice(0, 4).map(({ a, kind }) => '<div class="ac" data-id="' + esc(a.id) + '" data-enr="' + esc(a.enrId) + '" data-n="' + esc(a.contact) + '">'
+          + '<div class="t"><span>' + (kind === 'ask' ? '💬' : '✅') + '</span><b>' + esc(a.contact) + (kind === 'ask' ? ' respondeu' : ' — aprovar envio') + '</b><button class="x" data-x="1" title="Dispensar">✕</button></div>'
+          + (a.ruleName ? '<div class="r">Follow up: ' + esc(a.ruleName) + (kind === 'ask' ? ' · envio pausado' : '') + '</div>' : '')
+          + '<div class="m">' + (kind === 'ask' ? '“' + esc((a.text || '').slice(0, 180)) + '”' : esc((a.text || '').slice(0, 180))) + '</div>'
+          + '<div class="b">' + (kind === 'ask'
+            ? '<button class="go" data-c="keep">▶ Continuar follow up</button><button data-c="reset">↻ Reiniciar tempo</button><button class="no" data-c="cancel">✖ Cancelar</button><button data-open="1">💬 Abrir</button>'
+            : '<button class="go" data-c="approve">✅ Aprovar envio</button><button class="no" data-c="cancel">✖ Cancelar</button><button data-open="1">💬 Abrir</button>')
+          + '</div></div>').join('') + (cards.length > 4 ? '<div class="ac" style="text-align:center;font-size:13px">+' + (cards.length - 4) + ' aviso(s) — veja em Follow Up › Avisos</div>' : '');
+      } finally { busyDraw = false; }
+    }
+    box.addEventListener('click', async e => {
+      const card = e.target.closest('.ac[data-enr]'); if (!card) return;
+      const id = card.dataset.enr;
+      if (e.target.closest('[data-x]')) { hidden.add(card.dataset.id); return draw(); }
+      if (e.target.closest('[data-open]')) { try { await openChat(card.dataset.n); } catch (x) {} return; }
+      const b = e.target.closest('[data-c]'); if (!b) return;
+      b.disabled = true; await decideEnr(id, b.dataset.c);
+      try { root.__wcrm && root.__wcrm.toast(b.dataset.c === 'cancel' ? '✖ Follow up cancelado' : b.dataset.c === 'reset' ? '↻ Tempo reiniciado' : '✅ Follow up continua'); } catch (x) {}
+      draw();
+    });
+    try { chrome.storage.onChanged.addListener((c, a) => { if (a === 'local' && (c[K_RT] || c[K_ENR])) draw(); }); } catch (e) {}
+    setTimeout(draw, 1500); setInterval(draw, 8000);
+  })();
+
   root.__wcrmEngine = { tick, bulkTick, bulkGate, bulkStepsOf, quickRun };
   setInterval(() => tick(), 10000);
   log('motor de follow-up carregado (v4.33)');
