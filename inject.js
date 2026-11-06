@@ -263,7 +263,8 @@
     try {
       stage = 'ler arquivo';
       var blob = await (await fetch(d.dataUrl)).blob();
-      var file = new File([blob], d.name || 'arquivo', { type: d.mime || blob.type });
+      var mt = d.mime || blob.type; if ((d.mkind || '') === 'audio' && /ogg|opus/i.test(mt + ' ' + (d.name || ''))) mt = 'audio/ogg; codecs=opus';   // sem o codecs o WhatsApp manda como arquivo de áudio, não como voz
+      var file = new File([blob], d.name || 'arquivo', { type: mt });
       stage = 'OpaqueData.createFromData';
       var opaque = await withTimeout(OD.createFromData(file, file.type), 30000, 'ler áudio/arquivo');
       var o = {}; var k = d.mkind || (d.kind === 'SENDMEDIA' ? 'image' : d.kind);

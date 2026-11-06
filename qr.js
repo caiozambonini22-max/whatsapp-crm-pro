@@ -79,6 +79,13 @@
   // migra mídias antigas (guardadas dentro da mensagem) para o armazenamento separado
   (async function migrate() { let n = 0; for (const m of msgs) for (const a of (m.actions || [])) if (a.fileDataUrl && !a.fileKey) { const k = newKey(); if (await mediaPut(k, a.fileDataUrl)) { a.fileKey = k; delete a.fileDataUrl; n++; } } if (n) { console.log('[WCRM] ' + n + ' mídia(s) movida(s) para o armazenamento separado'); try { saveAutoBackup(); } catch (e) {} } })();
 
+  // limpeza única: apaga as respostas importadas do WaSpeed (e suas mídias)
+  (async function cleanWs() { const had = msgs.filter(m => m.wsId); const f = await new Promise(r => chrome.storage.local.get('wcrm_wsclean', o => r(o.wcrm_wsclean))); if (f && !had.length) return;
+    const keys = []; had.forEach(m => (m.actions || []).forEach(a => { if (a.fileKey) keys.push(a.fileKey); }));
+    if (had.length) { msgs = msgs.filter(m => !m.wsId); }
+    if (CATS.wsimp) delete CATS.wsimp;
+    try { if (keys.length) await new Promise(r => chrome.storage.local.remove(keys, r)); await new Promise(r => chrome.storage.local.set({ wcrm_wsclean: 1 }, r)); } catch (e) {}
+    try { renderPills(); renderMsgs(); saveAutoBackup(); } catch (e) {} if (had.length) console.log('[WCRM] removidas ' + had.length + ' respostas importadas do WaSpeed'); })();
   const catList = () => Object.entries(CATS).filter(([k]) => k !== 'all');
   const catColor = k => (CATS[k] && CATS[k].c) || '#8aa0ad';
   const closeMenus = () => document.querySelectorAll('.qr-menu').forEach(m => m.remove());
@@ -298,7 +305,7 @@
       + '<div style="margin:16px 4px 4px;font-size:14px">Tamanho do Menu Lateral: <b id="cfg-wv">' + ui.w + ' px</b></div><input type="range" id="cfg-w" min="300" max="700" step="10" value="' + ui.w + '" style="width:100%">'
       + '<div style="margin:16px 4px 6px;font-size:14px">Tema</div><div class="pal">' + [['black', 'Preto'], ['dark', 'Escuro'], ['light', 'Claro'], ['white', 'Branco']].map(t => '<button class="btn' + ((ui.theme || 'dark') === t[0] ? '' : ' g') + '" data-theme="' + t[0] + '" style="padding:6px 12px">' + t[1] + '</button>').join('') + '</div>'
       + '<div style="margin:12px 4px 6px;font-size:14px">Cor de destaque</div><div class="pal">' + ['#000000', '#ffffff', '#00a884', '#1d4ed8', '#f59e0b', '#ef4444', '#a855f7', '#ec4899', '#14b8a6', '#84cc16'].map(c => '<b data-acc="' + c + '" style="background:' + c + ';border-color:' + (c === ui.acc ? '#888' : '#8884') + '"></b>').join('') + '<input type="color" id="cfg-acc" value="' + (ui.acc || '#00a884') + '" style="width:30px;height:30px;border:0;background:none;padding:0"></div>'
-      + '<div style="margin:18px 0 6px;font-weight:700;font-size:14px">📥 Importar backup do WaSpeed</div><div class="note">Escolha o arquivo .json do backup. Entram as ações das respostas rápidas (texto, imagem, áudio, vídeo, link) com as mídias. Títulos, categorias e abas do WaSpeed vêm criptografados e não são lidos.</div><button class="btn" id="ws-pick" style="margin-top:8px">Escolher arquivo…</button><input type="file" id="ws-file" accept=".json,application/json" style="display:none"><div id="ws-out" class="note" style="white-space:pre-wrap;margin-top:8px"></div>'
+      + '<div style="margin:18px 0 6px;font-weight:700;font-size:14px">💾 Backup do CRM ZAMBONINI</div><div class="note">Exporte ou restaure tudo (respostas rápidas, categorias, mídias e configurações).</div><button class="btn" id="cfg-backup" style="margin-top:8px">Abrir backup</button>'
       + '<div class="note" style="margin-top:14px">O monitor de envios é a faixa “Ação (1/9)” com o botão Cancelar Envio. A assinatura, quando ligada, vai em negrito antes do texto.</div>'
       + '<div class="ctr"><button class="btn g" id="cfg-close" style="color:#ff6b6b;border:1px solid #ff6b6b;background:transparent">Fechar Menu</button></div></div>'; };
     s.addEventListener('click', e => {
@@ -306,23 +313,7 @@
       const th = e.target.closest('[data-theme]'); if (th) { ui.theme = th.dataset.theme; save(); window.__applyTheme(ui); draw(); return; }
       const ac = e.target.closest('[data-acc]'); if (ac) { ui.acc = ac.dataset.acc; save(); try { chrome.storage.local.set({ wcrm_acc: ui.acc }); } catch (x) {} window.__applyAcc(ui.acc); draw(); return; }
       if (e.target.id === 'cfg-close') window.parent.postMessage({ type: 'TOGGLE_PANEL' }, '*');
-      if (e.target.id === 'ws-pick') document.getElementById('ws-file').click();
-    });
-    s.addEventListener('change', async e => {
-      if (e.target.id !== 'ws-file' || !e.target.files[0]) return; const out = document.getElementById('ws-out'); const say = t => { out.textContent = t; };
-      try {
-        say('Lendo o arquivo…'); let json = JSON.parse(await e.target.files[0].text()); const r = WCRM_WSIMPORT.convert(json); json = null;
-        const have = new Set(msgs.map(m => m.wsId).filter(Boolean)); let added = 0, dup = 0, media = 0, fail = 0;
-        if (!CATS.wsimp) CATS.wsimp = { l: 'Importado WaSpeed', e: '🗂️', c: '#4fc3f7' };
-        for (let i = 0; i < r.items.length; i++) {
-          const it = r.items[i]; if (have.has(it.wsId)) { dup++; continue; } say('Importando ' + (i + 1) + '/' + r.items.length + '…  (mídias: ' + media + ')');
-          const acts = []; let ok = true;
-          for (const a of it.actions) { const x = Object.assign({}, a); if (x.media) { const k = newKey(); if (!(await mediaPut(k, x.media))) { ok = false; fail++; break; } x.fileKey = k; media++; } delete x.media; acts.push(x); a.media = null; }
-          if (!ok) continue; msgs.push({ id: Date.now() + i, wsId: it.wsId, type: 'msg', label: it.title, cat: 'wsimp', actions: acts, uses: 0 }); added++;
-        }
-        renderPills(); renderMsgs(); try { saveAutoBackup(); } catch (x) {}
-        say('✅ Importadas ' + added + ' respostas rápidas (' + media + ' mídias)' + (dup ? ' · ' + dup + ' já existiam' : '') + (fail ? ' · ' + fail + ' falharam (espaço)' : '') + '\nNão importado: ' + r.skipped.labelActions + ' ações de etiqueta e ' + r.skipped.crmActions + ' de aba (os nomes vêm criptografados), ' + r.skipped.emptyMedia + ' mídia vazia.\nElas estão na categoria “Importado WaSpeed” — renomeie e reorganize como quiser.');
-      } catch (err) { say('⚠️ Falhou: ' + (err && err.message || err)); }
+      if (e.target.id === 'cfg-backup') { const t = document.querySelector('.ntab[data-tab="backup"]'); t && t.click(); }
     });
     s.addEventListener('input', e => { if (e.target.id === 'cfg-acc') { ui.acc = e.target.value; save(); try { chrome.storage.local.set({ wcrm_acc: ui.acc }); } catch (x) {} window.__applyAcc(ui.acc); } if (e.target.id === 'cfg-w') { ui.w = +e.target.value; $q('cfg-wv').textContent = ui.w + ' px'; save(); } if (e.target.id === 'cfg-sig') { ui.sigName = e.target.value; save(); } });
     try { chrome.storage.local.get('wcrm_ui', o => { ui = Object.assign(ui, o.wcrm_ui || {}); s.dataset.sig = ui.sigName ? '1' : ''; draw(); }); } catch (e) { draw(); }

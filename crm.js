@@ -1637,17 +1637,20 @@ function renderBackupSummary() {
 }
 
 // Exportar backup completo
-function exportBackup(onlyMsgs = false) {
+async function exportBackup(onlyMsgs = false) {
   const data = onlyMsgs
     ? { version: BACKUP_VERSION, exportedAt: new Date().toISOString(), exportedAtFormatted: new Date().toLocaleString('pt-BR'), type: 'messages-only', data: { msgs } }
     : collectBackupData();
-  const json = JSON.stringify(data, null, 2);
+  if (!onlyMsgs || true) { // mídias ficam em chaves separadas: entram no backup para não perder nada
+    try { const ks = []; (data.data.msgs || []).forEach(m => (m.actions || []).forEach(a => { if (a.fileKey) ks.push(a.fileKey); })); if (ks.length) { const got = await new Promise(r => chrome.storage.local.get(ks, r)); data.data.media = got; } } catch (e) {}
+  }
+  const json = JSON.stringify(data);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const ts = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
   a.href = url;
-  a.download = onlyMsgs ? 'crm-mensagens-' + ts + '.json' : 'crm-backup-completo-' + ts + '.json';
+  a.download = onlyMsgs ? 'crm-zambonini-mensagens-' + ts + '.json' : 'crm-zambonini-backup-' + ts + '.json';
   a.click();
   URL.revokeObjectURL(url);
   toast('✅ Backup exportado!');
@@ -1776,6 +1779,7 @@ $('btn-import-replace').addEventListener('click', () => {
 // Aplica o backup
 function applyBackup(data, mode) {
   const d = data.data;
+  if (d.media && typeof d.media === 'object') try { chrome.storage.local.set(d.media); } catch (e) {}
   if (d.cats && typeof d.cats === 'object') Object.keys(d.cats).forEach(k => { if (mode === 'replace' || !CATS[k]) CATS[k] = d.cats[k]; });
   if (mode === 'replace') {
     if (d.msgs) msgs = d.msgs;
