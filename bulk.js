@@ -89,10 +89,10 @@
   }
   function buildPool() {
     if (!src) { pool = []; return; }
-    const known = new Map(src.act.map(a => [norm(a.n), a]));
+    const known = new Map(src.act.filter(a => a.i || a.o || a.t).map(a => [norm(a.n), a]));
     const mk = (n, extra) => Object.assign({ n, known: known.has(norm(n)) }, extra || {});
-    if (seg === 'saved') pool = src.act.map(a => mk(a.n)).sort((a, b) => a.n.localeCompare(b.n));
-    else if (seg === 'inbox') pool = src.act.filter(a => a.i).sort((a, b) => b.i - a.i).map(a => mk(a.n));
+    if (seg === 'saved') pool = src.act.map(a => mk(a.n));
+    else if (seg === 'inbox') pool = src.act.filter(a => a.i && !a.t).sort((a, b) => b.i - a.i).map(a => mk(a.n));
     else if (seg === 'labels') pool = src.chats.filter(c => !segPick || c.labels.includes(segPick)).map(c => mk(c.n));
     else if (seg === 'tabs') { const seen = new Set(); pool = []; src.tabs.filter(t => !segPick || t.name === segPick).forEach(t => (t.contacts || []).forEach(n => { if (!seen.has(norm(n))) { seen.add(norm(n)); pool.push(mk(n)); } })); }
     else if (seg === 'sheet') pool = pool.filter(c => c.sheet);
@@ -250,8 +250,11 @@
 
   async function open(v) {
     opened = true; root.classList.add('show'); await loadAll();
-    if (v) view = v; src = await askSources(); setView(view);
+    if (v) view = v; setView(view); await refreshSources(); setView(view);
     clearInterval(timer); timer = setInterval(async () => { if (!opened || view !== 'report') return; await loadAll(); const a = document.activeElement; if (!a || a.tagName !== 'INPUT') render(); }, 4000);
+  }
+  async function refreshSources() {
+    for (let i = 0; i < 6; i++) { src = await askSources(); if (src && src.ok && (src.act.length || src.chats.length)) return; if (opened && view === 'quick') { const l = document.getElementById('bk-list'); if (l) l.innerHTML = '<div style="padding:22px;text-align:center;color:#6b7791">Carregando contatos do WhatsApp…</div>'; } await sleep(2500); }
   }
   function close() { opened = false; root.classList.remove('show'); clearInterval(timer); }
   window.addEventListener('message', e => { if (e.data && e.data.type === 'OPEN_BULK') open(e.data.view); });

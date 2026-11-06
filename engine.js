@@ -821,7 +821,8 @@
     const setC = (patch, jobPatch) => mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (!j) return; Object.assign(j.contacts[idx], patch, { at: Date.now() }); if (jobPatch) Object.assign(j, jobPatch); });
     const gap = () => Date.now() + rndMs(o.minSec * 1000, Math.max(o.minSec, o.maxSec) * 1000);
     const br = W.getBridge && W.getBridge();
-    const info = ((br && br.act) || []).find(a => norm(a.n) === norm(c.n));
+    let info = ((br && br.act) || []).find(a => norm(a.n) === norm(c.n));
+    if (!info) { const al = ((br && br.all) || []).find(a => norm(a.n) === norm(c.n)); if (al && al.t) info = { n: al.n, i: al.t, o: 0 }; }
     if (info && info.g) { await setC({ state: 'skipped', why: 'é um grupo' }); return; }
     if (o.onlyKnown && !(info && (info.i || info.o))) { await setC({ state: 'skipped', why: 'nunca conversou com você (proteção)' }); await addLog('📣 "' + c.n + '" pulado: nunca conversou com você'); return; }
     const steps = bulkStepsOf(job);
@@ -859,7 +860,9 @@
   // lista de contatos disponíveis para escolher (vem da ponte do WhatsApp)
   async function bulkSources() {
     const W = root.__wcrm; const br = W && W.getBridge && W.getBridge();
-    const act = ((br && br.act) || []).filter(a => !a.g).map(a => ({ n: a.n, i: a.i || 0, o: a.o || 0 }));
+    const actMap = new Map(); ((br && br.act) || []).filter(a => !a.g).forEach(a => actMap.set(norm(a.n), { n: a.n, i: a.i || 0, o: a.o || 0 }));
+    ((br && br.all) || []).forEach(a => { const k = norm(a.n); if (!actMap.has(k)) actMap.set(k, { n: a.n, i: a.t || 0, o: 0, t: a.t || 0 }); else actMap.get(k).t = a.t || 0; });
+    const act = [...actMap.values()].sort((x, y) => (y.t || Math.max(x.i, x.o)) - (x.t || Math.max(y.i, y.o)));
     const labels = ((br && br.labels) || []).map(l => ({ name: l.name, color: l.color, count: l.count }));
     const chats = ((br && br.chats) || []).filter(c => !/@g\.us$/.test(c.id || '')).map(c => ({ n: c.name, labels: c.labels }));
     const bar = (await sget(K_BAR)) || {}; const tabs = (bar.tabs || []).map(t => ({ name: t.name, contacts: t.contacts || [] }));

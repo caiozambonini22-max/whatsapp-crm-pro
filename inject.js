@@ -53,8 +53,14 @@
       });
       if (li || lo) act.push({ n: chatName(c), i: li, o: lo, g: !!(c.isGroup || (c.id && c.id.server === 'g.us')) });
     });
+    var all = [];
+    arr(s.C).forEach(function (c) {
+      if (c.isGroup || (c.id && c.id.server === 'g.us') || (c.id && c.id.server === 'broadcast') || (c.id && c.id._serialized === 'status@broadcast')) return;
+      var nm = chatName(c); if (!nm) return;
+      all.push({ n: nm, t: (c.t || 0) * 1000 });
+    });
     return {
-      ok: true, act: act,
+      ok: true, act: act, all: all,
       labels: labs.map(function (l) { return { id: String(l.id), name: l.name, color: l.hexColor || null, count: counts[l.name] || 0 }; }),
       chats: chats
     };
