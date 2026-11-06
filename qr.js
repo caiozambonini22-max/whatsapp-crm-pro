@@ -52,7 +52,7 @@
   .qr-pick .it{padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px} .qr-pick .it:hover{background:#ffffff14}
   .cfgrow{display:flex;align-items:center;gap:10px;padding:12px 6px;font-size:14px;color:#e9edef} .cfgrow span{flex:1}
   .sw{width:46px;height:24px;border-radius:99px;background:#3a444a;position:relative;cursor:pointer;flex:none} .sw::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.15s} .sw.on{background:var(--acc)} .sw.on::after{left:25px}
-  html,body{min-width:0} .sec>.scroll,.cr-body,#msgs-body{min-height:0!important} .creator{position:fixed!important;inset:0;height:100vh;max-height:100vh;overflow:hidden} .cr-body{overflow-y:auto!important;padding-bottom:90px!important}
+  html,body{min-width:0} .sec>.scroll,.cr-body,#msgs-body{min-height:0!important} .creator{position:fixed!important;inset:0;height:100vh;max-height:100vh;overflow:hidden} .cr-body{overflow-y:scroll!important;padding:12px 6px 90px 14px!important;box-sizing:border-box} #msgs-body{overflow-y:scroll!important}
   .qc .ctr{position:sticky;bottom:-12px;padding:10px 0 6px;background:linear-gradient(transparent,#1a2530 35%);z-index:5}
   .qr-row{font-size:15.5px!important;padding:9px 8px!important;cursor:pointer} .qr-row .nm{font-size:15.5px!important;font-weight:500} .qg-h{font-size:15.5px!important} .qr-row .ic{font-size:17px} .qr-row button{font-size:17px!important}
   .qr-pills .chip{font-size:14px!important;padding:6px 14px!important} .qc .btn,.qr-pills .chip{color:var(--acc-fg,#fff)!important}
