@@ -942,6 +942,7 @@
     const ui = (await sget('wcrm_ui')) || {};
     // #primeiroNome: resolve UMA vez, com a conversa em que o envio foi acionado (contato salvo → nome do perfil; vazio em grupo)
     let nome = ''; try { if (W.applyNomeLive) nome = String((await W.applyNomeLive('#primeiroNome')) || '').trim(); } catch (x) {}
+    if (!/[A-Za-zÀ-ÿ]/.test(nome)) nome = '';   // número/55 nunca vira nome: sem nome, fica em branco
     const subst = v => typeof v === 'string' ? v.replace(/#primeiroNome/gi, nome) : Array.isArray(v) ? v.map(subst) : (v && typeof v === 'object') ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, subst(x)])) : v;
     for (const q of qs) for (const k of Object.keys(q)) { if (k !== 'dataUrl') q[k] = subst(q[k]); }
     const run = { cancel: false, label: 'Preparando…', ico: '', cancelable: true, hidden: !!ui.noMonitor }; qrRuns[chatId] = run; qrActive = chatId; busy = true;
