@@ -518,7 +518,7 @@
     wrap.id = 'wcrm-wrap';
     Object.assign(wrap.style, {
       position: 'fixed', top: '0', right: '0', bottom: '0',
-      width: '380px', zIndex: '2147483646',
+      width: 'var(--wcrm-pw,380px)', zIndex: '2147483646',
       transition: 'transform .25s cubic-bezier(.4,0,.2,1)',
       boxShadow: '-4px 0 20px rgba(0,0,0,.4)',
     });

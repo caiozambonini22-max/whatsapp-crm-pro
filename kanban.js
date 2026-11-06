@@ -15,7 +15,7 @@
   const COLS_MAX = 120;   // cartões desenhados por coluna (o resto aparece como “+N”)
 
   let tabs = [], inbox = [], kb = { values: {}, notes: {}, hidden: [] }, filters = {}, dark = ls('wcrm_kb_dark') !== '0', acc = ls('wcrm_acc') || ACC[0], open = false, menuCollapsed = ls('wcrm_kb_side') === '1';
-  const setAcc = c => { acc = c; ls('wcrm_acc', c); document.documentElement.style.setProperty('--wcrm-acc', c); const r = document.getElementById('wcrm-kb'); if (r) r.style.setProperty('--acc', c); };
+  const setAcc = c => { acc = c; ls('wcrm_acc', c); try { chrome.storage.local.set({ wcrm_acc: c }); } catch (e) {} document.documentElement.style.setProperty('--wcrm-acc', c); const r = document.getElementById('wcrm-kb'); if (r) r.style.setProperty('--acc', c); };
   setAcc(acc);
 
   const css = document.createElement('style');

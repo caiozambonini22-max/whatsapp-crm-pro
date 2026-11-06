@@ -1602,6 +1602,7 @@ function collectBackupData() {
     exportedAtFormatted: new Date().toLocaleString('pt-BR'),
     data: {
       msgs,
+      cats: Object.fromEntries(Object.entries(CATS).filter(([k]) => k !== 'all')),
       labels,
       crmTabs,
       contacts,
@@ -1775,6 +1776,7 @@ $('btn-import-replace').addEventListener('click', () => {
 // Aplica o backup
 function applyBackup(data, mode) {
   const d = data.data;
+  if (d.cats && typeof d.cats === 'object') Object.keys(d.cats).forEach(k => { if (mode === 'replace' || !CATS[k]) CATS[k] = d.cats[k]; });
   if (mode === 'replace') {
     if (d.msgs) msgs = d.msgs;
     if (d.labels) labels = d.labels;

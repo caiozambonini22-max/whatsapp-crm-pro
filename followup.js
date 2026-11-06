@@ -26,6 +26,7 @@
   // ── CSS ──
   const css = document.createElement('style');
   css.textContent = `
+  html.wcrm-bar #wcrm-fu{top:46px !important;} html.wcrm-left #wcrm-fu{left:56px !important;} html.wcrm-open #wcrm-fu{right:var(--wcrm-pw,380px) !important;}
   #wcrm-fu{position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;font-family:'Segoe UI',Arial,sans-serif;}
   #wcrm-fu.show{display:flex;}
   #wcrm-fu .fu-box{width:min(940px,94vw);height:min(86vh,820px);background:#14181c;color:#e9edef;border:1px solid #2a3238;border-radius:16px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.6);}

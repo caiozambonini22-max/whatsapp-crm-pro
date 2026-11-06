@@ -24,9 +24,9 @@
     html.wcrm-bar body{padding-top:${BAR_H}px !important;box-sizing:border-box !important;}
     html.wcrm-bar #app{top:${BAR_H}px !important;height:calc(100vh - ${BAR_H}px) !important;}
     html.wcrm-bar #wcrm-wrap{top:${BAR_H}px !important;}
-    html.wcrm-open #app{width:calc(100vw - ${PANEL_W}px) !important;}
+    html.wcrm-open #app{width:calc(100vw - var(--wcrm-pw,${PANEL_W}px)) !important;}
     html.wcrm-left #app{left:56px !important;width:calc(100vw - 56px) !important;}
-    html.wcrm-left.wcrm-open #app{width:calc(100vw - 56px - ${PANEL_W}px) !important;}
+    html.wcrm-left.wcrm-open #app{width:calc(100vw - 56px - var(--wcrm-pw,${PANEL_W}px)) !important;}
     html.wcrm-open #wcrm-topbar{right:0;}
     #wcrm-left{position:fixed;left:0;top:0;bottom:0;width:56px;z-index:2147483641;background:#0d0f11;border-right:1px solid #2a3238;display:none;flex-direction:column;align-items:center;gap:8px;padding-top:10px;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif;}
     html.wcrm-left #wcrm-left{display:flex;} html.wcrm-bar #wcrm-left{top:${BAR_H}px;}
@@ -85,7 +85,7 @@
 
   // ── barra do topo ──
   const bar = document.createElement('div'); bar.id = 'wcrm-topbar';
-  bar.innerHTML = `<img class="tb-logo" src="${getURL('icons/icon128.png')}" alt=""><span class="tb-mode" id="wcrm-mode"></span><div class="tb-chips" id="wcrm-chips"><span class="tb-empty">Carregando…</span></div>
+  bar.innerHTML = `<img class="tb-logo" src="${getURL('icons/icon128.png')}" alt=""><button class="tb-btn" id="wcrm-tb-funnel" title="Filtro Funil"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg></button><span class="tb-mode" id="wcrm-mode"></span><div class="tb-chips" id="wcrm-chips"><span class="tb-empty">Carregando…</span></div>
     <button class="tb-btn" id="wcrm-tb-add" title="Nova aba" style="display:none">＋</button>
     <button class="tb-btn" id="wcrm-tb-refresh" title="Atualizar">↻</button><button class="tb-btn" id="wcrm-tb-menu" title="Menu">≡</button>`;
   document.body.appendChild(bar);
@@ -206,6 +206,9 @@
   document.getElementById('wcrm-tb-menu').addEventListener('click', e => {
     popAt(e.currentTarget, `<div class="it" data-m="tabs"><span class="ck">${mode === 'tabs' ? '✓' : ''}</span>📂 Abas (do CRM)</div><div class="it" data-m="labels"><span class="ck">${mode === 'labels' ? '✓' : ''}</span>🏷️ Etiquetas (do WhatsApp)</div>
       <div class="it" data-m="strip"><span class="ck">${document.documentElement.classList.contains('wcrm-strip') ? '✓' : ''}</span>▭ Barra da conversa</div><div class="it" data-m="left"><span class="ck">${document.documentElement.classList.contains('wcrm-left') ? '✓' : ''}</span>▍Menu da esquerda</div><div class="it" data-m="hide"><span class="ck"></span>⌃ Ocultar exibição</div>`, 'right');
+  });
+  document.getElementById('wcrm-tb-funnel').addEventListener('click', e => {
+    popAt(e.currentTarget, `<div class="it" data-m="tabs"><span class="ck">${mode === 'tabs' ? '✓' : ''}</span>📂 Abas</div><div class="it" data-m="labels"><span class="ck">${mode === 'labels' ? '✓' : ''}</span>🏷️ Etiquetas</div><div class="it" data-m="hide"><span class="ck"></span>⬇ Ocultar Exibição</div>`, 'left');
   });
   document.getElementById('wcrm-tb-add').addEventListener('click', e => {
     popAt(e.currentTarget, '<div class="ttl">Nova aba</div><input id="wcrm-newtab" placeholder="Nome da aba e Enter" maxlength="30">', 'right');
@@ -372,6 +375,30 @@
     syncAgentBtn(); updateStrip();
   }
   setInterval(placeAll, 1200); window.addEventListener('resize', placeAll);
+  // ── largura do menu lateral (ajustável em ⚙) + botão ⚡ ao lado do microfone + logo Z (minimizar/maximizar) ──
+  function setPW(px) { px = Math.max(300, Math.min(700, +px || 380)); document.documentElement.style.setProperty('--wcrm-pw', px + 'px'); const w = document.getElementById('wcrm-wrap'); if (w) w.style.width = px + 'px'; }
+  try { chrome.storage.local.get('wcrm_ui', o => { const u = o.wcrm_ui || {}; if (u.w) setPW(u.w); }); chrome.storage.onChanged.addListener((ch, a) => { if (a === 'local' && ch.wcrm_ui && ch.wcrm_ui.newValue) setPW(ch.wcrm_ui.newValue.w); }); } catch (e) {}
+  const boltCss = document.createElement('style');
+  boltCss.textContent = '#wcrm-bolt,#wcrm-zlogo{position:fixed;z-index:2147483642;border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;user-select:none}'
+    + '#wcrm-bolt{width:40px;height:40px;background:transparent;border:0;font-size:24px;color:var(--wcrm-acc,#2563eb)} #wcrm-bolt:hover{background:#8884}'
+    + '#wcrm-zlogo{width:44px;height:44px;background:#0b0b0b;border:2px solid var(--wcrm-acc,#00a884);color:var(--wcrm-acc,#00a884);font:900 22px "Segoe UI",Arial;box-shadow:0 3px 12px #0006} #wcrm-zlogo:hover{transform:scale(1.07)}'
+    + '#wcrm-btn{display:none !important}';
+  document.documentElement.appendChild(boltCss);
+  const bolt = document.createElement('div'); bolt.id = 'wcrm-bolt'; bolt.title = 'Abrir/fechar menu lateral'; bolt.textContent = '⚡';
+  const zlogo = document.createElement('div'); zlogo.id = 'wcrm-zlogo'; zlogo.title = 'Minimizar / maximizar o menu lateral'; zlogo.textContent = 'Z';
+  const togglePanelBtn = () => { const b = document.getElementById('wcrm-btn'); b && b.click(); };
+  bolt.addEventListener('click', togglePanelBtn); zlogo.addEventListener('click', togglePanelBtn);
+  document.body.appendChild(bolt); document.body.appendChild(zlogo);
+  function placeBolt() {
+    const main = document.getElementById('main'); if (!main) { bolt.style.display = zlogo.style.display = 'none'; return; }
+    const r = main.getBoundingClientRect(); const ft = main.querySelector('footer'); if (!ft || r.width < 200) { bolt.style.display = zlogo.style.display = 'none'; return; }
+    const fr = ft.getBoundingClientRect();
+    const mic = ft.querySelector('[data-icon="ptt"],[data-icon="ptt-refreshed"],[data-icon="send"],[data-icon="wds-ic-send-filled"]'); const mr = mic ? mic.getBoundingClientRect() : null;
+    bolt.style.display = 'flex'; bolt.style.left = Math.round((mr ? mr.right + 4 : fr.right - 48)) + 'px'; bolt.style.top = Math.round((mr ? mr.top + mr.height / 2 : fr.top + fr.height / 2) - 20) + 'px';
+    zlogo.style.display = 'flex'; zlogo.style.left = Math.round(r.left + 12) + 'px'; zlogo.style.top = Math.round(fr.top - 62) + 'px';
+  }
+  setInterval(placeBolt, 900); window.addEventListener('resize', placeBolt);
+
 
   // ── fechar painel pelo ✕ do cabeçalho ──
   window.addEventListener('message', e => {

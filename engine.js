@@ -562,20 +562,37 @@
     if (st.type === 'invite') return [st.text || '', st.link || ''].filter(Boolean).join('\n');
     if (st.type === 'contact') return ['👤 *' + (st.name || 'Contato') + '*', st.phone ? '📞 ' + st.phone : ''].filter(Boolean).join('\n');
     if (st.type === 'banner') return [st.text || '', st.link || ''].filter(Boolean).join('\n');
-    if (st.type === 'list') return [st.title ? '*' + st.title + '*' : '', (st.items || []).map((x, i) => (i + 1) + '. ' + x).join('\n')].filter(Boolean).join('\n');
+    if (st.type === 'list') return [st.title ? '*' + st.title + '*' : '', st.text || '', (st.items || []).map((x, i) => (i + 1) + '. ' + x).join('\n'), st.footer ? '_' + st.footer + '_' : ''].filter(Boolean).join('\n');
     return '';
   }
-  async function quickSteps(id) {
+  const AUX = new Set(['tab_add', 'tab_rm', 'tab_rmall', 'label_add', 'label_rm', 'label_rmall', 'archive', 'unarchive', 'pin', 'unpin', 'unread']);
+  async function quickSteps(id, depth) {
     const stt = (await sget('wcrm_state')) || {}; const m = (stt.msgs || []).find(x => String(x.id) === String(id));
     if (!m) return null;
     const out = [];
-    (m.actions || []).forEach(a => {
+    for (const a of (m.actions || [])) {
+      if (a.k === 'ref') {   // script: junta várias respostas rápidas
+        if ((depth || 0) < 2 && a.refId != null) { const sub = await quickSteps(a.refId, (depth || 0) + 1); if (sub) sub.forEach(x => out.push(x)); }
+        if (+a.iv) out.push({ type: 'wait', seconds: +a.iv });
+        continue;
+      }
       if (a.db) out.push({ type: 'wait', seconds: a.db });
+      if (a.ty && ['text', 'image', 'video', 'doc', 'pix', 'invite', 'contact', 'banner', 'list', 'sticker'].includes(a.k)) out.push({ type: 'typing', seconds: a.ty });
       if (a.k === 'text' && a.txt) out.push({ type: 'text', variations: [a.txt] });
-      else if (['image', 'video', 'audio', 'doc'].includes(a.k) && a.fileDataUrl) out.push({ type: a.k === 'doc' ? 'document' : a.k, dataUrl: a.fileDataUrl, name: a.fileName, mime: a.fileMime, caption: a.cap || '' });
-      else if (a.k === 'typing' || a.k === 'recording') out.push({ type: a.k, seconds: a.db || 3 });
-      if (a.da) out.push({ type: 'wait', seconds: a.da });
-    });
+      else if (['image', 'video', 'audio', 'doc', 'sticker'].includes(a.k) && a.fileDataUrl) {
+        if (a.k === 'audio' && a.ty) out.push({ type: 'recording', seconds: a.ty });
+        out.push({ type: a.k === 'doc' ? 'document' : a.k, dataUrl: a.fileDataUrl, name: a.fileName, mime: a.fileMime, caption: a.cap || '' });
+      }
+      else if (a.k === 'pix') out.push({ type: 'pix', name: a.name, keyType: a.keyType, key: a.key, value: a.value, note: a.note });
+      else if (a.k === 'invite') out.push({ type: 'invite', text: a.txt || (a.group ? 'Entre no grupo ' + a.group + ':' : ''), link: a.link });
+      else if (a.k === 'contact') out.push({ type: 'contact', name: a.name, phone: a.phone });
+      else if (a.k === 'banner') out.push({ type: 'banner', text: [a.title ? '*' + a.title + '*' : '', a.desc || ''].filter(Boolean).join('\n'), link: a.link });
+      else if (a.k === 'list') out.push({ type: 'list', title: a.title, text: a.desc, footer: a.footer, items: (a.items || []).filter(Boolean) });
+      else if (AUX.has(a.k)) out.push({ type: a.k, name: a.name });
+      else if (a.k === 'typing' || a.k === 'recording') out.push({ type: a.k, seconds: a.db || a.sec || 3 });
+      else if (a.k === 'wait' && (a.sec || a.da)) out.push({ type: 'wait', seconds: a.sec || a.da });
+      if (a.da && a.k !== 'wait') out.push({ type: 'wait', seconds: a.da });
+    }
     return out;
   }
   async function sendOne(W, enr, st, rot) {
@@ -596,6 +613,17 @@
     if (!ok || after <= before) return { ok: false, sent: false, why: 'Não consegui confirmar o envio (' + st.type + ')' };
     return { ok: true, sent: true, text };
   }
+  async function execAux(W, st, contact) {
+    const t = st.type;
+    if (t === 'label_add' || t === 'label_rm') { const r = await applyLabelsUI(t === 'label_add' ? [st.name] : [], t === 'label_rm' ? [st.name] : []); if (!r.ok) await addLog('Etiqueta não aplicada em "' + contact + '": ' + r.why); return; }
+    if (t === 'label_rmall') { const br = W.getBridge && W.getBridge(); const c = ((br && br.chats) || []).find(x => norm(x.name) === norm(contact)); const ls = c ? c.labels : []; if (ls.length) await applyLabelsUI([], ls); return; }
+    if (t === 'tab_add' || t === 'tab_rm' || t === 'tab_rmall') {
+      const f = document.getElementById('wcrm-iframe');
+      const msg = t === 'tab_add' ? { type: 'SET_TAB', contact, tab: st.name, newTab: st.name, mode: 'add' } : t === 'tab_rm' ? { type: 'SET_TAB', contact, tab: st.name, mode: 'remove' } : { type: 'SET_TAB', contact, tab: '', mode: 'clear' };
+      f && f.contentWindow && f.contentWindow.postMessage(msg, '*'); return;
+    }
+    if (['archive', 'unarchive', 'pin', 'unpin', 'unread'].includes(t)) { const r = await actBridge(t, '__active__'); if (!r.ok) await addLog('Ação "' + t + '" falhou em "' + contact + '": ' + r.reason); }
+  }
   async function runSteps(W, rule, enr, steps, rot, before, fail) {
     let firstText = '', sentCount = 0;
     const start = Math.min(enr.stepIdx || 0, steps.length);
@@ -608,6 +636,7 @@
         for (const q of qs) {
           if (q.type === 'wait') { await sleep(Math.min(120, +q.seconds || 0) * 1000); continue; }
           if (q.type === 'typing' || q.type === 'recording') { await actBridge(q.type, enr.contact); await sleep((+q.seconds || 3) * 1000); await actBridge('paused', enr.contact); continue; }
+          if (AUX.has(q.type)) { await execAux(W, q, enr.contact); continue; }
           const r = await sendOne(W, enr, q, rot);
           if (!r.ok) { await fail(r.why + ' — NÃO avancei', 'Falha no envio do follow-up "' + rule.name + '": ' + r.why); return { ok: false }; }
           if (r.sent) { sentCount++; firstText = firstText || r.text; await sleep(rndMs(1200, 2500)); }
@@ -870,7 +899,7 @@
   }
   // ── envio manual de resposta rápida (clique em ▷) — com faixa de progresso e "Cancelar Envio" (igual WaSpeed) ──
   let qrRunning = false, qrCancel = false;
-  const QR_ICO = { text: '📝', image: '🖼️', video: '🎬', audio: '🎤', document: '📄' };
+  const QR_ICO = { text: '📝', image: '🖼️', video: '🎬', audio: '🎤', document: '📄', sticker: '😀', pix: '💠', invite: '👥', contact: '👤', banner: '🔗', list: '☰' };
   function qrBar(label, ico, cancelable) {
     let b = document.getElementById('wcrm-qrbar');
     if (!b) {
@@ -893,7 +922,8 @@
     if (busy) { qrBar('Aguarde: o robô está enviando outra coisa agora', '⏳', false); setTimeout(qrHide, 3000); return; }
     const stt = (await sget('wcrm_state')) || {}; const m = (stt.msgs || []).find(x => String(x.id) === String(id));
     const qs = await quickSteps(id); if (!qs || !qs.length) { qrBar('Resposta rápida vazia', '⚠️', false); setTimeout(qrHide, 2500); return; }
-    const sendable = qs.filter(q => !['wait', 'typing', 'recording'].includes(q.type)); const total = sendable.length; let n = 0;
+    const ui = (await sget('wcrm_ui')) || {}; const showBar = (a, b, c) => { if (!ui.noMonitor) qrBar(a, b, c); };
+    const sendable = qs.filter(q => !['wait', 'typing', 'recording'].includes(q.type) && !AUX.has(q.type)); const total = sendable.length; let n = 0;
     qrRunning = true; busy = true; qrCancel = false;
     const title = (m && m.label) || 'Resposta Rápida'; let fail = '';
     try {
@@ -901,9 +931,11 @@
         if (qrCancel) break;
         if (q.type === 'wait') { await qrSleep(Math.min(120, +q.seconds || 0) * 1000); continue; }
         if (q.type === 'typing' || q.type === 'recording') { await actBridge(q.type, '__active__'); await qrSleep((+q.seconds || 3) * 1000); await actBridge('paused', '__active__'); continue; }
-        n++; qrBar('Ação da Resposta Rápida (' + n + '/' + total + ') — ' + title, QR_ICO[q.type] || '📨', true);
+        if (AUX.has(q.type)) { await execAux(W, q, (W.getDisplayName && W.getDisplayName()) || ''); continue; }
+        n++; showBar('Ação da Resposta Rápida (' + n + '/' + total + ') — ' + title, QR_ICO[q.type] || '📨', true);
         let ok = false;
-        if (q.type === 'text') { const t = pickVariation(q.variations, 0); ok = t ? await W.sendMsg(t) : true; }
+        if (q.type === 'text') { let t = pickVariation(q.variations, 0); if (t && !ui.noSig && ui.sigName) t = '*' + ui.sigName + ':*\n' + t; ok = t ? await W.sendMsg(t) : true; }
+        else if (['pix', 'invite', 'contact', 'banner', 'list'].includes(q.type)) { const t = templateText(q); ok = t ? await W.sendMsg(t) : true; }
         else {
           if (q.type === 'audio') { await actBridge('recording', '__active__'); await qrSleep(rndMs(2000, 4000)); await actBridge('paused', '__active__'); }
           if (qrCancel) break;
