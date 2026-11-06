@@ -868,6 +868,58 @@
     const bar = (await sget(K_BAR)) || {}; const tabs = (bar.tabs || []).map(t => ({ name: t.name, contacts: t.contacts || [] }));
     return { act, labels, chats, tabs, ok: !!(br && br.ok) };
   }
+  // ── envio manual de resposta rápida (clique em ▷) — com faixa de progresso e "Cancelar Envio" (igual WaSpeed) ──
+  let qrRunning = false, qrCancel = false;
+  const QR_ICO = { text: '📝', image: '🖼️', video: '🎬', audio: '🎤', document: '📄' };
+  function qrBar(label, ico, cancelable) {
+    let b = document.getElementById('wcrm-qrbar');
+    if (!b) {
+      b = document.createElement('div'); b.id = 'wcrm-qrbar';
+      b.style.cssText = 'position:fixed;z-index:2147483000;display:flex;align-items:center;gap:12px;padding:8px 14px;background:#111;color:#fff;border-bottom:1px solid #333;font:600 15px system-ui,Segoe UI,sans-serif;box-shadow:0 2px 8px #0006';
+      b.innerHTML = '<button id="wcrm-qrcancel" style="border:1px solid #ff4d4d;color:#ff6b6b;background:transparent;border-radius:999px;padding:5px 14px;font:600 13px system-ui;cursor:pointer">Cancelar Envio</button><span id="wcrm-qrico"></span><span id="wcrm-qrtxt"></span>';
+      document.body.appendChild(b);
+      b.querySelector('#wcrm-qrcancel').onclick = () => { qrCancel = true; b.querySelector('#wcrm-qrtxt').textContent = 'Cancelando…'; };
+    }
+    const main = document.querySelector('#main'); const r = main ? main.getBoundingClientRect() : { left: 0, width: window.innerWidth, top: 0 };
+    b.style.left = r.left + 'px'; b.style.width = r.width + 'px'; b.style.top = (r.top + 59) + 'px';
+    b.querySelector('#wcrm-qrico').textContent = ico || ''; b.querySelector('#wcrm-qrtxt').textContent = label;
+    b.querySelector('#wcrm-qrcancel').style.display = cancelable === false ? 'none' : '';
+  }
+  const qrHide = () => { const b = document.getElementById('wcrm-qrbar'); if (b) b.remove(); };
+  async function qrSleep(ms) { const end = Date.now() + ms; while (Date.now() < end && !qrCancel) await sleep(Math.min(250, end - Date.now())); }
+  async function quickRun(id) {
+    const W = root.__wcrm; if (!W) return;
+    if (qrRunning) { qrBar('Já existe um envio em andamento', '⏳', true); setTimeout(() => { if (!qrRunning) qrHide(); }, 2500); return; }
+    if (busy) { qrBar('Aguarde: o robô está enviando outra coisa agora', '⏳', false); setTimeout(qrHide, 3000); return; }
+    const stt = (await sget('wcrm_state')) || {}; const m = (stt.msgs || []).find(x => String(x.id) === String(id));
+    const qs = await quickSteps(id); if (!qs || !qs.length) { qrBar('Resposta rápida vazia', '⚠️', false); setTimeout(qrHide, 2500); return; }
+    const sendable = qs.filter(q => !['wait', 'typing', 'recording'].includes(q.type)); const total = sendable.length; let n = 0;
+    qrRunning = true; busy = true; qrCancel = false;
+    const title = (m && m.label) || 'Resposta Rápida'; let fail = '';
+    try {
+      for (const q of qs) {
+        if (qrCancel) break;
+        if (q.type === 'wait') { await qrSleep(Math.min(120, +q.seconds || 0) * 1000); continue; }
+        if (q.type === 'typing' || q.type === 'recording') { await actBridge(q.type, '__active__'); await qrSleep((+q.seconds || 3) * 1000); await actBridge('paused', '__active__'); continue; }
+        n++; qrBar('Ação da Resposta Rápida (' + n + '/' + total + ') — ' + title, QR_ICO[q.type] || '📨', true);
+        let ok = false;
+        if (q.type === 'text') { const t = pickVariation(q.variations, 0); ok = t ? await W.sendMsg(t) : true; }
+        else {
+          if (q.type === 'audio') { await actBridge('recording', '__active__'); await qrSleep(rndMs(2000, 4000)); await actBridge('paused', '__active__'); }
+          if (qrCancel) break;
+          ok = await sendMedia(W, q);
+        }
+        if (!ok) { fail = 'Falhou na ação ' + n + '/' + total; break; }
+        await qrSleep(rndMs(700, 1400));
+      }
+    } catch (err) { fail = String(err && err.message || err); }
+    qrRunning = false; busy = false;
+    if (fail) { qrBar('⚠️ ' + fail, '', false); await addLog('Resposta rápida "' + title + '": ' + fail); setTimeout(qrHide, 5000); }
+    else if (qrCancel) { qrBar('Envio cancelado (' + Math.max(0, n - 1) + '/' + total + ' enviadas)', '✋', false); setTimeout(qrHide, 2500); }
+    else { qrBar('Enviado (' + total + '/' + total + ') ✔', '', false); setTimeout(qrHide, 1200); }
+  }
+  window.addEventListener('message', e => { const d = e.data; if (!d || d.type !== 'QUICK_RUN') return; quickRun(d.id); });
+
   window.addEventListener('message', async e => {
     const t = e.data && e.data.type; if (!t || t.indexOf('BULK_') !== 0) return;
     const reply = m => window.postMessage(Object.assign({ from: 'wcrm-bulk' }, m), '*');
@@ -880,7 +932,7 @@
   });
   setInterval(() => bulkTick(), 4000);
 
-  root.__wcrmEngine = { tick, bulkTick, bulkGate, bulkStepsOf };
+  root.__wcrmEngine = { tick, bulkTick, bulkGate, bulkStepsOf, quickRun };
   setInterval(() => tick(), 10000);
   log('motor de follow-up carregado (v4.33)');
 })(typeof window !== 'undefined' ? window : globalThis);

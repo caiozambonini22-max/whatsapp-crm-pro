@@ -323,6 +323,8 @@ $('msgs-body').addEventListener('click', e => {
 function runMsg(id) {
   const m = msgs.find(x => x.id === id); if (!m) return;
   m.uses = (m.uses || 0) + 1;
+  window.parent.postMessage({ type: 'QUICK_RUN', id: id }, '*');   // o motor envia tudo (texto, mídia, áudio) com faixa de progresso
+  return;
 
   // Verifica se tem conversa aberta (activeContact pode estar desatualizado — content.js vai resolver o nome na hora)
   let cumulativeDelay = 0;
