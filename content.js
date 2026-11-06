@@ -607,7 +607,7 @@
   }).observe(document.body, { childList: true, subtree: true });
 
   // ── API para o engine.js (motor de follow-up) ─────────────
-  window.__wcrm = { bridgeCall, getBridge: () => bridge, applyLabel: applyLabelBridge, bridgeOk: () => !!(bridge && bridge.ok), sendMsg, prefillMsg, resolveStable, resolveContact, getDisplayName, getInputBox, getFirstName, toast: showPageToast };
+  window.__wcrm = { applyNomeLive, bridgeCall, getBridge: () => bridge, applyLabel: applyLabelBridge, bridgeOk: () => !!(bridge && bridge.ok), sendMsg, prefillMsg, resolveStable, resolveContact, getDisplayName, getInputBox, getFirstName, toast: showPageToast };
 
   // ── Aguarda WA ────────────────────────────────────────────
   const timer = setInterval(() => {

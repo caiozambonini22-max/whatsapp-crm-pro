@@ -940,6 +940,10 @@
     const stt = (await sget('wcrm_state')) || {}; const m = (stt.msgs || []).find(x => String(x.id) === String(id));
     const qs = await quickSteps(id); if (!qs || !qs.length) { qrDraw({ label: 'Resposta rápida vazia', ico: '⚠️', cancelable: false }); setTimeout(() => { if (!Object.keys(qrRuns).length) qrDraw(null); }, 2500); return; }
     const ui = (await sget('wcrm_ui')) || {};
+    // #primeiroNome: resolve UMA vez, com a conversa em que o envio foi acionado (contato salvo → nome do perfil; vazio em grupo)
+    let nome = ''; try { if (W.applyNomeLive) nome = String((await W.applyNomeLive('#primeiroNome')) || '').trim(); } catch (x) {}
+    const subst = v => typeof v === 'string' ? v.replace(/#primeiroNome/gi, nome) : Array.isArray(v) ? v.map(subst) : (v && typeof v === 'object') ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, subst(x)])) : v;
+    for (const q of qs) for (const k of Object.keys(q)) { if (k !== 'dataUrl') q[k] = subst(q[k]); }
     const run = { cancel: false, label: 'Preparando…', ico: '', cancelable: true, hidden: !!ui.noMonitor }; qrRuns[chatId] = run; qrActive = chatId; busy = true;
     const showBar = (a, b, c) => { run.label = a; run.ico = b; run.cancelable = c; qrSync(); };
     const sendable = qs.filter(q => !['wait', 'typing', 'recording'].includes(q.type) && !AUX.has(q.type)); const total = sendable.length; let n = 0;
