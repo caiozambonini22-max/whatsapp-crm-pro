@@ -274,6 +274,18 @@
       var media = prep(opaque, o);
       stage = 'waitForPrep';
       if (media && typeof media.waitForPrep === 'function') await withTimeout(media.waitForPrep(), 40000, 'preparar mídia');
+      if (k === 'audio' && media && media.mediaData) {   // gráfico de onda + duração, igual a um áudio gravado no celular
+        stage = 'onda do áudio';
+        try {
+          var AC = window.AudioContext || window.webkitAudioContext; var ac = new AC();
+          var ab = await withTimeout(ac.decodeAudioData(await blob.arrayBuffer()), 20000, 'decodificar áudio');
+          var ch = ab.getChannelData(0); var N = 64; var step = Math.max(1, Math.floor(ch.length / N)); var vals = [];
+          for (var wi = 0; wi < N; wi++) { var sm = 0; for (var wj = 0; wj < step; wj++) sm += Math.abs(ch[wi * step + wj] || 0); vals.push(sm / step); }
+          var mxv = Math.max.apply(null, vals) || 1; var wfa = new Uint8Array(N); for (var wk = 0; wk < N; wk++) wfa[wk] = Math.round(vals[wk] / mxv * 100);
+          media.mediaData.waveform = wfa; media.mediaData.duration = Math.max(1, Math.round(ab.duration));
+          try { ac.close(); } catch (e2) { }
+        } catch (e1) { /* sem onda: manda mesmo assim como voz */ }
+      }
       stage = 'sendToChat';
       if (!media || typeof media.sendToChat !== 'function') return { ok: false, reason: 'sem sendToChat (' + typeof media + ')' };
       var opts = k === 'audio' ? {} : { caption: d.caption || '', addEvenWhilePreparing: false, isViewOnce: false };
