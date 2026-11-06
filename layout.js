@@ -369,8 +369,10 @@
     // menu lateral
     const open = lsGet('wcrm_rail') !== '0';
     const top = Math.round(Math.min(Math.max(r.top + 70, 0), window.innerHeight - 420));
-    if (open) { rail.style.display = 'flex'; mini.style.display = 'none'; rail.style.left = Math.round(r.left + 10) + 'px'; rail.style.top = top + 'px'; }
-    else { rail.style.display = 'none'; mini.style.display = 'flex'; mini.style.left = Math.round(r.left + 10) + 'px'; mini.style.top = top + 'px'; }
+    mini.style.display = 'none';
+    const ftr = main.querySelector('footer'); const zTop = ftr ? ftr.getBoundingClientRect().top - 62 : window.innerHeight - 130;
+    if (open) { rail.style.display = 'flex'; rail.style.left = Math.round(r.left + 14) + 'px'; rail.style.top = 'auto'; rail.style.bottom = Math.round(window.innerHeight - zTop + 8) + 'px'; rail.style.maxHeight = Math.max(120, Math.round(zTop - r.top - 70)) + 'px'; rail.style.overflowY = 'auto'; }
+    else { rail.style.display = 'none'; }
     const hdr = main.querySelector('header'); if (hdr && hdr.getAttribute('draggable') !== 'true') hdr.setAttribute('draggable', 'true');
     syncAgentBtn(); updateStrip();
   }
@@ -378,23 +380,24 @@
   // ── largura do menu lateral (ajustável em ⚙) + botão ⚡ ao lado do microfone + logo Z (minimizar/maximizar) ──
   function setPW(px) { px = Math.max(300, Math.min(700, +px || 380)); document.documentElement.style.setProperty('--wcrm-pw', px + 'px'); const w = document.getElementById('wcrm-wrap'); if (w) w.style.width = px + 'px'; }
   try { chrome.storage.local.get('wcrm_ui', o => { const u = o.wcrm_ui || {}; if (u.w) setPW(u.w); }); chrome.storage.onChanged.addListener((ch, a) => { if (a === 'local' && ch.wcrm_ui && ch.wcrm_ui.newValue) setPW(ch.wcrm_ui.newValue.w); }); } catch (e) {}
+  try { chrome.storage.local.get('wcrm_acc', o => { if (o.wcrm_acc) document.documentElement.style.setProperty('--wcrm-acc', o.wcrm_acc); }); chrome.storage.onChanged.addListener((c, a) => { if (a === 'local' && c.wcrm_acc && c.wcrm_acc.newValue) document.documentElement.style.setProperty('--wcrm-acc', c.wcrm_acc.newValue); }); } catch (e) {}
   const boltCss = document.createElement('style');
   boltCss.textContent = '#wcrm-bolt,#wcrm-zlogo{position:fixed;z-index:2147483642;border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;user-select:none}'
     + '#wcrm-bolt{width:40px;height:40px;background:transparent;border:0;font-size:24px;color:var(--wcrm-acc,#2563eb)} #wcrm-bolt:hover{background:#8884}'
     + '#wcrm-zlogo{width:44px;height:44px;background:#0b0b0b;border:2px solid var(--wcrm-acc,#00a884);color:var(--wcrm-acc,#00a884);font:900 22px "Segoe UI",Arial;box-shadow:0 3px 12px #0006} #wcrm-zlogo:hover{transform:scale(1.07)}'
-    + '#wcrm-btn{display:none !important}';
+    + '#wcrm-btn{display:none !important} #main footer{padding-right:46px !important;box-sizing:border-box}';
   document.documentElement.appendChild(boltCss);
   const bolt = document.createElement('div'); bolt.id = 'wcrm-bolt'; bolt.title = 'Abrir/fechar menu lateral'; bolt.textContent = '⚡';
-  const zlogo = document.createElement('div'); zlogo.id = 'wcrm-zlogo'; zlogo.title = 'Minimizar / maximizar o menu lateral'; zlogo.textContent = 'Z';
+  const zlogo = document.createElement('div'); zlogo.id = 'wcrm-zlogo'; zlogo.title = 'Minimizar / maximizar o menu de funções'; zlogo.textContent = 'Z';
   const togglePanelBtn = () => { const b = document.getElementById('wcrm-btn'); b && b.click(); };
-  bolt.addEventListener('click', togglePanelBtn); zlogo.addEventListener('click', togglePanelBtn);
+  bolt.addEventListener('click', togglePanelBtn); zlogo.addEventListener('click', () => { lsSet('wcrm_rail', lsGet('wcrm_rail') !== '0' ? '0' : '1'); placeAll(); });
   document.body.appendChild(bolt); document.body.appendChild(zlogo);
   function placeBolt() {
     const main = document.getElementById('main'); if (!main) { bolt.style.display = zlogo.style.display = 'none'; return; }
     const r = main.getBoundingClientRect(); const ft = main.querySelector('footer'); if (!ft || r.width < 200) { bolt.style.display = zlogo.style.display = 'none'; return; }
     const fr = ft.getBoundingClientRect();
     const mic = ft.querySelector('[data-icon="ptt"],[data-icon="ptt-refreshed"],[data-icon="send"],[data-icon="wds-ic-send-filled"]'); const mr = mic ? mic.getBoundingClientRect() : null;
-    bolt.style.display = 'flex'; bolt.style.left = Math.round((mr ? mr.right + 4 : fr.right - 48)) + 'px'; bolt.style.top = Math.round((mr ? mr.top + mr.height / 2 : fr.top + fr.height / 2) - 20) + 'px';
+    bolt.style.display = 'flex'; bolt.style.left = Math.round(fr.right - 40) + 'px'; bolt.style.top = Math.round(fr.top + fr.height / 2 - 20) + 'px';
     zlogo.style.display = 'flex'; zlogo.style.left = Math.round(r.left + 12) + 'px'; zlogo.style.top = Math.round(fr.top - 62) + 'px';
   }
   setInterval(placeBolt, 900); window.addEventListener('resize', placeBolt);

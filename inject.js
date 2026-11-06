@@ -208,14 +208,21 @@
     return out;
   }
   var HINT = /Media|Opaque|Prep|Upload|Send|Archive|Pin|Unread|ChatState|Presence|Composing/i;
+  var scanCache = {}, scanFail = {};
   function scanMods(req, pred, anyName) {
-    var ks = modNames(req);
+    var key = pred.toString() + '|' + (anyName ? 1 : 0);
+    if (scanCache[key]) return scanCache[key];
+    if (scanFail[key] && Date.now() - scanFail[key] < 120000) return null;   // não reescaneia à toa (travava o WhatsApp por minutos)
+    var ks = modNames(req); var t0 = Date.now();
     for (var i = 0; i < ks.length; i++) {
+      if (Date.now() - t0 > 2500) break;   // orçamento de tempo
       if (!/^WAWeb/.test(ks[i]) || (!anyName && !HINT.test(ks[i]))) continue;
-      try { var m = mod(req, ks[i]); var f = m && pred(m); if (f) { f.__mod = ks[i]; return f; } } catch (e) { }
+      try { var m = mod(req, ks[i]); var f = m && pred(m); if (f) { f.__mod = ks[i]; scanCache[key] = f; return f; } } catch (e) { }
     }
+    scanFail[key] = Date.now();
     return null;
   }
+  function withTimeout(p, ms, what) { return new Promise(function (res, rej) { var t = setTimeout(function () { rej(new Error('tempo esgotado em ' + what)); }, ms); Promise.resolve(p).then(function (v) { clearTimeout(t); res(v); }, function (e) { clearTimeout(t); rej(e); }); }); }
   function probeMedia() {
     var req = getReq(); if (!req) return { ok: false, reason: 'sem ponte' };
     var ks = modNames(req);
@@ -258,18 +265,18 @@
       var blob = await (await fetch(d.dataUrl)).blob();
       var file = new File([blob], d.name || 'arquivo', { type: d.mime || blob.type });
       stage = 'OpaqueData.createFromData';
-      var opaque = await OD.createFromData(file, file.type);
+      var opaque = await withTimeout(OD.createFromData(file, file.type), 30000, 'ler áudio/arquivo');
       var o = {}; var k = d.kind;
       if (k === 'document') o.asDocument = true; else if (k === 'sticker') o.asSticker = true;
       if (k === 'audio') o.isPtt = true;   // MENSAGEM DE VOZ gravada (precisa ser .ogg/opus)
       stage = 'prepRawMedia';
       var media = prep(opaque, o);
       stage = 'waitForPrep';
-      if (media && typeof media.waitForPrep === 'function') await media.waitForPrep();
+      if (media && typeof media.waitForPrep === 'function') await withTimeout(media.waitForPrep(), 40000, 'preparar mídia');
       stage = 'sendToChat';
       if (!media || typeof media.sendToChat !== 'function') return { ok: false, reason: 'sem sendToChat (' + typeof media + ')' };
       var opts = k === 'audio' ? {} : { caption: d.caption || '', addEvenWhilePreparing: false, isViewOnce: false };
-      if (media.sendToChat.length === 1) await media.sendToChat({ chat: chat, options: opts }); else await media.sendToChat(chat, opts);
+      await withTimeout(media.sendToChat.length === 1 ? media.sendToChat({ chat: chat, options: opts }) : media.sendToChat(chat, opts), 40000, 'enviar');
       return { ok: true };
     } catch (err) { return { ok: false, reason: 'etapa ' + (typeof stage !== 'undefined' ? stage : '?') + ': ' + String(err && err.message || err) }; }
   }

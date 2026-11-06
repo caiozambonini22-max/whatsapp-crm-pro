@@ -52,9 +52,21 @@
   .qr-pick .it{padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px} .qr-pick .it:hover{background:#ffffff14}
   .cfgrow{display:flex;align-items:center;gap:10px;padding:12px 6px;font-size:14px;color:#e9edef} .cfgrow span{flex:1}
   .sw{width:46px;height:24px;border-radius:99px;background:#3a444a;position:relative;cursor:pointer;flex:none} .sw::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.15s} .sw.on{background:var(--acc)} .sw.on::after{left:25px}
+  html,body{min-width:0} .sec>.scroll,.cr-body,#msgs-body{min-height:0!important} .creator{position:fixed!important;inset:0;height:100vh;max-height:100vh;overflow:hidden} .cr-body{overflow-y:auto!important;padding-bottom:90px!important}
+  .qc .ctr{position:sticky;bottom:-12px;padding:10px 0 6px;background:linear-gradient(transparent,#1a2530 35%);z-index:5}
+  .qr-row{font-size:15.5px!important;padding:9px 8px!important;cursor:pointer} .qr-row .nm{font-size:15.5px!important;font-weight:500} .qg-h{font-size:15.5px!important} .qr-row .ic{font-size:17px} .qr-row button{font-size:17px!important}
+  .qr-pills .chip{font-size:14px!important;padding:6px 14px!important} .qc .btn,.qr-pills .chip{color:var(--acc-fg,#fff)!important}
+  html.th-light,html.th-white{filter:invert(1) hue-rotate(180deg)} html.th-light img,html.th-light video,html.th-light audio,html.th-white img,html.th-white video,html.th-white audio{filter:invert(1) hue-rotate(180deg)}
+  html.th-black,html.th-black body,html.th-black .app,html.th-black .creator,html.th-black .qc .card,html.th-black .qg{background-color:#000}
+  html.th-black .cr-hdr,html.th-black .sbar{background:#0a0a0a}
   `;
   document.head.appendChild(css);
-  try { chrome.storage.local.get('wcrm_acc', o => { if (o.wcrm_acc) document.documentElement.style.setProperty('--acc', o.wcrm_acc); }); chrome.storage.onChanged.addListener((c, a) => { if (a === 'local' && c.wcrm_acc && c.wcrm_acc.newValue) document.documentElement.style.setProperty('--acc', c.wcrm_acc.newValue); }); } catch (e) {}
+  // ── tema (Preto / Escuro / Claro / Branco) + cor de destaque (inclui branco e preto) ──
+  window.__applyTheme = function (u) { const h = document.documentElement; h.classList.remove('th-light', 'th-white', 'th-black'); const m = (u && u.theme) || 'dark'; if (m === 'light') h.classList.add('th-light'); else if (m === 'white') h.classList.add('th-white'); else if (m === 'black') h.classList.add('th-black'); };
+  const accFg = c => { const m = /^#?([0-9a-f]{6})$/i.exec(c || ''); if (!m) return '#fff'; const n = parseInt(m[1], 16); const l = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)); return l > 160 ? '#000' : '#fff'; };
+  window.__applyAcc = function (c) { if (!c) return; document.documentElement.style.setProperty('--acc', c); document.documentElement.style.setProperty('--acc-fg', accFg(c)); };
+  try { chrome.storage.local.get('wcrm_ui', o => window.__applyTheme(o.wcrm_ui)); chrome.storage.onChanged.addListener((c, a) => { if (a === 'local' && c.wcrm_ui) window.__applyTheme(c.wcrm_ui.newValue); }); } catch (e) {}
+  try { chrome.storage.local.get('wcrm_acc', o => { if (o.wcrm_acc) window.__applyAcc(o.wcrm_acc); }); chrome.storage.onChanged.addListener((c, a) => { if (a === 'local' && c.wcrm_acc && c.wcrm_acc.newValue) window.__applyAcc(c.wcrm_acc.newValue); if (0) document.documentElement.style.setProperty('--acc', c.wcrm_acc.newValue); }); } catch (e) {}
 
   // ── mídia fora do estado (cada arquivo numa chave própria do chrome.storage; o estado fica leve) ──
   const MK = 'wcrm_mf_';
@@ -122,6 +134,7 @@
   };
   // clique em cabeçalho/itens da lista (captura antes do handler antigo)
   $q('msgs-body').addEventListener('click', e => {
+    const rowTxt = e.target.closest('.qr-row .nm, .qr-row .ic'); if (rowTxt) { e.stopImmediatePropagation(); const rw = rowTxt.closest('.qr-row'); window.parent.postMessage({ type: 'QUICK_RUN', id: +rw.dataset.id }, '*'); return; }
     const ec = e.target.closest('[data-editcat]'); if (ec) { e.stopImmediatePropagation(); openCreator(null, 'cat', ec.dataset.editcat); return; }
     const tg = e.target.closest('[data-toggle]'); if (tg) { e.stopImmediatePropagation(); const k = tg.dataset.toggle; window.__qrClosed = window.__qrClosed || {}; window.__qrClosed[k] = !window.__qrClosed[k]; renderMsgs(); return; }
     const eye = e.target.closest('[data-eye]'); if (eye) { e.stopImmediatePropagation(); const m = msgs.find(x => String(x.id) === eye.dataset.eye); const p = $q('mc-exp-' + eye.dataset.eye); if (m && p) { p.textContent = previewText(m); p.style.display = p.style.display === 'none' ? 'block' : 'none'; } return; }
@@ -283,11 +296,15 @@
       + '<div class="cfgrow"><span>Desativar a assinatura</span><div class="sw' + (ui.noSig ? ' on' : '') + '" data-sw="noSig"></div></div>'
       + '<div class="cfgrow"><span>Personalizar o nome da assinatura</span><div class="sw' + (ui.sigName ? ' on' : '') + '" data-sw="sigOn"></div></div>' + (ui.sigName !== '' || s.dataset.sig ? '<input type="text" id="cfg-sig" placeholder="Nome na assinatura" value="' + E(ui.sigName) + '">' : '')
       + '<div style="margin:16px 4px 4px;font-size:14px">Tamanho do Menu Lateral: <b id="cfg-wv">' + ui.w + ' px</b></div><input type="range" id="cfg-w" min="300" max="700" step="10" value="' + ui.w + '" style="width:100%">'
+      + '<div style="margin:16px 4px 6px;font-size:14px">Tema</div><div class="pal">' + [['black', 'Preto'], ['dark', 'Escuro'], ['light', 'Claro'], ['white', 'Branco']].map(t => '<button class="btn' + ((ui.theme || 'dark') === t[0] ? '' : ' g') + '" data-theme="' + t[0] + '" style="padding:6px 12px">' + t[1] + '</button>').join('') + '</div>'
+      + '<div style="margin:12px 4px 6px;font-size:14px">Cor de destaque</div><div class="pal">' + ['#000000', '#ffffff', '#00a884', '#1d4ed8', '#f59e0b', '#ef4444', '#a855f7', '#ec4899', '#14b8a6', '#84cc16'].map(c => '<b data-acc="' + c + '" style="background:' + c + ';border-color:' + (c === ui.acc ? '#888' : '#8884') + '"></b>').join('') + '<input type="color" id="cfg-acc" value="' + (ui.acc || '#00a884') + '" style="width:30px;height:30px;border:0;background:none;padding:0"></div>'
       + '<div style="margin:18px 0 6px;font-weight:700;font-size:14px">📥 Importar backup do WaSpeed</div><div class="note">Escolha o arquivo .json do backup. Entram as ações das respostas rápidas (texto, imagem, áudio, vídeo, link) com as mídias. Títulos, categorias e abas do WaSpeed vêm criptografados e não são lidos.</div><button class="btn" id="ws-pick" style="margin-top:8px">Escolher arquivo…</button><input type="file" id="ws-file" accept=".json,application/json" style="display:none"><div id="ws-out" class="note" style="white-space:pre-wrap;margin-top:8px"></div>'
       + '<div class="note" style="margin-top:14px">O monitor de envios é a faixa “Ação (1/9)” com o botão Cancelar Envio. A assinatura, quando ligada, vai em negrito antes do texto.</div>'
       + '<div class="ctr"><button class="btn g" id="cfg-close" style="color:#ff6b6b;border:1px solid #ff6b6b;background:transparent">Fechar Menu</button></div></div>'; };
     s.addEventListener('click', e => {
       const sw = e.target.closest('[data-sw]'); if (sw) { const k = sw.dataset.sw; if (k === 'sigOn') { if (ui.sigName) ui.sigName = ''; else { ui.sigName = ' '; ui.noSig = false; } s.dataset.sig = ui.sigName ? '1' : ''; } else ui[k] = !ui[k]; save(); draw(); return; }
+      const th = e.target.closest('[data-theme]'); if (th) { ui.theme = th.dataset.theme; save(); window.__applyTheme(ui); draw(); return; }
+      const ac = e.target.closest('[data-acc]'); if (ac) { ui.acc = ac.dataset.acc; save(); try { chrome.storage.local.set({ wcrm_acc: ui.acc }); } catch (x) {} window.__applyAcc(ui.acc); draw(); return; }
       if (e.target.id === 'cfg-close') window.parent.postMessage({ type: 'TOGGLE_PANEL' }, '*');
       if (e.target.id === 'ws-pick') document.getElementById('ws-file').click();
     });
@@ -307,7 +324,7 @@
         say('✅ Importadas ' + added + ' respostas rápidas (' + media + ' mídias)' + (dup ? ' · ' + dup + ' já existiam' : '') + (fail ? ' · ' + fail + ' falharam (espaço)' : '') + '\nNão importado: ' + r.skipped.labelActions + ' ações de etiqueta e ' + r.skipped.crmActions + ' de aba (os nomes vêm criptografados), ' + r.skipped.emptyMedia + ' mídia vazia.\nElas estão na categoria “Importado WaSpeed” — renomeie e reorganize como quiser.');
       } catch (err) { say('⚠️ Falhou: ' + (err && err.message || err)); }
     });
-    s.addEventListener('input', e => { if (e.target.id === 'cfg-w') { ui.w = +e.target.value; $q('cfg-wv').textContent = ui.w + ' px'; save(); } if (e.target.id === 'cfg-sig') { ui.sigName = e.target.value; save(); } });
+    s.addEventListener('input', e => { if (e.target.id === 'cfg-acc') { ui.acc = e.target.value; save(); try { chrome.storage.local.set({ wcrm_acc: ui.acc }); } catch (x) {} window.__applyAcc(ui.acc); } if (e.target.id === 'cfg-w') { ui.w = +e.target.value; $q('cfg-wv').textContent = ui.w + ' px'; save(); } if (e.target.id === 'cfg-sig') { ui.sigName = e.target.value; save(); } });
     try { chrome.storage.local.get('wcrm_ui', o => { ui = Object.assign(ui, o.wcrm_ui || {}); s.dataset.sig = ui.sigName ? '1' : ''; draw(); }); } catch (e) { draw(); }
   })();
 

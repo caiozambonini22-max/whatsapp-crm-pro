@@ -508,13 +508,13 @@
   // ── executor do script de ações ──
   const rndMs = (a, b) => Math.round(a + Math.random() * (b - a));
   async function dataUrlToFile(du, name, mime) { const r = await fetch(du); const b = await r.blob(); return new File([b], name || 'arquivo', { type: mime || b.type }); }
-  async function actBridge(op, chat) { const W = root.__wcrm; if (!(W && W.bridgeOk && W.bridgeOk())) return { ok: false, reason: 'ponte indisponível' }; return (await W.bridgeCall('ACT', { op, chat }, 8000)) || { ok: false, reason: 'sem resposta' }; }
+  async function actBridge(op, chat) { if ((root.__wcrmPresFail || 0) > 2) return { ok: false, reason: 'presença desligada' }; const W = root.__wcrm; if (!(W && W.bridgeOk && W.bridgeOk())) return { ok: false, reason: 'ponte indisponível' }; const r = (await W.bridgeCall('ACT', { op, chat }, 4000)) || { ok: false, reason: 'sem resposta' }; if (!r.ok && /presen|ponte/.test(r.reason || '') && ['typing', 'recording', 'paused'].includes(op)) root.__wcrmPresFail = (root.__wcrmPresFail || 0) + 1; return r; }
   async function sendMedia(W, m) {
     // 1º: envio direto pelo WhatsApp (sem prévia, igual ao WaSpeed)
     if (W.bridgeOk && W.bridgeOk()) {
-      const r = await W.bridgeCall('SENDMEDIA', { chat: '__active__', dataUrl: m.dataUrl, name: m.name, mime: m.mime, caption: m.caption || '', kind: m.type }, 60000);
+      const r = await W.bridgeCall('SENDMEDIA', { chat: '__active__', dataUrl: m.dataUrl, name: m.name, mime: m.mime, caption: m.caption || '', kind: m.type }, 90000);
       if (r && r.ok) { await sleep(1200); return true; }
-      log('envio direto falhou:', r && r.reason);
+      log('envio direto falhou:', r && r.reason); root.__wcrmLastMediaErr = String((r && r.reason) || '').slice(0, 140);
       if (Date.now() - (root.__wcrmMediaAlertAt || 0) > 10 * 60e3) try {
         root.__wcrmMediaAlertAt = Date.now();
         const pb = await W.bridgeCall('PROBE', {}, 15000);
@@ -942,7 +942,7 @@
           if (qrCancel) break;
           ok = await sendMedia(W, q);
         }
-        if (!ok) { fail = 'Falhou na ação ' + n + '/' + total; break; }
+        if (!ok) { fail = 'Falhou na ação ' + n + '/' + total + (root.__wcrmLastMediaErr ? ' — ' + root.__wcrmLastMediaErr : ''); break; }
         await qrSleep(rndMs(700, 1400));
       }
     } catch (err) { fail = String(err && err.message || err); }
