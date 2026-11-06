@@ -509,10 +509,11 @@
   const rndMs = (a, b) => Math.round(a + Math.random() * (b - a));
   async function dataUrlToFile(du, name, mime) { const r = await fetch(du); const b = await r.blob(); return new File([b], name || 'arquivo', { type: mime || b.type }); }
   async function actBridge(op, chat) { if ((root.__wcrmPresFail || 0) > 2) return { ok: false, reason: 'presença desligada' }; const W = root.__wcrm; if (!(W && W.bridgeOk && W.bridgeOk())) return { ok: false, reason: 'ponte indisponível' }; const r = (await W.bridgeCall('ACT', { op, chat }, 4000)) || { ok: false, reason: 'sem resposta' }; if (!r.ok && /presen|ponte/.test(r.reason || '') && ['typing', 'recording', 'paused'].includes(op)) root.__wcrmPresFail = (root.__wcrmPresFail || 0) + 1; return r; }
-  async function sendMedia(W, m) {
+  async function actBridgeActive() { const W = root.__wcrm; try { const r = await W.bridgeCall('ACTIVE', {}, 2500); return r && r.ok ? (r.id || '__active__') : null; } catch (x) { return null; } }
+  async function sendMedia(W, m, chat) {
     // 1º: envio direto pelo WhatsApp (sem prévia, igual ao WaSpeed)
     if (W.bridgeOk && W.bridgeOk()) {
-      const r = await W.bridgeCall('SENDMEDIA', { chat: '__active__', dataUrl: m.dataUrl, name: m.name, mime: m.mime, caption: m.caption || '', kind: m.type }, 90000);
+      const r = await W.bridgeCall('SENDMEDIA', { chat: chat || '__active__', dataUrl: m.dataUrl, name: m.name, mime: m.mime, caption: m.caption || '', mkind: m.type }, 90000);
       if (r && r.ok) { await sleep(1200); return true; }
       log('envio direto falhou:', r && r.reason); root.__wcrmLastMediaErr = String((r && r.reason) || '').slice(0, 140);
       if (Date.now() - (root.__wcrmMediaAlertAt || 0) > 10 * 60e3) try {
@@ -524,6 +525,7 @@
       if (m.type === 'audio') { await addLog('⚠️ Áudio não enviado como voz: ' + ((r && r.reason) || '?')); return false; }   // nunca manda áudio como arquivo (parece robô)
 
     }
+    if (chat && chat !== '__active__') { const a = await actBridgeActive(); if (a && a !== chat) return false; }
     const box = W.getInputBox(); if (!box) return false;
     const file = await dataUrlToFile(m.dataUrl, m.name, m.mime);
     box.focus(); await sleep(250);
@@ -901,55 +903,83 @@
   // ── envio manual de resposta rápida (clique em ▷) — com faixa de progresso e "Cancelar Envio" (igual WaSpeed) ──
   let qrRunning = false, qrCancel = false;
   const QR_ICO = { text: '📝', image: '🖼️', video: '🎬', audio: '🎤', document: '📄', sticker: '😀', pix: '💠', invite: '👥', contact: '👤', banner: '🔗', list: '☰' };
-  function qrBar(label, ico, cancelable) {
+  // ── envios de resposta rápida: um por conversa (cada um com seu status e seu Cancelar) ──
+  const qrRuns = {};   // chatId -> { cancel, label, ico, cancelable }
+  let qrActive = '__active__';
+  function qrDraw(run) {
     let b = document.getElementById('wcrm-qrbar');
+    if (!run) { if (b) b.remove(); return; }
     if (!b) {
       b = document.createElement('div'); b.id = 'wcrm-qrbar';
       b.style.cssText = 'position:fixed;z-index:2147483000;display:flex;align-items:center;gap:12px;padding:8px 14px;background:#111;color:#fff;border-bottom:1px solid #333;font:600 15px system-ui,Segoe UI,sans-serif;box-shadow:0 2px 8px #0006';
       b.innerHTML = '<button id="wcrm-qrcancel" style="border:1px solid #ff4d4d;color:#ff6b6b;background:transparent;border-radius:999px;padding:5px 14px;font:600 13px system-ui;cursor:pointer">Cancelar Envio</button><span id="wcrm-qrico"></span><span id="wcrm-qrtxt"></span>';
       document.body.appendChild(b);
-      b.querySelector('#wcrm-qrcancel').onclick = () => { qrCancel = true; b.querySelector('#wcrm-qrtxt').textContent = 'Cancelando…'; };
+      b.querySelector('#wcrm-qrcancel').onclick = () => { const r = qrRuns[qrActive] || qrRuns.__active__; if (r) { r.cancel = true; r.label = 'Cancelando…'; qrDraw(r); } };
     }
     const main = document.querySelector('#main'); const r = main ? main.getBoundingClientRect() : { left: 0, width: window.innerWidth, top: 0 };
     b.style.left = r.left + 'px'; b.style.width = r.width + 'px'; b.style.top = (r.top + 59) + 'px';
-    b.querySelector('#wcrm-qrico').textContent = ico || ''; b.querySelector('#wcrm-qrtxt').textContent = label;
-    b.querySelector('#wcrm-qrcancel').style.display = cancelable === false ? 'none' : '';
+    b.querySelector('#wcrm-qrico').textContent = run.ico || ''; b.querySelector('#wcrm-qrtxt').textContent = run.label;
+    b.querySelector('#wcrm-qrcancel').style.display = run.cancelable === false ? 'none' : '';
   }
-  const qrHide = () => { const b = document.getElementById('wcrm-qrbar'); if (b) b.remove(); };
-  async function qrSleep(ms) { const end = Date.now() + ms; while (Date.now() < end && !qrCancel) await sleep(Math.min(250, end - Date.now())); }
+  // mostra só o status da conversa que está aberta
+  async function qrSync() {
+    const keys = Object.keys(qrRuns); if (!keys.length) { qrDraw(null); return; }
+    const cur = await actBridgeActive(); if (cur) qrActive = cur;
+    const run = qrRuns[qrActive] || (qrRuns.__active__ && (cur === '__active__' || !cur) ? qrRuns.__active__ : null);
+    qrDraw(run && !run.hidden ? run : null);
+  }
+  setInterval(() => { if (Object.keys(qrRuns).length) qrSync(); }, 700);
+  async function qrSleep(ms, run) { const end = Date.now() + ms; while (Date.now() < end && !(run && run.cancel)) await sleep(Math.min(200, end - Date.now())); }
+  // espera uma ação, mas devolve na hora se o usuário cancelar
+  function qrRace(p, run) { return new Promise(res => { let done = false; const t = setInterval(() => { if (run.cancel && !done) { done = true; clearInterval(t); res(false); } }, 150); Promise.resolve(p).then(v => { if (!done) { done = true; clearInterval(t); res(v); } }, () => { if (!done) { done = true; clearInterval(t); res(false); } }); }); }
   async function quickRun(id) {
     const W = root.__wcrm; if (!W) return;
-    if (qrRunning) { qrBar('Já existe um envio em andamento', '⏳', true); setTimeout(() => { if (!qrRunning) qrHide(); }, 2500); return; }
-    if (busy) { qrBar('Aguarde: o robô está enviando outra coisa agora', '⏳', false); setTimeout(qrHide, 3000); return; }
+    const chatId = (await actBridgeActive()) || '__active__';
+    if (qrRuns[chatId]) { const r = qrRuns[chatId]; r.hidden = false; qrActive = chatId; qrDraw(r); return; }
+    if (busy && !Object.keys(qrRuns).length) { qrDraw({ label: 'Aguarde: o robô está enviando outra coisa agora', ico: '⏳', cancelable: false }); setTimeout(() => { if (!Object.keys(qrRuns).length) qrDraw(null); }, 3000); return; }
     const stt = (await sget('wcrm_state')) || {}; const m = (stt.msgs || []).find(x => String(x.id) === String(id));
-    const qs = await quickSteps(id); if (!qs || !qs.length) { qrBar('Resposta rápida vazia', '⚠️', false); setTimeout(qrHide, 2500); return; }
-    const ui = (await sget('wcrm_ui')) || {}; const showBar = (a, b, c) => { if (!ui.noMonitor) qrBar(a, b, c); };
+    const qs = await quickSteps(id); if (!qs || !qs.length) { qrDraw({ label: 'Resposta rápida vazia', ico: '⚠️', cancelable: false }); setTimeout(() => { if (!Object.keys(qrRuns).length) qrDraw(null); }, 2500); return; }
+    const ui = (await sget('wcrm_ui')) || {};
+    const run = { cancel: false, label: 'Preparando…', ico: '', cancelable: true, hidden: !!ui.noMonitor }; qrRuns[chatId] = run; qrActive = chatId; busy = true;
+    const showBar = (a, b, c) => { run.label = a; run.ico = b; run.cancelable = c; qrSync(); };
     const sendable = qs.filter(q => !['wait', 'typing', 'recording'].includes(q.type) && !AUX.has(q.type)); const total = sendable.length; let n = 0;
-    qrRunning = true; busy = true; qrCancel = false;
     const title = (m && m.label) || 'Resposta Rápida'; let fail = '';
+    const same = async () => { if (chatId === '__active__') return true; const c = await actBridgeActive(); return !c || c === chatId; };   // ainda é a conversa aberta?
+    const pres = async op => { await actBridge(op, chatId); };
     try {
       for (const q of qs) {
-        if (qrCancel) break;
-        if (q.type === 'wait') { await qrSleep(Math.min(120, +q.seconds || 0) * 1000); continue; }
-        if (q.type === 'typing' || q.type === 'recording') { await actBridge(q.type, '__active__'); await qrSleep((+q.seconds || 3) * 1000); await actBridge('paused', '__active__'); continue; }
-        if (AUX.has(q.type)) { await execAux(W, q, (W.getDisplayName && W.getDisplayName()) || ''); continue; }
+        if (run.cancel) break;
+        if (q.type === 'wait') { await qrSleep(Math.min(120, +q.seconds || 0) * 1000, run); continue; }
+        if (q.type === 'typing' || q.type === 'recording') { await pres(q.type); await qrSleep((+q.seconds || 3) * 1000, run); await pres('paused'); continue; }
+        if (AUX.has(q.type)) { if (await same()) await execAux(W, q, (W.getDisplayName && W.getDisplayName()) || ''); else await addLog('Ação "' + q.type + '" pulada: você trocou de conversa'); continue; }
         n++; showBar('Ação da Resposta Rápida (' + n + '/' + total + ') — ' + title, QR_ICO[q.type] || '📨', true);
         let ok = false;
-        if (q.type === 'text') { let t = pickVariation(q.variations, 0); if (t && !ui.noSig && ui.sigName) t = '*' + ui.sigName + ':*\n' + t; ok = t ? await W.sendMsg(t) : true; }
-        else if (['pix', 'invite', 'contact', 'banner', 'list'].includes(q.type)) { const t = templateText(q); ok = t ? await W.sendMsg(t) : true; }
-        else {
-          if (q.type === 'audio') { await actBridge('recording', '__active__'); await qrSleep(rndMs(2000, 4000)); await actBridge('paused', '__active__'); }
-          if (qrCancel) break;
-          ok = await sendMedia(W, q);
+        if (q.type === 'text' || ['pix', 'invite', 'contact', 'banner', 'list'].includes(q.type)) {
+          let t = q.type === 'text' ? pickVariation(q.variations, 0) : templateText(q);
+          if (q.type === 'text' && t && !ui.noSig && ui.sigName) t = '*' + ui.sigName + ':*\n' + t;
+          if (!t) ok = true;
+          else {
+            const r = (W.bridgeOk && W.bridgeOk()) ? await qrRace(W.bridgeCall('SENDTEXT', { chat: chatId, text: t }, 20000), run) : false;
+            ok = !!(r && r.ok);
+            if (!ok && !run.cancel && (await same())) ok = await qrRace(W.sendMsg(t), run);   // plano B: caixa de texto (só se ainda for a conversa)
+          }
+        } else {
+          if (q.type === 'audio') { await pres('recording'); await qrSleep(rndMs(2000, 4000), run); await pres('paused'); }
+          if (run.cancel) break;
+          root.__wcrmLastMediaErr = '';
+          ok = await qrRace(sendMedia(W, q, chatId), run);
         }
+        if (run.cancel) break;
         if (!ok) { fail = 'Falhou na ação ' + n + '/' + total + (root.__wcrmLastMediaErr ? ' — ' + root.__wcrmLastMediaErr : ''); break; }
-        await qrSleep(rndMs(700, 1400));
+        await qrSleep(rndMs(700, 1400), run);
       }
     } catch (err) { fail = String(err && err.message || err); }
-    qrRunning = false; busy = false;
-    if (fail) { qrBar('⚠️ ' + fail, '', false); await addLog('Resposta rápida "' + title + '": ' + fail); setTimeout(qrHide, 5000); }
-    else if (qrCancel) { qrBar('Envio cancelado (' + Math.max(0, n - 1) + '/' + total + ' enviadas)', '✋', false); setTimeout(qrHide, 2500); }
-    else { qrBar('Enviado (' + total + '/' + total + ') ✔', '', false); setTimeout(qrHide, 1200); }
+    run.cancelable = false;
+    if (fail) { run.label = '⚠️ ' + fail; run.ico = ''; await addLog('Resposta rápida "' + title + '": ' + fail); }
+    else if (run.cancel) { run.label = 'Envio cancelado (' + Math.max(0, n - 1) + '/' + total + ' enviadas)'; run.ico = '✋'; }
+    else { run.label = 'Enviado (' + total + '/' + total + ') ✔'; run.ico = ''; }
+    await qrSync();
+    setTimeout(() => { delete qrRuns[chatId]; busy = Object.keys(qrRuns).length > 0; qrSync(); if (!Object.keys(qrRuns).length) qrDraw(null); }, fail ? 5000 : run.cancel ? 2500 : 1200);
   }
   window.addEventListener('message', e => { const d = e.data; if (!d || d.type !== 'QUICK_RUN') return; quickRun(d.id); });
 

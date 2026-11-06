@@ -266,7 +266,7 @@
       var file = new File([blob], d.name || 'arquivo', { type: d.mime || blob.type });
       stage = 'OpaqueData.createFromData';
       var opaque = await withTimeout(OD.createFromData(file, file.type), 30000, 'ler áudio/arquivo');
-      var o = {}; var k = d.kind;
+      var o = {}; var k = d.mkind || (d.kind === 'SENDMEDIA' ? 'image' : d.kind);
       if (k === 'document') o.asDocument = true; else if (k === 'sticker') o.asSticker = true;
       if (k === 'audio') o.isPtt = true;   // MENSAGEM DE VOZ gravada (precisa ser .ogg/opus)
       stage = 'prepRawMedia';

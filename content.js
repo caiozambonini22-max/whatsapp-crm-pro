@@ -208,7 +208,7 @@
       const reqId = 'g' + Date.now() + Math.random().toString(36).slice(2, 6);
       const t = setTimeout(() => { delete bridgeWaiters[reqId]; res({ ok: false, reason: 'ponte não respondeu (F5 no WhatsApp Web?)' }); }, timeout || 10000);
       bridgeWaiters[reqId] = r => { clearTimeout(t); res(r); };
-      bridgeSend(Object.assign({ kind, reqId }, payload || {}));
+      bridgeSend(Object.assign({}, payload || {}, { kind, reqId }));
     });
   }
   window.addEventListener('message', e => {
