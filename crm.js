@@ -121,6 +121,18 @@ window.addEventListener('message', e => {
     try { saveAutoBackup(); } catch (x) {}
     if ($('sec-crm-tabs')?.classList.contains('active')) renderCRMTabsSection();
   }
+  if (e.data?.type === 'KANBAN_TAB_OP') {
+    const nm = e.data.name, to = (e.data.to || '').trim();
+    if (e.data.op === 'rename' && nm && to) {
+      crmTabs = crmTabs.map(t => t === nm ? to : t).filter((t, i, a) => a.indexOf(t) === i);
+      Object.values(contacts).forEach(c => { const tl = tabsOf(c); if (tl.includes(nm)) { c.tabs = tl.map(t => t === nm ? to : t); c.tab = c.tabs[0] || ''; } });
+    } else if (e.data.op === 'delete' && nm) {
+      crmTabs = crmTabs.filter(t => t !== nm);
+      Object.values(contacts).forEach(c => { const tl = tabsOf(c); if (tl.includes(nm)) { c.tabs = tl.filter(t => t !== nm); c.tab = c.tabs[0] || ''; } });
+    }
+    try { saveAutoBackup(); } catch (x) {}
+    if ($('sec-crm-tabs')?.classList.contains('active')) renderCRMTabsSection();
+  }
   if (e.data?.type === 'APPLY_LABEL_RESULT') {
     const r = e.data.result || {};
     if (r.ok) toast('🏷️ WhatsApp: "' + e.data.label + '" ' + (e.data.mode === 'add' ? 'aplicada' : 'removida') + ' ✓');

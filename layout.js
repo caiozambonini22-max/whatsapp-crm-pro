@@ -304,6 +304,7 @@
     ['|'],
     ['🪜', 'Follow Up', () => window.postMessage({ type: 'OPEN_FOLLOWUP' }, '*')],
     ['📢', 'Disparo em massa', () => window.postMessage({ type: 'OPEN_BULK' }, '*')],
+    ['🗂️', 'CRM Kanban', () => window.postMessage({ type: 'OPEN_KANBAN' }, '*')],
     ['📋', 'CRM: abas e etiquetas', () => { showPanel(); post({ type: 'GOTO_TAB', tab: 'crm-tabs' }); }],
   ];
   ITEMS.forEach(it => {
@@ -326,6 +327,7 @@
    ['🤖', 'Auto atendimento', () => { showPanel(); post({ type: 'GOTO_TAB', tab: 'auto' }); }],
    ['💬', 'Iniciar conversa (por número)', () => openStart()],
    ['📢', 'Disparo em massa', () => window.postMessage({ type: 'OPEN_BULK' }, '*')],
+   ['🗂️', 'CRM Kanban', () => window.postMessage({ type: 'OPEN_KANBAN' }, '*')],
    ['🕐', 'Agendamentos', () => { showPanel(); post({ type: 'GOTO_TAB', tab: 'sched' }); }],
    ['🔔', 'Lembretes', () => { showPanel(); post({ type: 'GOTO_TAB', tab: 'followup' }); }]
   ].forEach(it => { const b = document.createElement('button'); b.textContent = it[0]; b.title = it[1]; b.addEventListener('click', it[2]); left.appendChild(b); });
