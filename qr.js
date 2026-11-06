@@ -52,7 +52,7 @@
   .qr-pick .it{padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px} .qr-pick .it:hover{background:#ffffff14}
   .cfgrow{display:flex;align-items:center;gap:10px;padding:12px 6px;font-size:14px;color:#e9edef} .cfgrow span{flex:1}
   .sw{width:46px;height:24px;border-radius:99px;background:#3a444a;position:relative;cursor:pointer;flex:none} .sw::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.15s} .sw.on{background:var(--acc)} .sw.on::after{left:25px}
-  html,body{min-width:0} .sec>.scroll,.cr-body,#msgs-body{min-height:0!important} .creator{position:fixed!important;inset:0;height:100vh;max-height:100vh;overflow:hidden} .cr-body{overflow-y:scroll!important;padding:12px 6px 90px 14px!important;box-sizing:border-box} #msgs-body{overflow-y:scroll!important}
+  html,body{min-width:0} .sec>.scroll,.cr-body,#msgs-body{min-height:0!important} .creator{position:fixed!important;inset:0;height:100vh;max-height:100vh;overflow:hidden} .creator{display:none} .creator.open{display:block!important} .creator .cr-hdr{position:absolute;top:0;left:0;right:0;height:46px;box-sizing:border-box} .creator .cr-body{position:absolute!important;top:46px;bottom:0;left:0;right:0;overflow-y:scroll!important;padding:12px 6px 90px 14px!important;box-sizing:border-box;min-height:0} #msgs-body{overflow-y:scroll!important}
   .qc .ctr{position:sticky;bottom:-12px;padding:10px 0 6px;background:linear-gradient(transparent,#1a2530 35%);z-index:5}
   .qr-row{font-size:15.5px!important;padding:9px 8px!important;cursor:pointer} .qr-row .nm{font-size:15.5px!important;font-weight:500} .qg-h{font-size:15.5px!important} .qr-row .ic{font-size:17px} .qr-row button{font-size:17px!important}
   .qr-pills .chip{font-size:14px!important;padding:6px 14px!important} .qc .btn,.qr-pills .chip{color:var(--acc-fg,#fff)!important}
@@ -65,6 +65,7 @@
   `;
   document.head.appendChild(css);
   // ── tema (Preto / Escuro / Claro / Branco) + cor de destaque (inclui branco e preto) ──
+  try { const v = chrome.runtime.getManifest().version; const t = document.getElementById('cr-title'); if (t) t.title = 'CRM ZAMBONINI v' + v; document.title = 'CRM ZAMBONINI v' + v; window.__wcrmV = v; } catch (e) {}
   window.__applyTheme = function (u) { const h = document.documentElement; h.classList.remove('th-light', 'th-white', 'th-black'); const m = (u && u.theme) || 'dark'; if (m === 'light') h.classList.add('th-light'); else if (m === 'white') h.classList.add('th-white'); else if (m === 'black') h.classList.add('th-black'); };
   const accFg = c => { const m = /^#?([0-9a-f]{6})$/i.exec(c || ''); if (!m) return '#fff'; const n = parseInt(m[1], 16); const l = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)); return l > 160 ? '#000' : '#fff'; };
   window.__applyAcc = function (c) { if (!c) return; document.documentElement.style.setProperty('--acc', c); document.documentElement.style.setProperty('--acc-fg', accFg(c)); };
@@ -206,7 +207,7 @@
   }
   const catSelect = sel => '<select id="qc-cat"><option value="">Nenhuma selecionada</option>' + catList().map(([k, v]) => '<option value="' + k + '"' + (sel === k ? ' selected' : '') + '>' + E(v.l) + '</option>').join('') + '</select>';
   window.renderCreator = function () {
-    const body = $q('cr-body'); body.className = 'qc'; let h = '';
+    const body = $q('cr-body'); body.className = 'cr-body qc'; let h = '';
     if (Q.mode === 'cat') {
       h = '<h4>' + (Q.catKey ? 'Editar Categoria' : 'Criar Categoria') + '</h4><label>Nome da categoria</label><input type="text" id="qc-catname" value="' + E(Q.catName) + '" placeholder="Ex: Modelos com Valores"><label>Cor</label><div class="pal">' + PALETTE.map(c => '<b data-pal="' + c + '" style="background:' + c + '" class="' + (Q.catColor === c ? 'on' : '') + '"></b>').join('') + '</div>'
         + '<div class="ctr"><button class="btn" id="qc-save">' + (Q.catKey ? 'Salvar' : 'Criar') + '</button>' + (Q.catKey ? ' <button class="btn g" id="qc-delcat" style="color:#ff6b6b">Excluir categoria</button>' : '') + '</div>';
@@ -301,7 +302,7 @@
     const s = document.createElement('div'); s.className = 'sec'; s.id = 'sec-qrcfg'; document.querySelector('.sec').parentNode.appendChild(s);
     let ui = { noMonitor: false, noSig: true, sigName: '', w: 380 };
     const save = () => { try { chrome.storage.local.set({ wcrm_ui: ui }); } catch (e) {} };
-    const draw = () => { s.innerHTML = '<div class="qc" style="padding:14px"><h4>Menu Lateral Configurações</h4>'
+    const draw = () => { s.innerHTML = '<div class="qc" style="padding:14px"><h4>Menu Lateral Configurações</h4><div class="note" style="text-align:center">CRM ZAMBONINI v' + (window.__wcrmV || '?') + '</div>'
       + '<div class="cfgrow"><span>Desabilitar monitor de envios</span><div class="sw' + (ui.noMonitor ? ' on' : '') + '" data-sw="noMonitor"></div></div>'
       + '<div class="cfgrow"><span>Desativar a assinatura</span><div class="sw' + (ui.noSig ? ' on' : '') + '" data-sw="noSig"></div></div>'
       + '<div class="cfgrow"><span>Personalizar o nome da assinatura</span><div class="sw' + (ui.sigName ? ' on' : '') + '" data-sw="sigOn"></div></div>' + (ui.sigName !== '' || s.dataset.sig ? '<input type="text" id="cfg-sig" placeholder="Nome na assinatura" value="' + E(ui.sigName) + '">' : '')
