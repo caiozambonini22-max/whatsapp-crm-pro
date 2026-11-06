@@ -73,7 +73,7 @@
     #wcrm-rail button.on{background:#d4af37;color:#111;}
     #wcrm-rail .sep{height:1px;background:#2a3238;margin:1px 4px;}
     #wcrm-minirail{position:fixed;z-index:2147483643;display:none;}
-    #wcrm-pop{position:fixed;z-index:2147483645;min-width:230px;max-width:300px;max-height:60vh;overflow:auto;background:#14181c;color:#e9edef;border:1px solid #2a3238;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.6);padding:6px;display:none;}
+    #wcrm-pop{position:fixed;z-index:2147483647;min-width:230px;max-width:300px;max-height:60vh;overflow:auto;background:#14181c;color:#e9edef;border:1px solid #2a3238;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.6);padding:6px;display:none;}
     #wcrm-pop .it{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;}
     #wcrm-pop .it:hover{background:#26303a;}
     #wcrm-pop .it .ck{width:16px;color:#16a34a;font-weight:800;}
