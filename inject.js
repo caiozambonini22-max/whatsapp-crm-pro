@@ -250,6 +250,20 @@
   }
 
   // envio DIRETO de mídia (sem abrir a prévia), pelos módulos internos do WhatsApp
+function oggSalt(u8) {
+  var out = new Uint8Array(u8); var T = oggSalt.T;
+  if (!T) { T = oggSalt.T = new Uint32Array(256); for (var i = 0; i < 256; i++) { var r = i << 24; for (var j = 0; j < 8; j++) r = (r & 0x80000000) ? ((r << 1) ^ 0x04c11db7) : (r << 1); T[i] = r >>> 0; } }
+  var serial = (Math.random() * 0xffffffff) >>> 0; var pos = 0;
+  while (pos + 27 <= out.length && out[pos] === 79 && out[pos + 1] === 103 && out[pos + 2] === 103 && out[pos + 3] === 83) {
+    var ns = out[pos + 26]; var body = 0; for (var k = 0; k < ns; k++) body += out[pos + 27 + k]; var len = 27 + ns + body; if (pos + len > out.length) break;
+    out[pos + 14] = serial & 255; out[pos + 15] = (serial >>> 8) & 255; out[pos + 16] = (serial >>> 16) & 255; out[pos + 17] = (serial >>> 24) & 255;
+    out[pos + 22] = out[pos + 23] = out[pos + 24] = out[pos + 25] = 0;
+    var crc = 0; for (var n = 0; n < len; n++) crc = ((crc << 8) ^ T[((crc >>> 24) & 255) ^ out[pos + n]]) >>> 0;
+    out[pos + 22] = crc & 255; out[pos + 23] = (crc >>> 8) & 255; out[pos + 24] = (crc >>> 16) & 255; out[pos + 25] = (crc >>> 24) & 255;
+    pos += len;
+  }
+  return out;
+}
   async function sendMediaDirect(d) {
     var req = getReq(); var s = stores(); if (s.err) return { ok: false, reason: s.err };
     var chat = findChat(s, d.chat); if (!chat) return { ok: false, reason: 'conversa não encontrada' };
@@ -264,6 +278,7 @@
       stage = 'ler arquivo';
       var blob = await (await fetch(d.dataUrl)).blob();
       var mt = d.mime || blob.type; if ((d.mkind || '') === 'audio' && /ogg|opus/i.test(mt + ' ' + (d.name || ''))) mt = 'audio/ogg; codecs=opus';   // sem o codecs o WhatsApp manda como arquivo de áudio, não como voz
+      if ((d.mkind || '') === 'audio' && /ogg/i.test(mt)) { try { blob = new Blob([oggSalt(new Uint8Array(await blob.arrayBuffer()))], { type: mt }); } catch (es) { } }   // bytes únicos: o WhatsApp reaproveitava o envio antigo (sem onda) de arquivos idênticos
       var file = new File([blob], d.name || 'arquivo', { type: mt });
       stage = 'OpaqueData.createFromData';
       var opaque = await withTimeout(OD.createFromData(file, file.type), 30000, 'ler áudio/arquivo');
@@ -281,7 +296,7 @@
           var ab = await withTimeout(ac.decodeAudioData(await blob.arrayBuffer()), 20000, 'decodificar áudio');
           var ch = ab.getChannelData(0); var N = 64; var step = Math.max(1, Math.floor(ch.length / N)); var vals = [];
           for (var wi = 0; wi < N; wi++) { var sm = 0; for (var wj = 0; wj < step; wj++) sm += Math.abs(ch[wi * step + wj] || 0); vals.push(sm / step); }
-          var mxv = Math.max.apply(null, vals) || 1; var wfa = new Uint8Array(N); for (var wk = 0; wk < N; wk++) wfa[wk] = Math.round(vals[wk] / mxv * 100);
+          var mxv = Math.max.apply(null, vals) || 1; var wfa = new Uint8Array(N); for (var wk = 0; wk < N; wk++) wfa[wk] = Math.round(vals[wk] / mxv * 85);
           media.mediaData.waveform = wfa; media.mediaData.duration = Math.max(1, Math.round(ab.duration));
           try { ac.close(); } catch (e2) { }
         } catch (e1) { /* sem onda: manda mesmo assim como voz */ }
