@@ -205,7 +205,30 @@
     return { act: 'send', enr: due[0], queued: due.length };
   }
 
-  const core = { stepsOf, isSendStep, safetyOf, checkSafety, DEFAULT_SAFETY, DEFAULT_CFG, inWindow, delayMs, dueAtFor, gapMs, pickVariation, parsePrePlain, hasReplySince, trackMembers, newEnrollments, decide, sameContact, dayKey, norm, fkey };
+  const BULK_OPTS = { minSec: 40, maxSec: 120, perHour: 30, perDay: 150, useWindow: true, onlyKnown: true, pauseAfterFails: 3, dryRun: false };
+  function bulkStepsOf(job) {
+    const out = [];
+    (job.steps || []).forEach((s, i) => {
+      if (s.type === 'quick' && s.msgId) { if (i > 0 && (job.stepGap || 0) > 0) out.push({ type: 'wait', seconds: job.stepGap }); out.push({ type: 'quick', msgId: s.msgId }); }
+      else if (s.type === 'text' && (s.variations || []).some(Boolean)) out.push({ type: 'text', variations: s.variations.filter(Boolean) });
+      else if (s.type === 'wait') out.push({ type: 'wait', seconds: Math.max(0, +s.seconds || 0) });
+    });
+    return out;
+  }
+  // decide se o próximo envio do disparo pode sair agora (função pura, testável)
+  function bulkGate(job, rt, cfg, now) {
+    const o = Object.assign({}, BULK_OPTS, job.opts || {});
+    if (job.status !== 'running') return { go: false, why: 'parado' };
+    if (job.nextAt && now < job.nextAt) return { go: false, why: 'intervalo aleatório (' + Math.ceil((job.nextAt - now) / 1000) + ' s)' };
+    if (o.useWindow && !inWindow(now, cfg)) return { go: false, why: 'fora do horário permitido (' + cfg.winStart + '–' + cfg.winEnd + ')' };
+    const hourly = (rt.hourly || []).filter(t => now - t < 3600e3).length;
+    if (hourly >= o.perHour) return { go: false, why: 'limite por hora (' + o.perHour + ') atingido' };
+    const today = dayKey(new Date(now)); const sentToday = rt.day === today ? (rt.sent || 0) : 0;
+    if (sentToday >= o.perDay) return { go: false, why: 'limite por dia (' + o.perDay + ') atingido' };
+    return { go: true };
+  }
+
+  const core = { bulkGate, bulkStepsOf, BULK_OPTS, stepsOf, isSendStep, safetyOf, checkSafety, DEFAULT_SAFETY, DEFAULT_CFG, inWindow, delayMs, dueAtFor, gapMs, pickVariation, parsePrePlain, hasReplySince, trackMembers, newEnrollments, decide, sameContact, dayKey, norm, fkey };
   if (typeof module !== 'undefined' && module.exports) { module.exports = core; return; }
 
   // ════════════════════════════════════════════════════════════
@@ -778,7 +801,83 @@
     }
   });
 
-  root.__wcrmEngine = { tick };
+
+  // ══════════════════════════════════════════════════════════
+  //  DISPARO EM MASSA (seguro) — um contato por vez, intervalo aleatório, horário e limites
+  // ══════════════════════════════════════════════════════════
+  const K_BULK = 'wcrm_bulk';
+  const BULK_DEF = { groups: [], jobs: [] };
+  async function getBulk() { const b = (await sget(K_BULK)) || {}; return Object.assign({}, BULK_DEF, b, { groups: b.groups || [], jobs: b.jobs || [] }); }
+  let bulkQ = Promise.resolve();
+  function mutateBulk(fn) { const p = bulkQ.then(async () => { const b = await getBulk(); fn(b); await sset(K_BULK, b); return b; }); bulkQ = p.catch(() => {}); return p; }
+  async function bulkProcess(jobId) {
+    const W = root.__wcrm; if (!W) return;
+    const cfg = await getCfg();
+    const b0 = await getBulk(); const job = b0.jobs.find(j => j.id === jobId); if (!job) return;
+    const o = Object.assign({}, BULK_OPTS, job.opts || {});
+    const idx = job.contacts.findIndex(c => c.state === 'pending');
+    if (idx < 0) { await mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (j) { j.status = 'done'; j.endedAt = Date.now(); } }); await addLog('📣 Disparo "' + job.name + '" concluído'); return; }
+    const c = job.contacts[idx];
+    const setC = (patch, jobPatch) => mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (!j) return; Object.assign(j.contacts[idx], patch, { at: Date.now() }); if (jobPatch) Object.assign(j, jobPatch); });
+    const gap = () => Date.now() + rndMs(o.minSec * 1000, Math.max(o.minSec, o.maxSec) * 1000);
+    const br = W.getBridge && W.getBridge();
+    const info = ((br && br.act) || []).find(a => norm(a.n) === norm(c.n));
+    if (info && info.g) { await setC({ state: 'skipped', why: 'é um grupo' }); return; }
+    if (o.onlyKnown && !(info && (info.i || info.o))) { await setC({ state: 'skipped', why: 'nunca conversou com você (proteção)' }); await addLog('📣 "' + c.n + '" pulado: nunca conversou com você'); return; }
+    const steps = bulkStepsOf(job);
+    if (!steps.length) { await mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (j) j.status = 'paused'; }); await addLog('📣 Disparo "' + job.name + '" sem ações — pausado'); return; }
+    if (o.dryRun) { await setC({ state: 'sent', simulated: true }, { nextAt: Date.now() + 1500 }); await addLog('🧪 SIMULAÇÃO disparo "' + job.name + '" → "' + c.n + '" (nada enviado)'); return; }
+    const fakeEnr = { id: 'bulk-' + jobId + '-' + idx, contact: c.n, nk: norm(c.n), stepIdx: 0 };
+    const failed = async why => {
+      const fails = (job.fails || 0) + 1;
+      await setC({ state: 'error', why }, { fails, nextAt: gap() });
+      await addLog('📣 Falha em "' + c.n + '": ' + why);
+      if (fails >= o.pauseAfterFails) { await mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (j) j.status = 'paused'; }); await addAlert('error', c.n, 'Disparo "' + job.name + '" PAUSADO após ' + fails + ' falhas seguidas: ' + why); }
+    };
+    const opened = await openChat(c.n);
+    if (!opened) { await failed('não consegui abrir a conversa'); return; }
+    const before = await readMsgs(c.n, 60);
+    const res = await runSteps(W, { name: job.name }, fakeEnr, steps, 0, before, async (why) => { await failed(why); });
+    if (!res.ok) return;
+    const now = Date.now();
+    await setC({ state: 'sent', text: (res.firstText || '').slice(0, 80) }, { fails: 0, nextAt: gap() });
+    await mutateRt(r => { const today = dayKey(new Date(now)); if (r.day !== today) { r.day = today; r.sent = 0; } r.sent = (r.sent || 0) + 1; r.hourly = (r.hourly || []).filter(t => now - t < 3600e3).concat([now]); });
+    await addLog('📣 Disparo "' + job.name + '" → "' + c.n + '"');
+  }
+  async function bulkTick() {
+    if (busy) return;
+    try {
+      if (!root.__wcrm || !document.querySelector('#pane-side')) return;
+      const b = await getBulk(); const job = b.jobs.find(j => j.status === 'running'); if (!job) return;
+      const cfg = await getCfg(); const rt = await getRt();
+      const g = bulkGate(job, rt, cfg, Date.now());
+      if (job.waitWhy !== (g.go ? '' : g.why)) await mutateBulk(x => { const j = x.jobs.find(y => y.id === job.id); if (j) j.waitWhy = g.go ? '' : g.why; });
+      if (!g.go) return;
+      busy = true; await bulkProcess(job.id);
+    } catch (e) { console.error('[WCRM][massa] erro', e); } finally { busy = false; }
+  }
+  // lista de contatos disponíveis para escolher (vem da ponte do WhatsApp)
+  async function bulkSources() {
+    const W = root.__wcrm; const br = W && W.getBridge && W.getBridge();
+    const act = ((br && br.act) || []).filter(a => !a.g).map(a => ({ n: a.n, i: a.i || 0, o: a.o || 0 }));
+    const labels = ((br && br.labels) || []).map(l => ({ name: l.name, color: l.color, count: l.count }));
+    const chats = ((br && br.chats) || []).filter(c => !/@g\.us$/.test(c.id || '')).map(c => ({ n: c.name, labels: c.labels }));
+    const bar = (await sget(K_BAR)) || {}; const tabs = (bar.tabs || []).map(t => ({ name: t.name, contacts: t.contacts || [] }));
+    return { act, labels, chats, tabs, ok: !!(br && br.ok) };
+  }
+  window.addEventListener('message', async e => {
+    const t = e.data && e.data.type; if (!t || t.indexOf('BULK_') !== 0) return;
+    const reply = m => window.postMessage(Object.assign({ from: 'wcrm-bulk' }, m), '*');
+    if (t === 'BULK_SOURCES') reply({ type: 'BULK_SOURCES_RESULT', data: await bulkSources(), req: e.data.req });
+    if (t === 'BULK_STATE') { const rt = await getRt(); reply({ type: 'BULK_STATE_RESULT', bulk: await getBulk(), rt: { day: rt.day, sent: rt.sent, hourly: (rt.hourly || []).filter(x => Date.now() - x < 3600e3).length }, cfg: { winStart: (await getCfg()).winStart, winEnd: (await getCfg()).winEnd } }); }
+    if (t === 'BULK_SAVE_GROUP') await mutateBulk(b => { const g = e.data.group; const i = b.groups.findIndex(x => x.id === g.id); if (i >= 0) b.groups[i] = g; else b.groups.push(g); });
+    if (t === 'BULK_DEL_GROUP') await mutateBulk(b => { b.groups = b.groups.filter(x => x.id !== e.data.id); });
+    if (t === 'BULK_START') await mutateBulk(b => { b.jobs.forEach(j => { if (j.status === 'running') j.status = 'paused'; }); const j = e.data.job; j.status = 'running'; j.created = Date.now(); j.nextAt = 0; j.fails = 0; b.jobs.unshift(j); b.jobs = b.jobs.slice(0, 30); });
+    if (t === 'BULK_CTRL') await mutateBulk(b => { const j = b.jobs.find(x => x.id === e.data.id); if (!j) return; if (e.data.op === 'pause') j.status = 'paused'; if (e.data.op === 'resume') { b.jobs.forEach(x => { if (x.status === 'running') x.status = 'paused'; }); j.status = 'running'; j.nextAt = 0; } if (e.data.op === 'stop') { j.status = 'stopped'; j.endedAt = Date.now(); } if (e.data.op === 'retry') { j.contacts.forEach(c => { if (c.state === 'error') { c.state = 'pending'; c.why = ''; } }); j.fails = 0; } });
+  });
+  setInterval(() => bulkTick(), 4000);
+
+  root.__wcrmEngine = { tick, bulkTick, bulkGate, bulkStepsOf };
   setInterval(() => tick(), 10000);
   log('motor de follow-up carregado (v4.33)');
 })(typeof window !== 'undefined' ? window : globalThis);

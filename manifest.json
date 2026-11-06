@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "WhatsApp CRM Pro",
-  "version": "4.47",
+  "version": "4.48",
   "description": "CRM completo para WhatsApp Web",
   "permissions": [
     "storage",
@@ -35,7 +35,8 @@
         "content.js",
         "engine.js",
         "layout.js",
-        "followup.js"
+        "followup.js",
+        "bulk.js"
       ],
       "run_at": "document_idle"
     },
