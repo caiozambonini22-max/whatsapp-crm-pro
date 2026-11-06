@@ -166,6 +166,50 @@
       selMode = false; sel.clear(); renderPills(); renderMsgs(); drawSelBar(); try { saveAutoBackup(); } catch (x) {} toast('🗑 ' + gone.length + ' excluída(s)');
     }
   }, true);
+
+  // ── arrastar para reordenar / trocar de categoria (rola sozinho perto das bordas) ──
+  (function dragSort() {
+    const body = $q('msgs-body'); let st = null; let suppress = false;
+    const css2 = document.createElement('style');
+    css2.textContent = '.qr-row.drop-before{box-shadow:0 -3px 0 0 var(--acc)} .qr-row.drop-after{box-shadow:0 3px 0 0 var(--acc)} .qg.drop-in{outline:2px dashed var(--acc);outline-offset:-2px} .qr-row.dragging{opacity:.35} #qr-ghost{position:fixed;z-index:99999;pointer-events:none;background:#1f2326;border:1px solid var(--acc);border-radius:10px;padding:8px 14px;color:#fff;font-size:14px;box-shadow:0 8px 24px #000a;max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} body.qr-dragging{user-select:none;cursor:grabbing}';
+    document.head.appendChild(css2);
+    const clear = () => body.querySelectorAll('.drop-before,.drop-after,.drop-in').forEach(e => e.classList.remove('drop-before', 'drop-after', 'drop-in'));
+    const targetAt = (x, y) => {
+      const el = document.elementFromPoint(x, y); if (!el || !body.contains(el)) return null;
+      const row = el.closest('.qr-row'); if (row && +row.dataset.id !== st.id) { const r = row.getBoundingClientRect(); return { row, id: +row.dataset.id, after: y > r.top + r.height / 2 }; }
+      const g = el.closest('.qg'); if (g) return { group: g, cat: g.dataset.cat, head: !!el.closest('.qg-h') };
+      return null;
+    };
+    body.addEventListener('pointerdown', e => {
+      if (selMode || e.button !== 0 || e.pointerType === 'touch') return;
+      if (e.target.closest('button,input,select,textarea,[data-editcat]')) return;
+      const row = e.target.closest('.qr-row'); if (!row) return;
+      st = { id: +row.dataset.id, x: e.clientX, y: e.clientY, on: false, row, my: e.clientY, tgt: null };
+    });
+    document.addEventListener('pointermove', e => {
+      if (!st) return; st.my = e.clientY;
+      if (!st.on) { if (Math.abs(e.clientX - st.x) + Math.abs(e.clientY - st.y) < 8) return; st.on = true; document.body.classList.add('qr-dragging'); st.row.classList.add('dragging'); const g = document.createElement('div'); g.id = 'qr-ghost'; g.textContent = (msgs.find(m => m.id === st.id) || {}).label || ''; document.body.appendChild(g); st.ghost = g; st.raf = requestAnimationFrame(function loop() { if (!st) return; const r = body.getBoundingClientRect(); if (st.my < r.top + 50) body.scrollTop -= Math.min(22, (r.top + 50 - st.my) / 2 + 4); else if (st.my > r.bottom - 50) body.scrollTop += Math.min(22, (st.my - (r.bottom - 50)) / 2 + 4); st.raf = requestAnimationFrame(loop); }); }
+      st.ghost.style.left = (e.clientX + 12) + 'px'; st.ghost.style.top = (e.clientY + 8) + 'px';
+      clear(); st.tgt = targetAt(e.clientX, e.clientY);
+      if (st.tgt) { if (st.tgt.row) st.tgt.row.classList.add(st.tgt.after ? 'drop-after' : 'drop-before'); else st.tgt.group.classList.add('drop-in'); }
+    });
+    const end = e => {
+      if (!st) return; const s = st; st = null; cancelAnimationFrame(s.raf); document.body.classList.remove('qr-dragging'); if (s.ghost) s.ghost.remove(); clear();
+      if (!s.on) return; suppress = true; setTimeout(() => { suppress = false; }, 0);
+      const t = s.tgt; if (!t || e.type === 'pointercancel') { renderMsgs(); return; }
+      const m = msgs.find(x => x.id === s.id); if (!m) return;
+      msgs = msgs.filter(x => x.id !== s.id);
+      if (t.row) { const o = msgs.find(x => x.id === t.id); if (!o) { msgs.push(m); } else { m.cat = o.cat || ''; const i = msgs.indexOf(o); msgs.splice(t.after ? i + 1 : i, 0, m); } }
+      else {
+        const k = t.cat; const cat = k.indexOf('__') === 0 ? '' : k; m.cat = cat;
+        const same = msgs.filter(x => (x.cat || '') === cat);
+        if (!same.length) msgs.push(m); else if (t.head) msgs.splice(msgs.indexOf(same[0]), 0, m); else msgs.splice(msgs.indexOf(same[same.length - 1]) + 1, 0, m);
+      }
+      renderMsgs(); try { saveAutoBackup(); } catch (x) {} toast('↕ Movida' + (m.cat && CATS[m.cat] ? ' para ' + CATS[m.cat].l : ''));
+    };
+    document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
+    document.addEventListener('click', e => { if (suppress) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+  })();
   // clique em cabeçalho/itens da lista (captura antes do handler antigo)
   $q('msgs-body').addEventListener('click', e => {
     if (selMode) { const rw = e.target.closest('.qr-row'); if (rw) { e.stopImmediatePropagation(); e.preventDefault(); const id = +rw.dataset.id; if (sel.has(id)) sel.delete(id); else sel.add(id); renderMsgs(); drawSelBar(); return; } }
