@@ -941,7 +941,15 @@
     const qs = await quickSteps(id); if (!qs || !qs.length) { qrDraw({ label: 'Resposta rápida vazia', ico: '⚠️', cancelable: false }); setTimeout(() => { if (!Object.keys(qrRuns).length) qrDraw(null); }, 2500); return; }
     const ui = (await sget('wcrm_ui')) || {};
     // #primeiroNome: resolve UMA vez, com a conversa em que o envio foi acionado (contato salvo → nome do perfil; vazio em grupo)
-    let nome = ''; try { if (W.applyNomeLive) nome = String((await W.applyNomeLive('#primeiroNome')) || '').trim(); } catch (x) {}
+    let nome = ''; const usaNome = /#primeiroNome/i.test(JSON.stringify(qs.map(q => Object.assign({}, q, { dataUrl: '' }))));
+    if (usaNome) {   // o WhatsApp às vezes demora a sincronizar o nome: tenta de novo por até ~5 s (grupo não tem nome, não espera)
+      for (let i = 0; i < 10 && !nome; i++) {
+        try { const a = await W.bridgeCall('ACTIVE', {}, 3000); if (a && a.ok && a.group) break; } catch (x) {}
+        try { if (W.applyNomeLive) nome = String((await W.applyNomeLive('#primeiroNome')) || '').trim(); } catch (x) {}
+        if (!/[A-Za-zÀ-ÿ]/.test(nome)) nome = '';
+        if (!nome) await sleep(500);
+      }
+    }
     if (!/[A-Za-zÀ-ÿ]/.test(nome)) nome = '';   // número/55 nunca vira nome: sem nome, fica em branco
     const subst = v => typeof v === 'string' ? v.replace(/#primeiroNome/gi, nome) : Array.isArray(v) ? v.map(subst) : (v && typeof v === 'object') ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, subst(x)])) : v;
     for (const q of qs) for (const k of Object.keys(q)) { if (k !== 'dataUrl') q[k] = subst(q[k]); }
