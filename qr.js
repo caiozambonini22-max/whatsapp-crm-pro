@@ -59,6 +59,9 @@
   html.th-light,html.th-white{filter:invert(1) hue-rotate(180deg)} html.th-light img,html.th-light video,html.th-light audio,html.th-white img,html.th-white video,html.th-white audio{filter:invert(1) hue-rotate(180deg)}
   html.th-black,html.th-black body,html.th-black .app,html.th-black .creator,html.th-black .qc .card,html.th-black .qg{background-color:#000}
   html.th-black .cr-hdr,html.th-black .sbar{background:#0a0a0a}
+  *{scrollbar-width:auto;scrollbar-color:var(--acc,#00a884) #0006}
+  *::-webkit-scrollbar{width:12px!important;height:12px!important} *::-webkit-scrollbar-track{background:#0005;border-radius:8px} *::-webkit-scrollbar-thumb{background:var(--acc,#00a884)!important;border-radius:8px;border:2px solid #0008;min-height:40px}
+  #hdr-cfg{background:none;border:0;cursor:pointer;color:var(--acc,#00a884)}
   `;
   document.head.appendChild(css);
   // ── tema (Preto / Escuro / Claro / Branco) + cor de destaque (inclui branco e preto) ──
@@ -308,6 +311,7 @@
       + '<div style="margin:18px 0 6px;font-weight:700;font-size:14px">💾 Backup do CRM ZAMBONINI</div><div class="note">Exporte ou restaure tudo (respostas rápidas, categorias, mídias e configurações).</div><button class="btn" id="cfg-backup" style="margin-top:8px">Abrir backup</button>'
       + '<div class="note" style="margin-top:14px">O monitor de envios é a faixa “Ação (1/9)” com o botão Cancelar Envio. A assinatura, quando ligada, vai em negrito antes do texto.</div>'
       + '<div class="ctr"><button class="btn g" id="cfg-close" style="color:#ff6b6b;border:1px solid #ff6b6b;background:transparent">Fechar Menu</button></div></div>'; };
+    const hc = document.getElementById('hdr-cfg'); if (hc) hc.addEventListener('click', () => tabEl.click());
     s.addEventListener('click', e => {
       const sw = e.target.closest('[data-sw]'); if (sw) { const k = sw.dataset.sw; if (k === 'sigOn') { if (ui.sigName) ui.sigName = ''; else { ui.sigName = ' '; ui.noSig = false; } s.dataset.sig = ui.sigName ? '1' : ''; } else ui[k] = !ui[k]; save(); draw(); return; }
       const th = e.target.closest('[data-theme]'); if (th) { ui.theme = th.dataset.theme; save(); window.__applyTheme(ui); draw(); return; }
