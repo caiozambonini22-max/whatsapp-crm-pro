@@ -194,6 +194,18 @@
     if (activeChip && activeChip.mode === 'tabs') applyFilter();
   }
 
+  // remove das abas contatos que não existem de verdade no WhatsApp (nome errado salvo por engano)
+  function cleanGhosts() {
+    const br = (W().getBridge && W().getBridge()) || {}; const known = new Set();
+    [].concat(br.act || [], br.all || []).forEach(a => a && a.n && known.add(norm(a.n)));
+    (br.chats || []).forEach(c => c && c.name && known.add(norm(c.name)));
+    if (known.size < 5) { toast('⚠️ Ainda não li a lista de conversas — tente de novo em alguns segundos'); return; }
+    const ghosts = []; (barData.tabs || []).forEach(t => (t.contacts || []).forEach(n => { if (!known.has(norm(n))) ghosts.push({ tab: t.name, n }); }));
+    if (!ghosts.length) { toast('✅ Nenhum contato fantasma nas abas'); return; }
+    if (!confirm('Estes nomes estão nas abas mas NÃO existem como conversa no WhatsApp:\n\n' + ghosts.map(g => '• ' + g.n + '  (' + g.tab + ')').join('\n') + '\n\nRemover das abas?')) return;
+    ghosts.forEach(g => setTab(g.n, g.tab, false, 'remove'));
+    toast('🧹 ' + ghosts.length + ' contato(s) fantasma removido(s)');
+  }
   // menu ≡
   function popAt(el, html, align) {
     pop.innerHTML = html; pop.style.display = 'block';
@@ -205,7 +217,7 @@
   document.addEventListener('mousedown', e => { if (pop.style.display !== 'none' && !pop.contains(e.target) && !e.target.closest('#wcrm-strip, #wcrm-topbar')) closePop(); }, true);
   document.getElementById('wcrm-tb-menu').addEventListener('click', e => {
     popAt(e.currentTarget, `<div class="it" data-m="tabs"><span class="ck">${mode === 'tabs' ? '✓' : ''}</span>📂 Abas (do CRM)</div><div class="it" data-m="labels"><span class="ck">${mode === 'labels' ? '✓' : ''}</span>🏷️ Etiquetas (do WhatsApp)</div>
-      <div class="it" data-m="strip"><span class="ck">${document.documentElement.classList.contains('wcrm-strip') ? '✓' : ''}</span>▭ Barra da conversa</div><div class="it" data-m="left"><span class="ck">${document.documentElement.classList.contains('wcrm-left') ? '✓' : ''}</span>▍Menu da esquerda</div><div class="it" data-m="hide"><span class="ck"></span>⌃ Ocultar exibição</div>`, 'right');
+      <div class="it" data-m="strip"><span class="ck">${document.documentElement.classList.contains('wcrm-strip') ? '✓' : ''}</span>▭ Barra da conversa</div><div class="it" data-m="left"><span class="ck">${document.documentElement.classList.contains('wcrm-left') ? '✓' : ''}</span>▍Menu da esquerda</div><div class="it" data-m="ghost"><span class="ck"></span>🧹 Limpar contatos fantasma das abas</div><div class="it" data-m="hide"><span class="ck"></span>⌃ Ocultar exibição</div>`, 'right');
   });
   document.getElementById('wcrm-tb-funnel').addEventListener('click', e => {
     popAt(e.currentTarget, `<div class="it" data-m="tabs"><span class="ck">${mode === 'tabs' ? '✓' : ''}</span>📂 Abas</div><div class="it" data-m="labels"><span class="ck">${mode === 'labels' ? '✓' : ''}</span>🏷️ Etiquetas</div><div class="it" data-m="hide"><span class="ck"></span>⬇ Ocultar Exibição</div>`, 'left');
@@ -229,6 +241,7 @@
     if (m === 'tabs' || m === 'labels') { mode = m; lsSet('wcrm_mode', m); activeChip = null; applyFilter(); renderChips(); closePop(); }
     else if (m === 'strip') { setStrip(!document.documentElement.classList.contains('wcrm-strip')); closePop(); }
     else if (m === 'left') { setLeft(!document.documentElement.classList.contains('wcrm-left')); closePop(); }
+    else if (m === 'ghost') { closePop(); cleanGhosts(); }
     else if (m === 'hide') { setBar(false); closePop(); }
     else if (it.dataset.tab !== undefined) {
       const who = me(); const tn = it.dataset.tab;

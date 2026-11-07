@@ -82,7 +82,8 @@
     if (!main) return null;
     const mr = main.getBoundingClientRect();
     const items = [];
-    const all = main.querySelectorAll('*');
+    const hdrEl = main.querySelector('header');          // só olha DENTRO do cabeçalho da conversa (evita pegar texto de mensagem)
+    const all = (hdrEl || main).querySelectorAll('*');
     const lim = Math.min(all.length, 600);
     for (let i = 0; i < lim; i++) {
       const el = all[i];
