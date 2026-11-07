@@ -574,11 +574,14 @@
   function placeAll() {
     const main = document.getElementById('main'); const stripOn = document.documentElement.classList.contains('wcrm-strip');
     const r = main ? main.getBoundingClientRect() : null;
-    if (!r || r.width < 200) { rail.style.display = 'none'; mini.style.display = 'none'; strip.classList.remove('show'); return; }
+    if (!r || r.width < 200) { rail.style.display = 'none'; mini.style.display = 'none'; strip.classList.remove('show'); so.style.display = 'none'; return; }
+    so.style.display = '';
     // barra da conversa
     strip.classList.toggle('show', stripOn);
     strip.style.left = Math.round(r.left) + 'px'; strip.style.width = Math.round(r.width) + 'px';
     strip.style.top = Math.round(stripOn ? Math.max(r.top - STRIP_H, 0) : r.top) + 'px';
+    // botão para reabrir a barra: fica no topo da própria conversa (antes ficava atrás do painel direito)
+    so.style.right = 'auto'; so.style.left = Math.round(r.left + r.width / 2 - 40) + 'px'; so.style.top = Math.round(Math.max(r.top, 0)) + 'px'; so.style.zIndex = '2147483643'; so.style.padding = '3px 14px';
     // menu lateral
     const open = lsGet('wcrm_rail') !== '0';
     const top = Math.round(Math.min(Math.max(r.top + 70, 0), window.innerHeight - 420));
