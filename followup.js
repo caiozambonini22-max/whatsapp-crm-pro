@@ -324,6 +324,19 @@
     const u = (q.units || {})[key] === 's' ? 's' : 'm'; const v = u === 's' ? Math.round((q[key] || 0) * 60) : q[key];
     return '<input type="number" min="1" step="1" data-s="' + key + '" value="' + esc(v) + '" style="width:80px"> <select data-su="' + key + '" style="width:105px"><option value="m"' + (u === 'm' ? ' selected' : '') + '>minutos</option><option value="s"' + (u === 's' ? ' selected' : '') + '>segundos</option></select>';
   }
+  function capInner(c) {
+    const q = c.queue || {}; const avg = q.mode === 'fixed' ? (+q.fixedMin || 1) : ((+q.minMin || 1) + Math.max(+q.minMin || 1, +q.maxMin || 1)) / 2;
+    const gapPerH = 60 / (avg + 0.7);   // ~0,7 min para rodar o roteiro de cada contato
+    const perH = Math.min(+c.hourlyCap || 0, gapPerH);
+    const tm = x => { const [h, m] = String(x || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+    let hrs = c.win24 ? 24 : (tm(c.winEnd) - tm(c.winStart)) / 60; if (hrs <= 0) hrs += 24; if (!c.win24 && c.winEnd === '00:00') hrs = (1440 - tm(c.winStart)) / 60;
+    const perD = Math.min(+c.dailyCap || 0, Math.floor(perH * hrs));
+    const why = perD === (+c.dailyCap || 0) ? 'limite por dia' : perH === (+c.hourlyCap || 0) ? 'limite por hora' : 'intervalo da fila';
+    const need = n => 45 * n;
+    const ok = perD >= need(5);
+    return '<div class="h3" style="margin-top:0">📊 Capacidade com essas regras</div><div style="font-size:15px">≈ <b>' + Math.floor(perH) + ' envios por hora</b> · ≈ <b style="color:' + (ok ? '#4ade80' : '#fbbf24') + '">' + perD + ' envios por dia</b> <span style="opacity:.7;font-size:12.5px">(o que mais limita: ' + why + ' · janela de ' + Math.round(hrs * 10) / 10 + ' h)</span></div>'
+      + '<div class="meta" style="margin-top:6px">Cada lead gera <b>1 envio por etapa</b> da escada. Com ~45 leads novos por dia: 3 etapas ≈ ' + need(3) + ' envios/dia · 4 etapas ≈ ' + need(4) + ' · 5 etapas ≈ ' + need(5) + '. ' + (ok ? '✅ Dá conta de uma escada de até 5 etapas.' : '⚠️ Abaixo de ' + need(5) + ': parte dos follow ups vai ficar esperando para o dia seguinte.') + '</div>';
+  }
   function renderSettings() {
     const c = cache.cfg, q = c.queue;
     $bd.innerHTML = '<div class="info" style="margin-top:0">Estas regras valem para <b>todos</b> os follow ups. Elas existem para NUNCA sair vários envios de uma vez.</div>'
@@ -335,6 +348,7 @@
       + '<div class="h3">Horário permitido</div><div class="card"><label class="rad" style="padding-top:0"><input type="checkbox" data-s="win24"' + (c.win24 ? ' checked' : '') + '>Sem limite de horário (24 h — enviar a qualquer hora, inclusive de madrugada)</label><div class="row">Das <input type="time" data-s="winStart" value="' + esc(c.winStart) + '"> às <input type="time" data-s="winEnd" value="' + esc(c.winEnd) + '"></div><div style="margin-top:10px">'
       + DAYS.map((d, i) => '<span class="chip' + (c.days.includes(i) ? '' : '" style="opacity:.4') + '" data-a="day" data-d="' + i + '" style="cursor:pointer;' + '">' + d + '</span>').join('') + '</div></div>'
       + '<div class="h3">Limites</div><div class="card"><div class="row"><input type="number" min="1" data-s="dailyCap" value="' + esc(c.dailyCap) + '" style="width:90px"> por dia &nbsp;·&nbsp; <input type="number" min="1" data-s="hourlyCap" value="' + esc(c.hourlyCap) + '" style="width:90px"> por hora</div></div>'
+      + '<div class="card" id="fu-cap">' + capInner(c) + '</div>'
       + '<div class="h3">Atrasados</div><div class="card"><div class="row">Se passou mais de <input type="number" min="10" data-s="staleMin" value="' + esc(c.staleMin) + '" style="width:90px"> minutos do horário (ou o computador ficou desligado), <b>perguntar</b> antes de enviar.</div></div>'
       + '<div class="h3">Agente de IA (CRM)</div><div class="card"><div style="font-size:12px;color:#8696a0;margin-bottom:3px">Endereço do CRM</div><input class="full" type="text" data-s="apiUrl" value="' + esc(c.apiUrl) + '"><div style="font-size:12px;color:#8696a0;margin:8px 0 3px">Token da extensão (EXT_TOKEN da Vercel)</div><input class="full" type="password" data-s="token" value="' + esc(c.token) + '" placeholder="cole aqui o token"></div>';
     $ft.innerHTML = '';
@@ -450,6 +464,7 @@
       if (k === 'mpc') sf.maxPerContact.count = v; else if (k === 'mpd') sf.maxPerContact.days = Math.max(1, v); else if (k === 'mhb') sf.minHoursBetween = v;
     }
     if (t.dataset.s) {
+      setTimeout(() => { const el = document.getElementById('fu-cap'); if (el) el.innerHTML = capInner(cache.cfg); }, 120);
       const s = t.dataset.s; const num = t.type === 'number' ? +t.value : t.type === 'checkbox' ? t.checked : t.value;
       await mutateCfg(c => { if (['minMin', 'maxMin', 'fixedMin'].includes(s)) { const su = document.querySelector('[data-su="' + s + '"]'); const un = su && su.value === 's' ? 's' : 'm'; c.queue.units = Object.assign({}, c.queue.units, { [s]: un }); c.queue[s] = Math.max(10 / 60, (un === 's' ? (num || 10) / 60 : (num || 1))); } else if (s === 'qmode') c.queue.mode = t.value; else c[s] = (s === 'dailyCap' || s === 'hourlyCap' || s === 'staleMin') ? Math.max(1, num || 1) : num; });
     }
