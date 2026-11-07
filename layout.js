@@ -123,15 +123,15 @@
 
   // ── LISTA PRÓPRIA (compacta) da aba/etiqueta: lê as conversas direto do WhatsApp, sem buracos e sem depender do filtro interno dele ──
   const tlCss = document.createElement('style');
-  tlCss.textContent = '#wcrm-tablist{position:fixed;z-index:2147483640;display:none;flex-direction:column;overflow:hidden;box-sizing:border-box;font-family:Segoe UI,Helvetica Neue,Arial,sans-serif}'
-    + '#wcrm-tablist .tl-h{flex:none;display:flex;align-items:center;gap:8px;padding:8px 16px;font-size:12.5px;opacity:.75;border-bottom:1px solid rgba(128,128,128,.18)}#wcrm-tablist .tl-h b{flex:1;font-weight:600}#wcrm-tablist .tl-h button{border:1px solid rgba(128,128,128,.4);background:transparent;color:inherit;border-radius:8px;padding:3px 10px;font-size:12px;cursor:pointer}'
-    + '#wcrm-tablist .tl-b{flex:1;overflow-y:auto}#wcrm-tablist .tl-row{display:flex;gap:13px;padding:0 14px;height:72px;align-items:center;cursor:pointer;border-bottom:1px solid rgba(128,128,128,.1)}#wcrm-tablist .tl-row:hover{background:rgba(128,128,128,.12)}#wcrm-tablist .tl-row.act{background:rgba(128,128,128,.2)}'
-    + '#wcrm-tablist .tl-av{width:49px;height:49px;border-radius:50%;background:#2a3942 center/cover no-repeat;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#cfd6db}'
-    + '#wcrm-tablist .tl-m{flex:1;min-width:0}#wcrm-tablist .tl-t1{display:flex;justify-content:space-between;gap:8px;align-items:baseline}#wcrm-tablist .tl-n{font-size:16.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#wcrm-tablist .tl-tm{font-size:12px;opacity:.7;flex:none}'
-    + '#wcrm-tablist .tl-t2{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:3px}#wcrm-tablist .tl-p{font-size:14px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#wcrm-tablist .tl-u{background:#25d366;color:#111;border-radius:99px;font-size:12px;font-weight:700;padding:1px 7px;flex:none}'
-    + '#wcrm-tablist .tl-e{padding:34px 22px;text-align:center;opacity:.65;font-size:14px;line-height:1.5}';
+  tlCss.textContent = '#wcrm-tabview{position:fixed;z-index:2147483640;display:none;flex-direction:column;overflow:hidden;box-sizing:border-box;font-family:Segoe UI,Helvetica Neue,Arial,sans-serif}'
+    + '#wcrm-tabview .tl-h{flex:none;display:flex;align-items:center;gap:8px;padding:8px 16px;font-size:12.5px;opacity:.75;border-bottom:1px solid rgba(128,128,128,.18)}#wcrm-tabview .tl-h b{flex:1;font-weight:600}#wcrm-tabview .tl-h button{border:1px solid rgba(128,128,128,.4);background:transparent;color:inherit;border-radius:8px;padding:3px 10px;font-size:12px;cursor:pointer}'
+    + '#wcrm-tabview .tl-b{flex:1;overflow-y:auto}#wcrm-tabview .tl-row{display:flex;gap:13px;padding:0 14px;height:72px;align-items:center;cursor:pointer;border-bottom:1px solid rgba(128,128,128,.1)}#wcrm-tabview .tl-row:hover{background:rgba(128,128,128,.12)}#wcrm-tabview .tl-row.act{background:rgba(128,128,128,.2)}'
+    + '#wcrm-tabview .tl-av{width:49px;height:49px;border-radius:50%;background:#2a3942 center/cover no-repeat;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#cfd6db}'
+    + '#wcrm-tabview .tl-m{flex:1;min-width:0}#wcrm-tabview .tl-t1{display:flex;justify-content:space-between;gap:8px;align-items:baseline}#wcrm-tabview .tl-n{font-size:16.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#wcrm-tabview .tl-tm{font-size:12px;opacity:.7;flex:none}'
+    + '#wcrm-tabview .tl-t2{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:3px}#wcrm-tabview .tl-p{font-size:14px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#wcrm-tabview .tl-u{background:#25d366;color:#111;border-radius:99px;font-size:12px;font-weight:700;padding:1px 7px;flex:none}'
+    + '#wcrm-tabview .tl-e{padding:34px 22px;text-align:center;opacity:.65;font-size:14px;line-height:1.5}';
   document.head.appendChild(tlCss);
-  const tl = document.createElement('div'); tl.id = 'wcrm-tablist'; document.body.appendChild(tl);
+  const tl = document.createElement('div'); tl.id = 'wcrm-tabview'; document.body.appendChild(tl);
   let tlTimer = null, tlBusy = false, tlSig = '';
   const fmtT = ts => { if (!ts) return ''; const d = new Date(ts), n = new Date(); const p = x => String(x).padStart(2, '0');
     if (d.toDateString() === n.toDateString()) return p(d.getHours()) + ':' + p(d.getMinutes());
