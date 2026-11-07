@@ -87,7 +87,7 @@
   const bar = document.createElement('div'); bar.id = 'wcrm-topbar';
   bar.innerHTML = `<img class="tb-logo" src="${getURL('icons/icon128.png')}" alt=""><button class="tb-btn" id="wcrm-tb-funnel" title="Filtro Funil"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg></button><span class="tb-mode" id="wcrm-mode"></span><div class="tb-chips" id="wcrm-chips"><span class="tb-empty">Carregando…</span></div>
     <button class="tb-btn" id="wcrm-tb-add" title="Nova aba" style="display:none">＋</button>
-    <button class="tb-btn" id="wcrm-tb-refresh" title="Atualizar">↻</button><button class="tb-btn" id="wcrm-tb-menu" title="Menu">≡</button>`;
+    <button class="tb-btn" id="wcrm-tb-refresh" title="Atualizar">↻</button><button class="tb-btn" id="wcrm-tb-sales" title="Vendas marcadas (etiqueta virtual)">💰</button><button class="tb-btn" id="wcrm-tb-menu" title="Menu">≡</button>`;
   document.body.appendChild(bar);
   const reopen = document.createElement('div'); reopen.id = 'wcrm-tabopen'; reopen.textContent = '⌄ etiquetas e abas'; reopen.title = 'Mostrar barra';
   document.body.appendChild(reopen);
@@ -140,7 +140,7 @@
   function listNames() {
     if (!activeChip) return [];
     if (activeChip.mode === 'labels') { const br = W().getBridge && W().getBridge(); return ((br && br.chats) || []).filter(c => (c.labels || []).some(l => norm(l) === norm(activeChip.name))).map(c => c.name); }
-    if (activeChip.mode === 'sales') { const d = (sales.days || []).find(x => x.name === activeChip.name); return (d && d.contacts) || []; }
+    if (activeChip.mode === 'sales') return Object.values(sales.marks || {}).filter(m => !activeChip.name || m.day === activeChip.name).sort((x, y) => (y.at || 0) - (x.at || 0)).map(m => m.name);
     const tab = (barData.tabs || []).find(t => t.name === activeChip.name); return (tab && tab.contacts) || [];
   }
   function placeList() {
@@ -171,10 +171,10 @@
       rows.sort((a, b) => ((b.pin ? 1 : 0) - (a.pin ? 1 : 0)) || (b.t - a.t));
       const sig = JSON.stringify([activeChip, rows.map(r => [r.id || r.n, r.t, r.unread, r.last, r.active, r.pic ? 1 : 0, (r.labels || []).join(',')]), miss]);
       if (!force && sig === tlSig && tl.style.display === 'flex') return; tlSig = sig;
-      const title = (activeChip.mode === 'labels' ? '🏷️ ' : activeChip.mode === 'sales' ? '💰 ' : '📂 ') + esc(activeChip.name);
+      const title = activeChip.mode === 'sales' ? '💰 Vendas' + (activeChip.name ? ' ' + esc(activeChip.name) : ' marcadas') : (activeChip.mode === 'labels' ? '🏷️ ' : '📂 ') + esc(activeChip.name);
       tl.innerHTML = '<div class="tl-h"><b>' + title + ' · ' + rows.length + ' conversa' + (rows.length === 1 ? '' : 's') + (miss ? ' (' + miss + ' não achada' + (miss > 1 ? 's' : '') + ')' : '') + '</b><button data-tl="all">✕ Mostrar tudo</button></div><div class="tl-b">'
-        + (rows.length ? rows.map(r => '<div class="tl-row' + (r.active ? ' act' : '') + '" data-id="' + esc(r.id || '') + '" data-n="' + esc(r.n) + '"><div class="tl-av"' + (r.pic ? ' style="background-image:url(\'' + esc(r.pic) + '\')"' : '') + '>' + (r.pic ? '' : esc((r.n || '?').trim().charAt(0).toUpperCase())) + '</div><div class="tl-m"><div class="tl-t1"><span class="tl-n">' + esc(r.n) + '</span><span class="tl-tm">' + esc(fmtT(r.t)) + '</span></div><div class="tl-t2"><span class="tl-p">' + (r.mine ? '✓ ' : '') + esc(r.last || '') + '</span>' + (r.unread ? '<span class="tl-u">' + r.unread + '</span>' : '') + '</div>' + ((r.labels || []).length ? '<div class="tl-l">' + r.labels.map(l => '<span style="background:' + esc(labCol.get(norm(l)) || '#3a434a') + '">' + esc(l) + '</span>').join('') + '</div>' : '') + '</div></div>').join('')
-          : '<div class="tl-e">Essa ' + (activeChip.mode === 'labels' ? 'etiqueta' : 'aba') + ' está vazia.<br>Arraste uma conversa para ela ou use o botão de aba no cabeçalho da conversa.</div>') + '</div>';
+        + (rows.length ? rows.map(r => '<div class="tl-row' + (r.active ? ' act' : '') + '" data-id="' + esc(r.id || '') + '" data-n="' + esc(r.n) + '"><div class="tl-av"' + (r.pic ? ' style="background-image:url(\'' + esc(r.pic) + '\')"' : '') + '>' + (r.pic ? '' : esc((r.n || '?').trim().charAt(0).toUpperCase())) + '</div><div class="tl-m"><div class="tl-t1"><span class="tl-n">' + esc(r.n) + '</span><span class="tl-tm">' + esc(fmtT(r.t)) + '</span></div><div class="tl-t2"><span class="tl-p">' + (r.mine ? '✓ ' : '') + esc(r.last || '') + '</span>' + (r.unread ? '<span class="tl-u">' + r.unread + '</span>' : '') + '</div>' + ((r.labels || []).length || saleOf(r.n) ? '<div class="tl-l">' + (saleOf(r.n) ? '<span style="background:#d4af37;color:#111">💰 VENDA ' + esc(saleOf(r.n).day) + '</span>' : '') + (r.labels || []).map(l => '<span style="background:' + esc(labCol.get(norm(l)) || '#3a434a') + '">' + esc(l) + '</span>').join('') + '</div>' : '') + '</div></div>').join('')
+          : '<div class="tl-e">' + (activeChip.mode === 'sales' ? 'Nenhuma venda marcada' + (activeChip.name ? ' em ' + esc(activeChip.name) : '') + '.<br>Abra a conversa do cliente e clique em 💰 na barra da conversa.' : 'Essa ' + (activeChip.mode === 'labels' ? 'etiqueta' : 'aba') + ' está vazia.<br>Arraste uma conversa para ela ou use o botão de aba no cabeçalho da conversa.') + '</div>') + '</div>';
       tl.style.display = 'flex';
     } catch (e) { } finally { tlBusy = false; }
   }
@@ -206,7 +206,7 @@
     const el = document.getElementById('wcrm-chips'); if (!el) return;
     document.getElementById('wcrm-mode').textContent = mode === 'labels' ? 'Etiquetas' : 'Abas';
     document.getElementById('wcrm-tb-add').style.display = mode === 'tabs' ? 'flex' : 'none';
-    renderSales();
+    updateSaleBtn();
     const all = chipList();
     const list = all;
     if (!list.length) {
@@ -255,58 +255,75 @@
   on2('contextmenu', e => { const b = e.target.closest('.tb-chip'); if (!b || b.dataset.all || mode !== 'tabs') return; e.preventDefault(); tabMenu(b); });
   on2('dblclick', e => { const b = e.target.closest('.tb-chip'); if (!b || b.dataset.all || mode !== 'tabs') return; e.preventDefault(); tabMenu(b); });
 
-  // ── VENDAS DO DIA: abas próprias (não misturam com as abas do CRM), numa gaveta flutuante no canto da lista ──
-  let sales = { days: [] }; let salesOpen = lsGet('wcrm_sales_open') === '1';
+
+  // ── 💰 VENDA: etiqueta virtual do sistema (não é aba do CRM nem etiqueta do WhatsApp) ──
+  let sales = { marks: {} };
+  const pad2 = n => String(n).padStart(2, '0');
+  const todayLbl = () => { const d = new Date(); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1); };
   const salesSave = () => { try { chrome.storage.local.set({ wcrm_sales: sales }); } catch (e) {} };
+  const saleOf = n => (sales.marks || {})[norm(n)];
   const salesCss = document.createElement('style');
-  salesCss.textContent = '#wcrm-sales{position:fixed;z-index:2147483641;display:none;font-family:Segoe UI,Helvetica Neue,Arial,sans-serif;color:#e9edef}html.wcrm-bar #wcrm-sales.show{display:block}'
-    + '#wcrm-sales .sv-btn{border:1px solid #d4af37;background:#14181c;color:#d4af37;border-radius:999px;font-size:12.5px;font-weight:800;padding:7px 14px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.5)}'
-    + '#wcrm-sales .sv-card{background:#14181c;border:1px solid #2a3238;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.6);padding:10px;max-height:300px;overflow:auto}'
-    + '#wcrm-sales .sv-h{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:800;color:#d4af37;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}#wcrm-sales .sv-h span{cursor:pointer;color:#9aa6ad;font-size:14px}'
-    + '#wcrm-sales .sv-ch{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}'
-    + '#wcrm-sales .sv-c{display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 11px;border-radius:999px;border:1px solid #3a434a;background:#181d21;color:#e9edef;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}#wcrm-sales .sv-c:hover{border-color:#d4af37}#wcrm-sales .sv-c.on{background:#d4af37;color:#111;border-color:#d4af37}#wcrm-sales .sv-c.drop{background:#2d3a1e;border-color:#84cc16;box-shadow:0 0 0 2px #84cc16}'
-    + '#wcrm-sales .sv-c b{background:#d4af37;color:#111;border-radius:999px;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10.5px;padding:0 5px}#wcrm-sales .sv-c.on b{background:#111;color:#d4af37}'
-    + '#wcrm-sales .sv-a{display:flex;flex-wrap:wrap;gap:6px}#wcrm-sales .sv-a button{border:1px solid #3a434a;background:#181d21;color:#e9edef;border-radius:8px;font-size:11.5px;font-weight:700;padding:5px 9px;cursor:pointer}#wcrm-sales .sv-a button:hover{border-color:#d4af37;color:#d4af37}'
-    + '#wcrm-sales .sv-e{font-size:11.5px;color:#9aa6ad;margin-bottom:8px}#wcrm-sales .sv-t{font-size:10.5px;color:#7d8a92;margin-top:6px}';
+  salesCss.textContent = '.wcrm-vb{position:absolute;right:12px;bottom:7px;background:#d4af37;color:#111;font:800 10.5px/1.5 Segoe UI,Arial,sans-serif;border-radius:6px;padding:0 7px;z-index:3;pointer-events:none;letter-spacing:.2px}'
+    + '#wcrm-salesm{position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.55);display:none;align-items:flex-start;justify-content:center;padding-top:70px;font-family:Segoe UI,Helvetica Neue,Arial,sans-serif}#wcrm-salesm.show{display:flex}'
+    + '#wcrm-salesm .sm-c{background:#14181c;color:#e9edef;border:1px solid #2a3238;border-radius:14px;width:min(560px,94vw);max-height:80vh;overflow:auto;padding:16px;box-shadow:0 14px 40px rgba(0,0,0,.7)}'
+    + '#wcrm-salesm h2{margin:0 0 4px;font-size:17px;color:#d4af37}#wcrm-salesm .sm-s{font-size:12px;color:#9aa6ad;margin-bottom:12px}'
+    + '#wcrm-salesm .sm-d{border:1px solid #2a3238;border-radius:10px;margin-bottom:10px;overflow:hidden}#wcrm-salesm .sm-h{display:flex;align-items:center;gap:8px;background:#1b2127;padding:8px 10px;font-weight:800;font-size:13px}#wcrm-salesm .sm-h b{flex:1}'
+    + '#wcrm-salesm button{border:1px solid #3a434a;background:#181d21;color:#e9edef;border-radius:8px;font-size:11.5px;font-weight:700;padding:4px 9px;cursor:pointer}#wcrm-salesm button:hover{border-color:#d4af37;color:#d4af37}'
+    + '#wcrm-salesm .sm-n{display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid #222a30;font-size:13px}#wcrm-salesm .sm-n span{flex:1;cursor:pointer}#wcrm-salesm .sm-n span:hover{color:#d4af37}#wcrm-salesm .sm-n i{color:#f87171;cursor:pointer;font-style:normal}'
+    + '#wcrm-salesm .sm-e{color:#9aa6ad;padding:18px 6px;text-align:center;font-size:13px}';
   document.head.appendChild(salesCss);
-  const sv = document.createElement('div'); sv.id = 'wcrm-sales'; document.body.appendChild(sv);
-  function placeSales() {
-    const ps = document.getElementById('pane-side'); if (!ps) { sv.classList.remove('show'); return; }
-    const r = ps.getBoundingClientRect(); if (!r.width || !r.height) { sv.classList.remove('show'); return; }
-    sv.classList.add('show'); sv.style.left = Math.round(r.left + 10) + 'px'; sv.style.bottom = Math.round(window.innerHeight - r.bottom + 10) + 'px'; sv.style.width = salesOpen ? Math.round(r.width - 20) + 'px' : 'auto';
+  const sm = document.createElement('div'); sm.id = 'wcrm-salesm'; document.body.appendChild(sm);
+  function decorateRows() {
+    const ps = document.getElementById('pane-side'); if (!ps) return;
+    ps.querySelectorAll('[role="listitem"], [role="row"]').forEach(row => {
+      const t = row.querySelector('span[title]'); const nm = t && t.getAttribute('title'); const m = nm && saleOf(nm); let b = row.querySelector('.wcrm-vb');
+      if (m) { if (!b) { b = document.createElement('span'); b.className = 'wcrm-vb'; if (getComputedStyle(row).position === 'static') row.style.position = 'relative'; row.appendChild(b); } const tx = '💰 VENDA ' + m.day; if (b.textContent !== tx) b.textContent = tx; }
+      else if (b) b.remove();
+    });
   }
-  function renderSales() {
-    const act = activeChip && activeChip.mode === 'sales' ? activeChip.name : '';
-    if (!salesOpen) { sv.innerHTML = '<button class="sv-btn" data-sv="open">💰 Vendas do dia' + ((sales.days || []).length ? ' · ' + sales.days.length : '') + ' ▴</button>'; placeSales(); return; }
-    const days = sales.days || [];
-    sv.innerHTML = '<div class="sv-card"><div class="sv-h">💰 Vendas do dia<span data-sv="close" title="Recolher">▾</span></div>'
-      + (days.length ? '<div class="sv-ch">' + days.map(d => '<button class="sv-c' + (d.name === act ? ' on' : '') + '" data-d="' + esc(d.name) + '">' + esc(d.name) + '<b>' + (d.contacts || []).length + '</b></button>').join('') + '</div>' : '<div class="sv-e">Nenhuma aba de venda ainda. Clique em ＋ Hoje e arraste quem comprou para ela.</div>')
-      + '<div class="sv-a"><button data-sv="today">＋ Hoje</button><button data-sv="new">＋ Outra data</button>' + (act ? '<button data-sv="addme">＋ Conversa aberta</button><button data-sv="rmme">− Tirar conversa aberta</button><button data-sv="copy">📋 Copiar nomes</button>' : '') + '</div>'
-      + '<div class="sv-t">' + (act ? 'Arraste conversas para a aba · clique direito na aba: renomear/excluir' : 'Estas abas não se misturam com as do CRM') + '</div></div>';
-    placeSales();
+  function updateSaleBtn() {
+    const vb = document.getElementById('wcrm-vbtn'); if (!vb) return; const m = me() && saleOf(me());
+    vb.style.background = m ? '#d4af37' : ''; vb.style.color = m ? '#111' : ''; const l = document.getElementById('wcrm-vlabel'); if (l) l.textContent = m ? ' ' + m.day : '';
+    vb.title = m ? 'Venda de ' + m.day + ' — clique para mudar a data ou tirar a marcação' : 'Marcar esta conversa como VENDA de hoje (etiqueta virtual do CRM)';
   }
-  const salesPick = name => { activeChip = { mode: 'sales', name }; renderChips(); applyFilter(); };
-  function salesAdd(name, contact) { const d = (sales.days || []).find(x => x.name === name); if (!d || !contact) return false; d.contacts = d.contacts || []; if (d.contacts.some(c => norm(c) === norm(contact))) { toast('Já está em ' + name); return false; } d.contacts.push(contact); salesSave(); toast('💰 ' + contact + ' → ' + name); if (activeChip && activeChip.mode === 'sales' && activeChip.name === name) startList(); renderSales(); return true; }
-  function salesNewDay(nm) { nm = (nm || '').trim().slice(0, 30); if (!nm) return; if (!(sales.days || []).some(d => d.name === nm)) { sales.days = (sales.days || []).concat([{ name: nm, contacts: [] }]); salesSave(); toast('💰 Aba "' + nm + '" criada'); } salesPick(nm); }
-  sv.addEventListener('click', e => {
-    const c = e.target.closest('.sv-c'); if (c) { salesPick(c.dataset.d); return; }
-    const b = e.target.closest('[data-sv]'); if (!b) return; const k = b.dataset.sv;
-    if (k === 'open') { salesOpen = true; lsSet('wcrm_sales_open', '1'); renderSales(); }
-    else if (k === 'close') { salesOpen = false; lsSet('wcrm_sales_open', '0'); renderSales(); }
-    else if (k === 'today') { const d = new Date(); salesNewDay('Vendas ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0')); }
-    else if (k === 'new') { popAt(b, '<div class="ttl">Nome da aba de venda</div><input id="wcrm-newsale" placeholder="ex.: Vendas 08/11 e Enter" maxlength="30">', 'left'); setTimeout(() => { const i = document.getElementById('wcrm-newsale'); i && i.focus(); }, 30); }
-    else if (k === 'addme') { const w = me(); w ? salesAdd(activeChip.name, w) : toast('Abra uma conversa primeiro'); }
-    else if (k === 'rmme') { const w = me(), d = (sales.days || []).find(x => x.name === activeChip.name); if (d && w) { d.contacts = (d.contacts || []).filter(c => norm(c) !== norm(w)); salesSave(); toast('💰 ' + w + ' saiu de ' + d.name); startList(); renderSales(); } }
-    else if (k === 'copy') { const n = listNames(); if (!n.length) { toast('Aba vazia'); return; } try { navigator.clipboard.writeText(n.join('\n')).then(() => toast('📋 ' + n.length + ' nome(s) copiado(s)'), () => toast('⚠️ Não consegui copiar')); } catch (x) { toast('⚠️ Não consegui copiar'); } }
+  function salesChanged() { decorateRows(); updateSaleBtn(); if (activeChip && activeChip.mode === 'sales') startList(); if (sm.classList.contains('show')) drawSalesModal(); }
+  function markSale(n, day) { if (!n) return; sales.marks = sales.marks || {}; sales.marks[norm(n)] = { name: n, day: day || todayLbl(), at: Date.now() }; salesSave(); salesChanged(); }
+  function unmarkSale(n) { if (sales.marks && sales.marks[norm(n)]) { delete sales.marks[norm(n)]; salesSave(); salesChanged(); } }
+  function drawSalesModal() {
+    const by = {}; Object.values(sales.marks || {}).forEach(m => { (by[m.day] = by[m.day] || []).push(m); });
+    const days = Object.keys(by).sort((a, b) => Math.max(...by[b].map(x => x.at || 0)) - Math.max(...by[a].map(x => x.at || 0)));
+    sm.innerHTML = '<div class="sm-c"><div style="display:flex;align-items:center"><h2 style="flex:1">💰 Vendas marcadas</h2><button data-sm="close">✕ Fechar</button></div><div class="sm-s">Etiqueta virtual do CRM — não mistura com abas nem etiquetas do WhatsApp. Marque pelo botão 💰 na barra da conversa.</div>'
+      + (days.length ? days.map(d => '<div class="sm-d"><div class="sm-h"><b>Vendas ' + esc(d) + ' · ' + by[d].length + '</b><button data-sm="view" data-d="' + esc(d) + '">👁 Ver na lista</button><button data-sm="copy" data-d="' + esc(d) + '">📋 Copiar nomes</button></div>' + by[d].sort((x, y) => (y.at || 0) - (x.at || 0)).map(m => '<div class="sm-n"><span data-sm="open" data-n="' + esc(m.name) + '">' + esc(m.name) + '</span><i data-sm="rm" data-n="' + esc(m.name) + '" title="Tirar marcação">✕</i></div>').join('') + '</div>').join('') : '<div class="sm-e">Nenhuma venda marcada ainda.<br>Abra a conversa do cliente e clique em 💰.</div>')
+      + '<div style="display:flex;gap:8px;margin-top:6px"><button data-sm="all">👁 Ver todas na lista</button><button data-sm="mark">＋ Marcar conversa aberta (hoje)</button></div></div>';
+  }
+  const openSalesModal = () => { drawSalesModal(); sm.classList.add('show'); };
+  sm.addEventListener('click', e => {
+    const b = e.target.closest('[data-sm]'); if (!b) { if (e.target === sm) sm.classList.remove('show'); return; } const k = b.dataset.sm;
+    if (k === 'close') sm.classList.remove('show');
+    else if (k === 'view') { sm.classList.remove('show'); activeChip = { mode: 'sales', name: b.dataset.d }; renderChips(); applyFilter(); }
+    else if (k === 'all') { sm.classList.remove('show'); activeChip = { mode: 'sales', name: '' }; renderChips(); applyFilter(); }
+    else if (k === 'copy') { const n = Object.values(sales.marks || {}).filter(m => m.day === b.dataset.d).map(m => m.name); try { navigator.clipboard.writeText(n.join('\n')).then(() => toast('📋 ' + n.length + ' nome(s) copiado(s)'), () => toast('⚠️ Não consegui copiar')); } catch (x) { toast('⚠️ Não consegui copiar'); } }
+    else if (k === 'rm') unmarkSale(b.dataset.n);
+    else if (k === 'open') { sm.classList.remove('show'); try { W().bridgeCall('OPEN', { chat: b.dataset.n }, 8000); } catch (x) {} }
+    else if (k === 'mark') { const w = me(); if (!w) toast('Abra uma conversa primeiro'); else { markSale(w); toast('💰 ' + w + ' marcada como venda ' + todayLbl()); } }
   });
-  sv.addEventListener('contextmenu', e => { const c = e.target.closest('.sv-c'); if (!c) return; e.preventDefault(); popAt(c, `<div class="ttl">Venda “${esc(c.dataset.d)}”</div><div class="it" data-se="ren">✏️ Renomear</div><div class="it" data-se="del">🗑️ Excluir aba</div>`, 'left'); pop.dataset.saleN = c.dataset.d; });
-  sv.addEventListener('dragover', e => { const c = e.target.closest('.sv-c'); if (c) { e.preventDefault(); sv.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); c.classList.add('drop'); } });
-  sv.addEventListener('dragleave', e => { const c = e.target.closest('.sv-c'); c && c.classList.remove('drop'); });
-  sv.addEventListener('drop', e => { const c = e.target.closest('.sv-c'); if (!c) return; e.preventDefault(); c.classList.remove('drop'); const n = e.dataTransfer.getData('text/wcrm-contact'); if (n) salesAdd(c.dataset.d, n); });
-  // arrastar conversa: abre a gaveta para facilitar o encaixe
-  document.addEventListener('dragstart', e => { if (!salesOpen && (e.target.closest && (e.target.closest('#main header') || e.target.closest('#pane-side [role="listitem"], #pane-side [role="row"]')))) { /* mantém recolhido; só abre se o usuário quiser */ } }, true);
-  try { chrome.storage.local.get('wcrm_sales', o => { if (o.wcrm_sales && o.wcrm_sales.days) { sales = o.wcrm_sales; renderSales(); } }); chrome.storage.onChanged.addListener((ch, a) => { if (a === 'local' && ch.wcrm_sales && ch.wcrm_sales.newValue) { sales = ch.wcrm_sales.newValue; renderSales(); if (activeChip && activeChip.mode === 'sales') startList(); } }); } catch (e) {}
-  setInterval(placeSales, 1500); window.addEventListener('resize', placeSales);
+  document.getElementById('wcrm-tb-sales').addEventListener('click', openSalesModal);
+  document.addEventListener('click', e => {
+    const vbn = e.target.closest && e.target.closest('#wcrm-vbtn'); if (!vbn) return;
+    const w = me(); if (!w) { toast('Abra uma conversa primeiro'); return; }
+    const m = saleOf(w);
+    if (!m) { markSale(w); toast('💰 ' + w + ' → venda ' + todayLbl()); return; }
+    popAt(vbn, '<div class="ttl">💰 Venda de ' + esc(m.day) + '</div><div class="it" data-vs="day"><span class="ck"></span>📅 Mudar a data…</div><div class="it" data-vs="rm"><span class="ck"></span>✕ Tirar a marcação</div><div class="it" data-vs="list"><span class="ck"></span>👁 Ver as vendas de ' + esc(m.day) + '</div>', 'left');
+  });
+  setInterval(decorateRows, 1200);
+  try {
+    chrome.storage.local.get('wcrm_sales', o => {
+      const v = o.wcrm_sales || {}; sales = { marks: v.marks || {} };
+      if (Array.isArray(v.days)) { v.days.forEach(d => { const day = String(d.name || '').replace(/^Vendas\s*/i, '') || todayLbl(); (d.contacts || []).forEach(c => { if (!sales.marks[norm(c)]) sales.marks[norm(c)] = { name: c, day, at: Date.now() }; }); }); salesSave(); }
+      salesChanged();
+    });
+    chrome.storage.onChanged.addListener((ch, a) => { if (a === 'local' && ch.wcrm_sales && ch.wcrm_sales.newValue) { sales = { marks: ch.wcrm_sales.newValue.marks || {} }; salesChanged(); } });
+  } catch (e) {}
   // arrastar conversa para uma aba
   const chipsEl = document.getElementById('wcrm-chips');
   on2('dragover', e => { const b = e.target.closest('.tb-chip'); if (mode === 'tabs' && b && !b.dataset.all) { e.preventDefault(); document.querySelectorAll('.tb-chip.drop').forEach(x => x.classList.remove('drop')); b.classList.add('drop'); } });
@@ -376,14 +393,7 @@
   document.getElementById('wcrm-tb-refresh').addEventListener('click', () => { post({ type: 'GET_CONVERSATIONS' }); window.postMessage({ tag: 'WCRM_CONTENT', kind: 'SYNC' }, '*'); loadBar(); });
   pop.addEventListener('input', e => { if (e.target.id === 'wcrm-tabsearch') { const q = norm(e.target.value); pop.querySelectorAll('#wcrm-tablist .it').forEach(x => { x.style.display = !q || (x.dataset.s || '').includes(q) ? '' : 'none'; }); } });
   pop.addEventListener('keydown', e => {
-    if (e.target.id === 'wcrm-newsale' && e.key === 'Enter') { const n = e.target.value; closePop(); salesNewDay(n); }
-    if (e.target.id === 'wcrm-rensale' && e.key === 'Enter') {
-      const to = e.target.value.trim().slice(0, 30), from = pop.dataset.saleN; closePop(); if (!to || to === from) return;
-      if ((sales.days || []).some(d => d.name === to)) { toast('⚠️ Já existe uma aba com esse nome'); return; }
-      sales.days = (sales.days || []).map(d => d.name === from ? Object.assign({}, d, { name: to }) : d); salesSave();
-      if (activeChip && activeChip.mode === 'sales' && activeChip.name === from) activeChip = { mode: 'sales', name: to };
-      renderSales(); if (activeChip) startList(); toast('✏️ "' + from + '" → "' + to + '"');
-    }
+    if (e.target.id === 'wcrm-saleday' && e.key === 'Enter') { const v = e.target.value.trim(); closePop(); if (/^\d{1,2}\/\d{1,2}$/.test(v)) { const [d, m] = v.split('/'); markSale(me(), pad2(+d) + '/' + pad2(+m)); toast('💰 Data da venda: ' + pad2(+d) + '/' + pad2(+m)); } else toast('⚠️ Use o formato dd/mm'); }
     if (e.target.id === 'wcrm-rentab' && e.key === 'Enter') {
       const to = e.target.value.trim(), from = pop.dataset.tabn; closePop();
       if (!to || to === from) return;
@@ -402,12 +412,11 @@
   });
   pop.addEventListener('click', async e => {
     const it = e.target.closest('.it'); if (!it) return;
-    if (it.dataset.se) {
-      const n = pop.dataset.saleN, act = it.dataset.se;
-      if (act === 'ren') { pop.innerHTML = '<div class="ttl">Renomear “' + esc(n) + '”</div><input id="wcrm-rensale" maxlength="30" value="' + esc(n) + '">'; pop.dataset.saleN = n; setTimeout(() => { const i = document.getElementById('wcrm-rensale'); i && (i.focus(), i.select()); }, 30); }
-      else if (act === 'del') { const d = (sales.days || []).find(x => x.name === n); pop.innerHTML = '<div class="ttl">Excluir “' + esc(n) + '”?</div><div style="padding:4px 10px 8px;font-size:12px;color:#c9d1d6">' + ((d && d.contacts || []).length) + ' conversa(s) saem desta aba de venda (nenhum contato é apagado).</div><div class="it" data-se="delok" style="color:#f87171">🗑️ Sim, excluir</div><div class="it" data-se="no">Cancelar</div>'; }
-      else if (act === 'delok') { closePop(); sales.days = (sales.days || []).filter(x => x.name !== n); salesSave(); if (activeChip && activeChip.mode === 'sales' && activeChip.name === n) { activeChip = null; applyFilter(); renderChips(); } renderSales(); toast('🗑️ "' + n + '" excluída'); }
-      else closePop();
+    if (it.dataset.vs) {
+      const w = me(), act = it.dataset.vs, m = saleOf(w);
+      if (act === 'rm') { closePop(); unmarkSale(w); toast('💰 Marcação tirada de ' + w); }
+      else if (act === 'list' && m) { closePop(); activeChip = { mode: 'sales', name: m.day }; renderChips(); applyFilter(); }
+      else if (act === 'day') { pop.innerHTML = '<div class="ttl">Data da venda (dd/mm)</div><input id="wcrm-saleday" maxlength="5" value="' + esc(m ? m.day : todayLbl()) + '">'; setTimeout(() => { const i = document.getElementById('wcrm-saleday'); i && (i.focus(), i.select()); }, 30); }
       return;
     }
     if (it.dataset.te) {
@@ -463,6 +472,7 @@
   const strip = document.createElement('div'); strip.id = 'wcrm-strip';
   strip.innerHTML = `<button id="wcrm-abtn" title="Abas (do CRM) — mover esta conversa">📂<span id="wcrm-alabel" style="font-size:12px;font-weight:700;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><i id="wcrm-abadge" style="display:none">1</i></button>
     <button id="wcrm-lbtn" title="Etiquetas do WhatsApp desta conversa">🏷️<i id="wcrm-lbadge" style="display:none">0</i></button>
+    <button id="wcrm-vbtn" title="Marcar esta conversa como VENDA de hoje (etiqueta virtual do CRM)">💰<span id="wcrm-vlabel" style="font-size:12px;font-weight:700"></span></button>
     <span class="hint">⠿ arraste o cabeçalho da conversa para uma aba</span><button class="min" id="wcrm-strip-min" title="Minimizar">▴</button>`;
   document.body.appendChild(strip);
   function curTabs() { const n = norm(me()); return (barData.tabs || []).filter(x => (x.contacts || []).some(c => norm(c) === n)).map(x => x.name); }
@@ -470,7 +480,7 @@
   function curLabels() { const br = W().getBridge && W().getBridge(); const n = norm(me()); const c = br && br.ok && (br.chats || []).find(x => norm(x.name) === n); return c ? c.labels : []; }
   function updateStrip() {
     const ct = curTab(); const ctl = curTabs(); const al = document.getElementById('wcrm-alabel'); if (al) al.textContent = ctl.length > 1 ? ctl[0] + ' +' + (ctl.length - 1) : (ctl[0] || ''); const ab = document.getElementById('wcrm-abadge'); if (ab) { ab.style.display = ct ? 'flex' : 'none'; document.getElementById('wcrm-abtn').title = ct ? 'Aba: ' + ct : 'Abas (do CRM) — mover esta conversa'; }
-    const cl = curLabels(); const lb = document.getElementById('wcrm-lbadge'); if (lb) { lb.style.display = cl.length ? 'flex' : 'none'; lb.textContent = cl.length; }
+    updateSaleBtn(); const cl = curLabels(); const lb = document.getElementById('wcrm-lbadge'); if (lb) { lb.style.display = cl.length ? 'flex' : 'none'; lb.textContent = cl.length; }
   }
   document.getElementById('wcrm-strip-min').addEventListener('click', () => setStrip(false));
   function openTabPop(btn) {

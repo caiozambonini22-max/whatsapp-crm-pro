@@ -206,13 +206,26 @@
     return { act: 'send', enr: due[0], queued: due.length };
   }
 
-  const BULK_OPTS = { minSec: 40, maxSec: 120, perHour: 30, perDay: 150, useWindow: true, onlyKnown: true, pauseAfterFails: 3, dryRun: false };
-  function bulkStepsOf(job) {
-    const out = [];
+  const BULK_OPTS = { minSec: 40, maxSec: 120, perHour: 30, perDay: 150, useWindow: true, onlyKnown: true, pauseAfterFails: 3, dryRun: false,
+    typingSim: false, batchEvery: 0, batchMin: 5, batchMax: 12, warmN: 0, warmFactor: 2, skipRecentHours: 0, skipActiveMin: 0, excludeTabs: [],
+    customWindow: false, winStart: '09:00', winEnd: '19:00', startAt: 0 };
+  // monta os passos de UM contato (idx = posição dele no disparo): variações e alternativas são distribuídas em rodízio, pausas entre ações sorteadas
+  function bulkStepsOf(job, idx) {
+    const o = job.opts || {}; const n = (idx || 0) + (job.seed || 0); const out = [];
+    const rr = list => list[n % list.length];
+    const gA = Math.max(0, +job.stepGap || 0), gB = Math.max(gA, +job.stepGapMax || gA);
+    const gap = () => gB > gA ? gA + Math.floor(Math.random() * (gB - gA + 1)) : gA;
     (job.steps || []).forEach((s, i) => {
-      if (s.type === 'quick' && s.msgId) { if (i > 0 && (job.stepGap || 0) > 0) out.push({ type: 'wait', seconds: job.stepGap }); out.push({ type: 'quick', msgId: s.msgId }); }
-      else if (s.type === 'text' && (s.variations || []).some(Boolean)) out.push({ type: 'text', variations: s.variations.filter(Boolean) });
+      const pre = () => { const g = gap(); if (i > 0 && g > 0) out.push({ type: 'wait', seconds: g }); };
+      if (s.type === 'quick' && s.msgId) { const ids = [s.msgId].concat((s.alts || []).filter(Boolean)); pre(); out.push({ type: 'quick', msgId: rr(ids) }); }
+      else if (s.type === 'text') {
+        const v = (s.variations || []).map(x => (x || '').trim()).filter(Boolean); if (!v.length) return;
+        const txt = rr(v); pre();
+        if (o.typingSim) out.push({ type: 'typing', seconds: Math.max(2, Math.min(9, Math.round(txt.length / 18))) });
+        out.push({ type: 'text', variations: [txt] });
+      }
       else if (s.type === 'wait') out.push({ type: 'wait', seconds: Math.max(0, +s.seconds || 0) });
+      else if (s.type === 'typing' || s.type === 'recording') out.push({ type: s.type, seconds: Math.max(1, +s.seconds || 3) });
     });
     return out;
   }
@@ -220,8 +233,10 @@
   function bulkGate(job, rt, cfg, now) {
     const o = Object.assign({}, BULK_OPTS, job.opts || {});
     if (job.status !== 'running') return { go: false, why: 'parado' };
-    if (job.nextAt && now < job.nextAt) return { go: false, why: 'intervalo aleatório (' + Math.ceil((job.nextAt - now) / 1000) + ' s)' };
-    if (o.useWindow && !inWindow(now, cfg)) return { go: false, why: 'fora do horário permitido (' + cfg.winStart + '–' + cfg.winEnd + ')' };
+    if (o.startAt && now < o.startAt) return { go: false, why: 'agendado para ' + new Date(o.startAt).toLocaleString('pt-BR') };
+    if (job.nextAt && now < job.nextAt) { const sec = Math.ceil((job.nextAt - now) / 1000); return { go: false, why: (job.longPause ? 'pausa longa entre lotes (' : 'intervalo aleatório (') + (sec >= 120 ? Math.ceil(sec / 60) + ' min' : sec + ' s') + ')' }; }
+    const wcfg = o.customWindow ? Object.assign({}, cfg, { winStart: o.winStart, winEnd: o.winEnd, win24: false }) : cfg;
+    if (o.useWindow && !inWindow(now, wcfg)) return { go: false, why: 'fora do horário permitido (' + wcfg.winStart + '–' + wcfg.winEnd + ')' };
     const hourly = (rt.hourly || []).filter(t => now - t < 3600e3).length;
     if (hourly >= o.perHour) return { go: false, why: 'limite por hora (' + o.perHour + ') atingido' };
     const today = dayKey(new Date(now)); const sentToday = rt.day === today ? (rt.sent || 0) : 0;
@@ -876,19 +891,25 @@
     if (idx < 0) { await mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (j) { j.status = 'done'; j.endedAt = Date.now(); } }); await addLog('📣 Disparo "' + job.name + '" concluído'); return; }
     const c = job.contacts[idx];
     const setC = (patch, jobPatch) => mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (!j) return; Object.assign(j.contacts[idx], patch, { at: Date.now() }); if (jobPatch) Object.assign(j, jobPatch); });
-    const gap = () => Date.now() + rndMs(o.minSec * 1000, Math.max(o.minSec, o.maxSec) * 1000);
+    const sentN = job.contacts.filter(x => x.state === 'sent').length + 1;   // contando este
+    const warm = o.warmN && sentN <= o.warmN ? (o.warmFactor || 2) : 1;
+    const longP = o.batchEvery && sentN % o.batchEvery === 0 && job.contacts.some(x => x.state === 'pending' && x !== c);
+    const gap = (ok) => Date.now() + ((ok && longP) ? rndMs(o.batchMin * 60e3, Math.max(o.batchMin, o.batchMax) * 60e3) : rndMs(o.minSec * 1000 * warm, Math.max(o.minSec, o.maxSec) * 1000 * warm));
     const br = W.getBridge && W.getBridge();
     let info = ((br && br.act) || []).find(a => norm(a.n) === norm(c.n));
     if (!info) { const al = ((br && br.all) || []).find(a => norm(a.n) === norm(c.n)); if (al && al.t) info = { n: al.n, i: al.t, o: 0 }; }
     if (info && info.g) { await setC({ state: 'skipped', why: 'é um grupo' }); return; }
     if (o.onlyKnown && !(info && (info.i || info.o))) { await setC({ state: 'skipped', why: 'nunca conversou com você (proteção)' }); await addLog('📣 "' + c.n + '" pulado: nunca conversou com você'); return; }
-    const steps = bulkStepsOf(job);
+    if (o.skipRecentHours > 0) { const lim = Date.now() - o.skipRecentHours * 3600e3; const rec = b0.jobs.some(j => (j.contacts || []).some(x => norm(x.n) === norm(c.n) && x.state === 'sent' && !x.simulated && (x.at || 0) > lim && !(j.id === jobId && x === c))); if (rec) { await setC({ state: 'skipped', why: 'já recebeu disparo há menos de ' + o.skipRecentHours + ' h' }); await addLog('📣 "' + c.n + '" pulado: recebeu disparo recente'); return; } }
+    if (o.skipActiveMin > 0 && info && info.i && Date.now() - info.i < o.skipActiveMin * 60e3) { await setC({ state: 'skipped', why: 'conversa ativa (cliente escreveu há menos de ' + o.skipActiveMin + ' min)' }); await addLog('📣 "' + c.n + '" pulado: conversa ativa'); return; }
+    if ((o.excludeTabs || []).length) { const bar = (await sget(K_BAR)) || {}; const ex = new Set(o.excludeTabs.map(norm)); const hit = (bar.tabs || []).find(t => ex.has(norm(t.name)) && (t.contacts || []).some(n => norm(n) === norm(c.n))); if (hit) { await setC({ state: 'skipped', why: 'está na aba bloqueada “' + hit.name + '”' }); await addLog('📣 "' + c.n + '" pulado: aba ' + hit.name); return; } }
+    const steps = bulkStepsOf(job, idx);
     if (!steps.length) { await mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (j) j.status = 'paused'; }); await addLog('📣 Disparo "' + job.name + '" sem ações — pausado'); return; }
-    if (o.dryRun) { await setC({ state: 'sent', simulated: true }, { nextAt: Date.now() + 1500 }); await addLog('🧪 SIMULAÇÃO disparo "' + job.name + '" → "' + c.n + '" (nada enviado)'); return; }
+    if (o.dryRun) { await setC({ state: 'sent', simulated: true }, { nextAt: Date.now() + 1500, longPause: false }); await addLog('🧪 SIMULAÇÃO disparo "' + job.name + '" → "' + c.n + '" (nada enviado)'); return; }
     const fakeEnr = { id: 'bulk-' + jobId + '-' + idx, contact: c.n, nk: norm(c.n), stepIdx: 0 };
     const failed = async why => {
       const fails = (job.fails || 0) + 1;
-      await setC({ state: 'error', why }, { fails, nextAt: gap() });
+      await setC({ state: 'error', why }, { fails, nextAt: gap(false), longPause: false });
       await addLog('📣 Falha em "' + c.n + '": ' + why);
       if (fails >= o.pauseAfterFails) { await mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (j) j.status = 'paused'; }); await addAlert('error', c.n, 'Disparo "' + job.name + '" PAUSADO após ' + fails + ' falhas seguidas: ' + why); }
     };
@@ -898,7 +919,7 @@
     const res = await runSteps(W, { name: job.name }, fakeEnr, steps, 0, before, async (why) => { await failed(why); });
     if (!res.ok) return;
     const now = Date.now();
-    await setC({ state: 'sent', text: (res.firstText || '').slice(0, 80) }, { fails: 0, nextAt: gap() });
+    await setC({ state: 'sent', text: (res.firstText || '').slice(0, 80) }, { fails: 0, nextAt: gap(true), longPause: !!longP });
     await mutateRt(r => { const today = dayKey(new Date(now)); if (r.day !== today) { r.day = today; r.sent = 0; } r.sent = (r.sent || 0) + 1; r.hourly = (r.hourly || []).filter(t => now - t < 3600e3).concat([now]); });
     await addLog('📣 Disparo "' + job.name + '" → "' + c.n + '"');
   }
@@ -919,13 +940,15 @@
   // lista de contatos disponíveis para escolher (vem da ponte do WhatsApp)
   async function bulkSources() {
     const W = root.__wcrm; const br = W && W.getBridge && W.getBridge();
-    const actMap = new Map(); ((br && br.act) || []).filter(a => !a.g).forEach(a => actMap.set(norm(a.n), { n: a.n, i: a.i || 0, o: a.o || 0 }));
-    ((br && br.all) || []).forEach(a => { const k = norm(a.n); if (!actMap.has(k)) actMap.set(k, { n: a.n, i: a.t || 0, o: 0, t: a.t || 0 }); else actMap.get(k).t = a.t || 0; });
+    const actMap = new Map(); ((br && br.act) || []).filter(a => !a.g).forEach(a => actMap.set(norm(a.n), { n: a.n, i: a.i || 0, o: a.o || 0, id: a.id || '' }));
+    ((br && br.all) || []).forEach(a => { const k = norm(a.n); if (!actMap.has(k)) actMap.set(k, { n: a.n, i: a.t || 0, o: 0, t: a.t || 0, id: a.id || '' }); else { actMap.get(k).t = a.t || 0; if (!actMap.get(k).id && a.id) actMap.get(k).id = a.id; } });
     const act = [...actMap.values()].sort((x, y) => (y.t || Math.max(x.i, x.o)) - (x.t || Math.max(y.i, y.o)));
     const labels = ((br && br.labels) || []).map(l => ({ name: l.name, color: l.color, count: l.count }));
     const chats = ((br && br.chats) || []).filter(c => !/@g\.us$/.test(c.id || '')).map(c => ({ n: c.name, labels: c.labels }));
     const bar = (await sget(K_BAR)) || {}; const tabs = (bar.tabs || []).map(t => ({ name: t.name, contacts: t.contacts || [] }));
-    return { act, labels, chats, tabs, ok: !!(br && br.ok) };
+    const sal = (await sget('wcrm_sales')) || {}; const marks = Object.values(sal.marks || {}).map(m => ({ n: m.name, day: m.day }));
+    const stt = (await sget('wcrm_state')) || {}; const profile = Object.entries(stt.contacts || {}).map(([n, c]) => ({ n, notes: Array.isArray(c.notesList) ? c.notesList.length : (c.notes ? 1 : 0), val: !!(c.values && (Array.isArray(c.values) ? c.values.length : Object.keys(c.values).length)) }));
+    return { act, labels, chats, tabs, marks, profile, ok: !!(br && br.ok) };
   }
   // ── envio manual de resposta rápida (clique em ▷) — com faixa de progresso e "Cancelar Envio" (igual WaSpeed) ──
   let qrRunning = false, qrCancel = false;

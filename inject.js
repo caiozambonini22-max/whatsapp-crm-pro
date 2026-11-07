@@ -51,13 +51,13 @@
         if (!m || !m.id || m.isNotification || SKIP_TYPES.test(m.type || '')) return;
         var t = (m.t || 0) * 1000; if (m.id.fromMe) { if (t > lo) lo = t; } else if (t > li) li = t;
       });
-      if (li || lo) act.push({ n: chatName(c), i: li, o: lo, g: !!(c.isGroup || (c.id && c.id.server === 'g.us')) });
+      if (li || lo) act.push({ n: chatName(c), id: c.id && c.id._serialized, i: li, o: lo, g: !!(c.isGroup || (c.id && c.id.server === 'g.us')) });
     });
     var all = [];
     arr(s.C).forEach(function (c) {
       if (c.isGroup || (c.id && c.id.server === 'g.us') || (c.id && c.id.server === 'broadcast') || (c.id && c.id._serialized === 'status@broadcast')) return;
       var nm = chatName(c); if (!nm) return;
-      all.push({ n: nm, t: (c.t || 0) * 1000 });
+      all.push({ n: nm, id: c.id && c.id._serialized, t: (c.t || 0) * 1000 });
     });
     return {
       ok: true, act: act, all: all,
