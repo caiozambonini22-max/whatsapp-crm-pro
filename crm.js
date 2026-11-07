@@ -119,7 +119,11 @@ window.addEventListener('message', e => {
   }
   if (e.data?.type === 'SET_TAB') {
     const nt = (e.data.newTab || '').trim(); if (nt && !crmTabs.includes(nt)) crmTabs.push(nt);
-    const n = e.data.contact;
+    let n = e.data.contact; let tabRes = { type: 'SET_TAB_RESULT', rid: e.data.rid, ok: false };
+    if (n && !contacts[n]) {   // acha o contato mesmo com diferença de acento/maiúscula/espaço
+      const nz = x => (x || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const k = Object.keys(contacts).find(x => nz(x) === nz(n)); if (k) n = k;
+    }
     if (n) {
       if (!contacts[n]) contacts[n] = { av: '👤', col: '#2a3942', labels: [] };
       const c0 = contacts[n]; let tl = tabsOf(c0); const md = e.data.mode;
@@ -128,9 +132,11 @@ window.addEventListener('message', e => {
       else if (md === 'clear') tl = [];
       else tl = e.data.tab ? [e.data.tab] : [];
       c0.tabs = tl; c0.tab = tl[0] || '';
+      tabRes.ok = md === 'add' ? tl.includes(e.data.tab) : (md === 'clear' ? !tl.length : !tl.includes(e.data.onlyIf || e.data.tab)); tabRes.tabs = tl; tabRes.key = n;
     }
     try { saveAutoBackup(); } catch (x) {}
     if ($('sec-crm-tabs')?.classList.contains('active')) renderCRMTabsSection();
+    if (e.data.rid) { try { window.parent.postMessage(tabRes, '*'); } catch (x) {} }
   }
   if (e.data?.type === 'KANBAN_TAB_OP') {
     const nm = e.data.name, to = (e.data.to || '').trim();

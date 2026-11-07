@@ -694,15 +694,25 @@
     if (await gotNew(5)) return { ok: true, sent: true, text };
     return { ok: false, sent: false, why: 'Não consegui confirmar o envio (' + st.type + ')' };
   }
+  // muda aba do CRM e CONFIRMA que o painel aplicou (tenta de novo se não confirmar)
+  const tabWaiters = {};
+  window.addEventListener('message', e => { const d = e.data; if (d && d.type === 'SET_TAB_RESULT' && tabWaiters[d.rid]) { tabWaiters[d.rid](d); } });
+  async function setTabSafe(contact, mode, tab) {
+    for (let a = 0; a < 3; a++) {
+      const f = document.getElementById('wcrm-iframe'); if (!(f && f.contentWindow)) { await sleep(1500); continue; }
+      const rid = 't' + Date.now() + Math.random().toString(36).slice(2, 5);
+      const msg = { type: 'SET_TAB', rid, contact, tab: mode === 'clear' ? '' : tab, mode }; if (mode === 'add') msg.newTab = tab;
+      const res = await new Promise(res => { const to = setTimeout(() => { delete tabWaiters[rid]; res(null); }, 5000); tabWaiters[rid] = d => { clearTimeout(to); delete tabWaiters[rid]; res(d); }; f.contentWindow.postMessage(msg, '*'); });
+      if (res && res.ok) { await sleep(1500); return { ok: true, tabs: res.tabs }; }
+      await sleep(1500);
+    }
+    return { ok: false };
+  }
   async function execAux(W, st, contact) {
     const t = st.type;
     if (t === 'label_add' || t === 'label_rm') { const r = await applyLabelsUI(t === 'label_add' ? [st.name] : [], t === 'label_rm' ? [st.name] : []); if (!r.ok) await addLog('Etiqueta não aplicada em "' + contact + '": ' + r.why); return; }
     if (t === 'label_rmall') { const br = W.getBridge && W.getBridge(); const c = ((br && br.chats) || []).find(x => norm(x.name) === norm(contact)); const ls = c ? c.labels : []; if (ls.length) await applyLabelsUI([], ls); return; }
-    if (t === 'tab_add' || t === 'tab_rm' || t === 'tab_rmall') {
-      const f = document.getElementById('wcrm-iframe');
-      const msg = t === 'tab_add' ? { type: 'SET_TAB', contact, tab: st.name, newTab: st.name, mode: 'add' } : t === 'tab_rm' ? { type: 'SET_TAB', contact, tab: st.name, mode: 'remove' } : { type: 'SET_TAB', contact, tab: '', mode: 'clear' };
-      f && f.contentWindow && f.contentWindow.postMessage(msg, '*'); return;
-    }
+    if (t === 'tab_add' || t === 'tab_rm' || t === 'tab_rmall') { await setTabSafe(contact, t === 'tab_add' ? 'add' : t === 'tab_rm' ? 'remove' : 'clear', st.name); return; }
     if (['archive', 'unarchive', 'pin', 'unpin', 'unread'].includes(t)) { const r = await actBridge(t, '__active__'); if (!r.ok) await addLog('Ação "' + t + '" falhou em "' + contact + '": ' + r.reason); }
   }
   async function runSteps(W, rule, enr, steps, rot, before, fail) {
@@ -744,12 +754,12 @@
         if (ls.length) { const r = await applyLabelsUI([], ls); if (!r.ok) await addAlert('label', enr.contact, 'Não consegui tirar todas as etiquetas: ' + r.why); else await addLog('Todas as etiquetas removidas de "' + enr.contact + '"'); }
       }
       else if (t === 'tab_add' || t === 'tab_rm' || t === 'tab_rmall') {
-        try {
-          const f = document.getElementById('wcrm-iframe');
-          if (!(f && f.contentWindow)) { await fail('Painel do CRM não carregado — não consegui mudar a aba', 'Não consegui mudar a aba de "' + enr.contact + '": o painel do CRM não está carregado (F5 no WhatsApp).'); return { ok: false }; }
-          const msg = t === 'tab_add' ? { type: 'SET_TAB', contact: enr.contact, tab: st.name, newTab: st.name, mode: 'add' } : t === 'tab_rm' ? { type: 'SET_TAB', contact: enr.contact, tab: st.name, mode: 'remove' } : { type: 'SET_TAB', contact: enr.contact, tab: '', mode: 'clear' };
-          f && f.contentWindow && f.contentWindow.postMessage(msg, '*');
-        } catch (e) {}
+        const f = document.getElementById('wcrm-iframe');
+        if (!(f && f.contentWindow)) { await fail('Painel do CRM não carregado — não consegui mudar a aba', 'Não consegui mudar a aba de "' + enr.contact + '": o painel do CRM não está carregado (F5 no WhatsApp).'); return { ok: false }; }
+        const r = await setTabSafe(enr.contact, t === 'tab_add' ? 'add' : t === 'tab_rm' ? 'remove' : 'clear', st.name);
+        const lbl = t === 'tab_add' ? 'adicionar em' : t === 'tab_rm' ? 'tirar de' : 'limpar abas';
+        if (r.ok) await addLog('Aba: ' + lbl + ' "' + (st.name || '') + '" ✓ ' + enr.contact);
+        else { await addLog('⚠️ Aba NÃO mudou (' + lbl + ' "' + (st.name || '') + '") em "' + enr.contact + '"'); await addAlert('label', enr.contact, 'Mensagem enviada, mas a aba não mudou (' + lbl + ' "' + (st.name || '') + '"). Mude na mão ou use ▶ nos Avisos.'); }
       }
       else if (['archive', 'unarchive', 'pin', 'unpin', 'unread'].includes(t)) {
         const r = await actBridge(t, enr.contact); if (!r.ok) { await addLog('Ação "' + t + '" falhou em "' + enr.contact + '": ' + r.reason); await addAlert('label', enr.contact, 'Ação “' + t + '” não aplicada: ' + r.reason); }
