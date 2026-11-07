@@ -335,6 +335,14 @@
         }
       } else { log('ponte não abriu a conversa:', r && r.reason); }
     }
+    // contato que ainda aparece como número (ou foi salvo depois): abre direto pelo telefone
+    const dg = String(name || '').replace(/\D/g, '');
+    if (W && W.bridgeOk && W.bridgeOk() && dg.length >= 10 && dg.length <= 13 && !/[a-zà-ú]/i.test(name)) {
+      const r2 = await W.bridgeCall('OPEN_NUMBER', { phone: dg }, 12000);
+      if (r2 && r2.ok) {
+        for (let i = 0; i < 12; i++) { await sleep(400); if (document.querySelector('#main footer')) { await sleep(1000); return true; } }
+      } else { log('abrir pelo número falhou:', r2 && r2.reason); }
+    }
     let row = findRow(name);
     if (!row) {
       const sb = searchBox();
@@ -482,7 +490,23 @@
       if (prev !== a.n) { map[a.id] = a.n; changed = true; }
     });
     if (changed) await sset('wcrm_idmap', map);
+    // contatos guardados com o número como nome, que agora têm nome salvo no WhatsApp
+    try {
+      const names = new Set(br.act.map(a => norm(a.n || '')));
+      const enrs = await getEnrs(); const seen = new Set();
+      for (const e of enrs) {
+        const c = e.contact || ''; const d = c.replace(/\D/g, '');
+        if (!c || seen.has(c) || /[a-zà-ú]/i.test(c) || d.length < 10 || names.has(norm(c))) continue; seen.add(c);
+        const hit = br.act.find(a => a && a.id && !a.g && /@c\.us$/.test(a.id) && a.id.replace(/\D/g, '').slice(-9) === d.slice(-9) && /[a-zà-ú]/i.test(a.n || ''));
+        if (hit && !moves.some(m => m.from === c)) moves.push({ from: c, to: hit.n });
+      }
+    } catch (x) {}
     for (const m of moves) await migrateContact(m.from, m.to);
+    // 1x: reativa follow-ups que pararam por "não achei a conversa"
+    if (!(await sget('wcrm_fix486'))) {
+      await mutateEnr(l => { l.forEach(e => { if (e.state === 'error' && /Não achei\/abri/.test(e.reason || '')) { e.state = 'waiting'; e.fails = 0; e.dueAt = Date.now(); delete e.reason; } }); });
+      await sset('wcrm_fix486', 1);
+    }
   }
   async function trackAndEnroll() {
     const cfg = await getCfg(); const { cur, avail } = await currentMembers();
