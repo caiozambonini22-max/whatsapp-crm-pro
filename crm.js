@@ -106,6 +106,17 @@ window.addEventListener('message', e => {
     }
     if (activeContact && contacts[activeContact]) updateContactPanel();
   }
+  if (e.data?.type === 'RENAME_CONTACT') {
+    const f = e.data.from, t = e.data.to;
+    if (f && t && f !== t && contacts[f]) {
+      const a = contacts[f]; const b = contacts[t] || (contacts[t] = { av: '👤', col: '#2a3942', labels: [] });
+      const tabsU = [...new Set(tabsOf(a).concat(tabsOf(b)))]; const labU = [...new Set((a.labels || []).concat(b.labels || []))];
+      Object.keys(a).forEach(k => { const v = b[k]; if (v === undefined || v === '' || (Array.isArray(v) && !v.length)) b[k] = a[k]; });
+      b.tabs = tabsU; b.tab = tabsU[0] || ''; b.labels = labU;
+      delete contacts[f]; if (activeContact === f) activeContact = t;
+      try { saveAutoBackup(); } catch (x) {}
+    }
+  }
   if (e.data?.type === 'SET_TAB') {
     const nt = (e.data.newTab || '').trim(); if (nt && !crmTabs.includes(nt)) crmTabs.push(nt);
     const n = e.data.contact;

@@ -459,6 +459,31 @@
     if (bar && bar.tabs) { avail.tabs = true; bar.tabs.forEach(t => { cur['tab:' + t.name] = (t.contacts || []).slice(); }); }
     return { cur, avail };
   }
+
+  // ── contato salvo/renomeado no WhatsApp: segue o chat pelo ID e leva abas, funil, Follow Up e vendas junto (sem reiniciar o tempo) ──
+  async function migrateContact(from, to) {
+    const fk = norm(from), tk = norm(to); if (!fk || !tk || fk === tk) return;
+    const f = document.getElementById('wcrm-iframe'); try { f && f.contentWindow && f.contentWindow.postMessage({ type: 'RENAME_CONTACT', from, to }, '*'); } catch (e) {}
+    const bar = await sget(K_BAR);
+    if (bar && bar.tabs) { let ch = false; bar.tabs.forEach(t => { const cs = t.contacts || []; const i = cs.findIndex(n => norm(n) === fk); if (i >= 0) { if (cs.some(n => norm(n) === tk)) cs.splice(i, 1); else cs[i] = to; t.count = cs.length; ch = true; } }); if (ch) await sset(K_BAR, bar); }
+    const mem = await sget(K_MEM);
+    if (mem && mem.m) { Object.keys(mem.m).forEach(key => { const p = mem.m[key]; if (p && p[fk]) { if (!p[tk]) p[tk] = Object.assign({}, p[fk], { n: to, miss: 0 }); delete p[fk]; } }); await sset(K_MEM, mem); }
+    await mutateEnr(l => { l.forEach(e => { if (e.nk === fk) { e.nk = tk; e.contact = to; } }); });
+    const sal = await sget('wcrm_sales');
+    if (sal && sal.marks && sal.marks[fk]) { const m = sal.marks[fk]; delete sal.marks[fk]; if (!sal.marks[tk]) sal.marks[tk] = Object.assign({}, m, { name: to }); await sset('wcrm_sales', sal); }
+    await addLog('🔁 Contato salvo/renomeado no WhatsApp: "' + from + '" → "' + to + '". Abas e Follow Up mantidos (tempo NÃO reiniciou).');
+  }
+  async function syncRenames() {
+    const br = root.__wcrm && root.__wcrm.getBridge && root.__wcrm.getBridge(); if (!br || !br.ok || !Array.isArray(br.act)) return;
+    const map = (await sget('wcrm_idmap')) || {}; let changed = false; const moves = [];
+    br.act.forEach(a => {
+      if (!a || !a.id || !a.n || a.g) return; const prev = map[a.id];
+      if (prev && norm(prev) !== norm(a.n) && !br.act.some(x => x.id !== a.id && norm(x.n) === norm(prev))) moves.push({ from: prev, to: a.n });
+      if (prev !== a.n) { map[a.id] = a.n; changed = true; }
+    });
+    if (changed) await sset('wcrm_idmap', map);
+    for (const m of moves) await migrateContact(m.from, m.to);
+  }
   async function trackAndEnroll() {
     const cfg = await getCfg(); const { cur, avail } = await currentMembers();
     const r = trackMembers(await sget(K_MEM), cur, avail, Date.now());
@@ -802,6 +827,7 @@
       else if (!cfg.on) wasOn = false;
       await mutateRt(r => { r.lastAlive = now; });
       await mutateEnr(l => { l.forEach(e => { if (e.state === 'sending' && now - (e.claimAt || 0) > 15 * 60e3) { e.state = 'stale'; delete e.claim; } }); });
+      await syncRenames();
       await trackAndEnroll();
       await replyScan();
       const enrs = await getEnrs(), rt = await getRt();
@@ -1108,7 +1134,7 @@
     setTimeout(draw, 1500); setInterval(draw, 8000);
   })();
 
-  root.__wcrmEngine = { tick, bulkTick, bulkGate, bulkStepsOf, quickRun };
+  root.__wcrmEngine = { tick, bulkTick, bulkGate, bulkStepsOf, quickRun, syncRenames, migrateContact };
   setInterval(() => tick(), 10000);
   log('motor de follow-up carregado (v4.33)');
 })(typeof window !== 'undefined' ? window : globalThis);
