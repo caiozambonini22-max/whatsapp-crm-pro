@@ -44,8 +44,8 @@
     #wcrm-topbar{position:fixed;top:0;left:0;right:0;height:${BAR_H}px;z-index:2147483644;background:#0d0f11;border-bottom:1px solid #2a3238;display:none;align-items:center;gap:8px;padding:0 10px;}
     html.wcrm-bar #wcrm-topbar{display:flex;}
     #wcrm-topbar .tb-logo{height:30px;width:30px;object-fit:contain;border-radius:6px;flex-shrink:0;}
-    #wcrm-topbar .tb-chips{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;align-items:center;}
-    #wcrm-topbar .tb-chips::-webkit-scrollbar{display:none;}
+    #wcrm-topbar .tb-chips{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--wcrm-acc,#d4af37) transparent;align-items:center;padding-bottom:2px;}
+    #wcrm-topbar .tb-chips::-webkit-scrollbar{height:7px;} #wcrm-topbar .tb-chips::-webkit-scrollbar-thumb{background:var(--wcrm-acc,#d4af37);border-radius:6px;} #wcrm-topbar .tb-chips::-webkit-scrollbar-track{background:transparent;}
     #wcrm-topbar .tb-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 12px;border-radius:999px;border:1px solid #3a434a;background:#181d21;color:#e9edef;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;}
     #wcrm-topbar .tb-chip:hover{border-color:#d4af37;}
     #wcrm-topbar .tb-chip.on{background:#d4af37;border-color:#d4af37;color:#111;}
@@ -209,12 +209,15 @@
     }
     el.innerHTML = '<button class="tb-chip' + (!activeChip ? ' on' : '') + '" data-all="1">Tudo</button>' + list.map(c => `<button class="tb-chip${activeChip && activeChip.mode === mode && activeChip.name === c.name ? ' on' : ''}" data-n="${esc(c.name)}">${esc(c.name)}<b>${c.count || 0}</b></button>`).join('');
   }
+  // roda do mouse = rola as abas para o lado; a aba escolhida sempre fica visível
+  document.getElementById('wcrm-chips').addEventListener('wheel', e => { const c = e.currentTarget; if (c.scrollWidth > c.clientWidth) { c.scrollLeft += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY); e.preventDefault(); } }, { passive: false });
   document.getElementById('wcrm-chips').addEventListener('click', e => {
     const b = e.target.closest('.tb-chip'); if (!b) return;
     if (b.dataset.all) { activeChip = null; renderChips(); applyFilter(); return; }
     const n = b.dataset.n;
     activeChip = { mode, name: n };   // clicar noutra aba troca direto; para sair, use "Tudo"
     renderChips(); applyFilter();
+    try { const on = document.querySelector('#wcrm-chips .tb-chip.on'); on && on.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (x) {}
   });
   // arrastar conversa para uma aba
   const chipsEl = document.getElementById('wcrm-chips');
