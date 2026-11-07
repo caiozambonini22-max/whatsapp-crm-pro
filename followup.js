@@ -59,6 +59,7 @@
   #wcrm-fu .bb-m{display:block;width:100%;max-height:340px;object-fit:cover;border-radius:7px}
   #wcrm-fu .bb-doc{padding:10px 12px;background:#0e3a29;border-radius:7px;font-size:13px}
   #wcrm-fu .bb-c{padding:6px 6px 2px;font-size:14px;line-height:1.35;word-break:break-word;white-space:normal}
+  #wcrm-fu .bb-c b{font-weight:800 !important;color:#fff} #wcrm-fu .bb-c i{font-style:italic !important} #wcrm-fu .bb-c s{text-decoration:line-through !important}
   #wcrm-fu .bb-t{font-size:11px;color:#8fb5a3;text-align:right;padding:0 6px 2px}
   #wcrm-fu textarea.cap-ta{min-height:110px}
   #wcrm-fu .full{width:100%;} #wcrm-fu textarea{width:100%;min-height:120px;resize:vertical;line-height:1.5;}
