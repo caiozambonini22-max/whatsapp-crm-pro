@@ -97,6 +97,11 @@
   async function load() {
     cache.cfg = await getCfg(); cache.enrs = (await sget(K.enr)) || []; cache.rt = (await sget(K.rt)) || {}; cache.bar = (await sget(K.bar)) || {}; cache.st = (await sget(K.st)) || {};
   }
+  // migração única: antes, linha em branco no texto virava "variação" (mandava só um parágrafo por vez). Agora o texto sai inteiro.
+  setTimeout(async () => { try {
+    const c0 = await sget(K.cfg); if (!c0 || c0.varMerged475) return;
+    await mutateCfg(c => { (c.rules || []).forEach(r => { const a = r.action || {}; if (Array.isArray(a.steps)) a.steps.forEach(st => { if (st.type === 'text' && (st.variations || []).length > 1) st.variations = [st.variations.map(x => (x || '').trim()).filter(Boolean).join('\n\n')]; }); else if (Array.isArray(a.variations) && a.variations.length > 1) a.variations = [a.variations.map(x => (x || '').trim()).filter(Boolean).join('\n\n')]; }); c.varMerged475 = true; });
+  } catch (e) {} }, 2500);
   function open(v) { opened = true; view = v || 'list'; root.classList.add('show'); load().then(render); clearInterval(rtimer); rtimer = setInterval(() => { if (opened && (view === 'queue' || view === 'alerts' || view === 'list')) load().then(render); }, 5000); }
   function close() { opened = false; root.classList.remove('show'); clearInterval(rtimer); }
   window.addEventListener('message', e => { if (e.data && e.data.type === 'OPEN_FOLLOWUP') open(e.data.view); });
@@ -210,7 +215,13 @@
     };
     const stepBody = st => {
       const t = st.type, id = st.id;
-      if (t === 'text') return fld('Mensagem (deixe uma linha em branco entre textos = variações que alternam sozinhas). Use #primeiroNome.', '<textarea data-sf="' + id + '|vars" placeholder="Oi #primeiroNome! Tudo bem?...">' + esc((st.variations || []).join('\n\n')) + '</textarea>');
+      if (t === 'text') {
+        const vs = (st.variations && st.variations.length) ? st.variations : [''];
+        return fld('Mensagem — sai exatamente como você escrever aqui (Enter e linhas em branco ficam do jeito que estão). Use #primeiroNome.', '')
+          + vs.map((v, i) => '<div style="margin-bottom:8px">' + (vs.length > 1 ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:#d4af37;margin:4px 0">Variação ' + (i + 1) + ' de ' + vs.length + '<span data-a="vdel" data-sid="' + id + '" data-i="' + i + '" style="cursor:pointer;color:#ff6b6b">🗑 remover</span></div>' : '') + '<textarea data-sf="' + id + '|var|' + i + '" placeholder="Oi #primeiroNome! Tudo bem?...">' + esc(v) + '</textarea></div>').join('')
+          + '<div class="row" style="gap:8px"><button class="sec sm" data-a="vadd" data-sid="' + id + '">＋ Adicionar outra variação</button>' + (vs.length > 1 ? '<button class="sec sm" data-a="vmerge" data-sid="' + id + '">⤵ Juntar tudo em uma mensagem só</button>' : '') + '</div>'
+          + '<div class="meta" style="margin-top:6px">' + (vs.length > 1 ? '⚠️ Com ' + vs.length + ' variações o robô manda <b>uma delas por contato</b> (alterna). Se você escreveu UMA mensagem com parágrafos, use “Juntar tudo em uma mensagem só”.' : 'Uma variação = uma mensagem inteira. Só adicione outra se quiser que o robô alterne entre textos diferentes.') + '</div>';
+      }
       if (MEDIA[t]) return '<div class="row" style="margin-top:6px"><label class="sec sm" style="cursor:pointer;display:inline-block;border:1px solid #38424a;border-radius:8px;padding:6px 12px;font-size:12px">📎 ' + (st.dataUrl ? 'Trocar arquivo' : 'Escolher arquivo') + '<input type="file" accept="' + MEDIA[t] + '" data-file="' + id + '" style="display:none"></label><span class="meta" style="margin:0">' + (st.dataUrl ? '✅ ' + esc(st.name || 'arquivo') + ' (' + Math.round((st.dataUrl.length * 0.75) / 1024) + ' KB)' : '<span style="color:#f87171">nenhum arquivo</span>') + '</span></div>'
         + bubble(st)
         + (t === 'sticker' || t === 'audio' ? '' : fld('✍️ Legenda — o texto que vai junto com ' + (t === 'image' ? 'a imagem' : t === 'video' ? 'o vídeo' : 'o arquivo') + ' (Enter = nova linha · *negrito* · _itálico_ · #primeiroNome)', '<textarea class="cap-ta" data-sf="' + id + '|caption" placeholder="Escreva a legenda aqui…">' + esc(st.caption || '') + '</textarea>'))
@@ -365,6 +376,13 @@
       }
       return;
     }
+    if (a === 'vadd' || a === 'vdel' || a === 'vmerge') {
+      const st = (draft.action.steps || []).find(x => x.id === b.dataset.sid); if (!st) return; st.variations = st.variations && st.variations.length ? st.variations : [''];
+      if (a === 'vadd') st.variations.push('');
+      else if (a === 'vdel') { st.variations.splice(+b.dataset.i, 1); if (!st.variations.length) st.variations = ['']; }
+      else st.variations = [st.variations.map(x => (x || '').trim()).filter(Boolean).join('\n\n')];
+      return render();
+    }
     if (a === 'addstep') {
       const t = b.dataset.t; const st = { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), type: t };
       if (t === 'text') st.variations = ['']; if (['wait', 'typing', 'recording'].includes(t)) st.seconds = t === 'wait' ? 5 : 4;
@@ -418,8 +436,9 @@
       else if (f === 'time') { draft.trigger.time = t.value || '00:00'; sumTrigger(); }
     }
     if (t.dataset.sf && draft) {
-      const [sid, f] = t.dataset.sf.split('|'); const st = (draft.action.steps || []).find(x => x.id === sid); if (st) {
-        if (f === 'vars') st.variations = t.value.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+      const [sid, f, ix] = t.dataset.sf.split('|'); const st = (draft.action.steps || []).find(x => x.id === sid); if (st) {
+        if (f === 'var') { st.variations = st.variations || ['']; st.variations[+ix] = t.value; }
+        else if (f === 'vars') st.variations = t.value.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
         else if (f === 'items') st.items = t.value.split('\n').map(x => x.trim()).filter(Boolean);
         else if (f === 'seconds') st.seconds = Math.max(0, +t.value || 0);
         else st[f] = t.value;
