@@ -106,6 +106,33 @@
   function close() { opened = false; root.classList.remove('show'); clearInterval(rtimer); }
   window.addEventListener('message', e => { if (e.data && e.data.type === 'OPEN_FOLLOWUP') open(e.data.view); });
 
+  // ── aviso sempre visível (bolinha) + notificação quando surge algo novo ──
+  (function () {
+    const st = document.createElement('style');
+    st.textContent = '#wcrm-fupill{position:fixed;left:76px;bottom:18px;z-index:2147483000;background:#f0b429;color:#111;font:700 13px system-ui,Segoe UI,sans-serif;padding:9px 14px;border-radius:22px;box-shadow:0 4px 18px rgba(0,0,0,.55);cursor:pointer;display:none;border:2px solid #111}#wcrm-fupill.red{background:#e5534b;color:#fff;border-color:#fff}#wcrm-fupill.on{display:block}#wcrm-fupill.pulse{animation:wcrmpulse 1s ease 3}@keyframes wcrmpulse{50%{transform:scale(1.12)}}';
+    document.documentElement.appendChild(st);
+    const pill = document.createElement('div'); pill.id = 'wcrm-fupill'; document.documentElement.appendChild(pill);
+    pill.addEventListener('click', () => open(pill.dataset.v || 'alerts'));
+    let lastN = -1, lastKey = '';
+    async function chk() {
+      try {
+        const enrs = (await sget(K.enr)) || [], rt = (await sget(K.rt)) || {};
+        const c = s => enrs.filter(e => e.state === s).length;
+        const errN = c('error'), askN = (rt.alerts || []).filter(a => a.kind === 'replied' && a.ask && enrs.some(e => e.id === a.enrId && e.state === 'asked')).length + c('approval'), staleN = c('stale');
+        const n = errN + askN + staleN;
+        const key = errN + '/' + askN + '/' + staleN + '/' + ((rt.alerts || [])[0] || {}).id;
+        if (!n) { pill.className = ''; lastN = 0; lastKey = key; return; }
+        const parts = []; if (errN) parts.push(errN + ' falha' + (errN > 1 ? 's' : '')); if (askN) parts.push(askN + ' aguardando você'); if (staleN) parts.push(staleN + ' atrasado' + (staleN > 1 ? 's' : ''));
+        pill.textContent = '🔔 Follow Up: ' + parts.join(' · ');
+        pill.dataset.v = errN || staleN ? 'queue' : 'alerts';
+        pill.className = 'on' + (errN ? ' red' : '') + (key !== lastKey && lastN >= 0 ? ' pulse' : '');
+        if (key !== lastKey && lastN >= 0 && n > lastN) { try { chrome.runtime.sendMessage({ type: 'NOTIFY', title: '🔔 Follow Up precisa de você', message: parts.join(' · ') }); } catch (e) {} }
+        lastN = n; lastKey = key;
+      } catch (e) {}
+    }
+    setTimeout(chk, 3000); setInterval(chk, 8000);
+  })();
+
   // ── textos ──
   function describeTrigger(r) {
     const t = r.trigger || {};
@@ -158,8 +185,8 @@
 
   // ── cabeçalho ──
   function renderHead() {
-    const al = (cache.rt.alerts || []).filter(a => a.kind === 'replied' && a.ask).length + cnt('asked') + cnt('approval');
-    const tabs = [['list', 'Follow Ups'], ['queue', 'Fila' + (cnt('stale') ? '<b>' + cnt('stale') + '</b>' : '')], ['alerts', 'Avisos' + (al ? '<b>' + al + '</b>' : '')], ['settings', 'Ajustes']];
+    const al = (cache.rt.alerts || []).filter(a => a.kind === 'replied' && a.ask).length + cnt('asked') + cnt('approval') + cnt('error');
+    const tabs = [['list', 'Follow Ups'], ['queue', 'Fila' + ((cnt('stale') + cnt('error')) ? '<b>' + (cnt('stale') + cnt('error')) + '</b>' : '')], ['alerts', 'Avisos' + (al ? '<b>' + al + '</b>' : '')], ['settings', 'Ajustes']];
     const on = cache.cfg.on;
     $hd.innerHTML = '<h2>Follow Up</h2><div class="fu-tabs">' + tabs.map(t => '<div class="fu-tab' + (view === t[0] || (view === 'form' && t[0] === 'list') ? ' on' : '') + '" data-v="' + t[0] + '">' + t[1] + '</div>').join('') + '</div>'
       + '<div class="tog' + (on ? ' on' : '') + '" data-a="master" title="Liga/desliga TODO envio automático"><i></i>Envio automático: <b>' + (on ? 'LIGADO' : 'desligado') + '</b></div><button class="fu-x" data-a="close">✕</button>';
@@ -285,6 +312,7 @@
     const waiting = cache.enrs.filter(e => e.state === 'waiting').sort((a, b) => a.dueAt - b.dueAt);
     const stale = cache.enrs.filter(e => e.state === 'stale');
     const appr = cache.enrs.filter(e => e.state === 'approval');
+    const errs = cache.enrs.filter(e => e.state === 'error');
     const q = cfg.queue, avg = q.mode === 'fixed' ? q.fixedMin : (q.minMin + q.maxMin) / 2;
     let eta = Math.max(now, rt.nextSendAfter || 0);
     const rn = id => (cfg.rules.find(r => r.id === id) || {}).name || '(apagado)';
@@ -294,6 +322,8 @@
       + (appr.length ? '<div class="h3">✅ Aguardando sua aprovação (' + appr.length + ')</div>' + appr.map(e => '<div class="qi"><div class="g"><div class="t">' + esc(e.contact) + '</div><div class="s">' + esc(rn(e.ruleId)) + '</div></div><button class="pri sm" data-a="dec" data-id="' + e.id + '" data-c="approve" style="padding:6px 14px;font-size:12px">Aprovar envio</button><button class="sec sm red" data-a="dec" data-id="' + e.id + '" data-c="cancel">Cancelar</button></div>').join('') : '')
       + (stale.length ? '<div class="h3">⏰ Atrasados — aguardam sua decisão (' + stale.length + ')</div><div class="warn">O computador ficou desligado ou o envio ficou parado. <b>Nada disso foi enviado.</b> Escolha o que fazer:<div class="row" style="margin-top:8px"><button class="pri sm" data-a="all" data-from="stale" data-c="release" style="padding:6px 14px;font-size:12px">Liberar todos na fila (espaçados)</button><button class="sec sm" data-a="all" data-from="stale" data-c="reset">Resetar o tempo de todos</button><button class="sec sm red" data-a="all" data-from="stale" data-c="cancel">Cancelar todos</button></div></div>'
         + stale.map(e => '<div class="qi"><div class="g"><div class="t">' + esc(e.contact) + '</div><div class="s">' + esc(rn(e.ruleId)) + ' · venceu ' + fmt(e.dueAt) + '</div></div><button class="sec sm" data-a="dec" data-id="' + e.id + '" data-c="release">Liberar</button><button class="sec sm" data-a="dec" data-id="' + e.id + '" data-c="reset">Resetar</button><button class="sec sm red" data-a="dec" data-id="' + e.id + '" data-c="cancel">✕</button></div>').join('') : '')
+      + (errs.length ? '<div class="h3">⚠️ Falhas — não consegui enviar (' + errs.length + ')</div><div class="warn">O robô tenta de novo sozinho de hora em hora (até 3 vezes). Se quiser, force agora:</div>'
+        + errs.map(e => '<div class="qi"><div class="g"><div class="t">' + esc(e.contact) + '</div><div class="s">' + esc(rn(e.ruleId)) + ' · ' + esc(e.reason || 'falhou') + ' · parou ' + fmt(e.errAt || e.dueAt) + '</div></div><button class="pri sm" data-a="now" data-id="' + e.id + '" style="padding:6px 14px;font-size:12px">▶ Enviar agora</button><button class="sec sm" data-a="open" data-n="' + esc(e.contact) + '">💬 Abrir</button><button class="sec sm red" data-a="dec" data-id="' + e.id + '" data-c="cancel">✕</button></div>').join('') : '')
       + '<div class="h3">Fila de envio (' + waiting.length + ')</div>'
       + (items.length ? items.map(({ e, when }) => '<div class="qi"><div class="g"><div class="t">' + esc(e.contact) + '</div><div class="s">' + esc(rn(e.ruleId)) + ' · ' + (e.dueAt > now ? 'vence ' + fmt(e.dueAt) : 'vencido, na fila') + ' · envio previsto ≈ <b>' + fmt(when) + '</b></div></div>'
         + '<button class="sec sm" data-a="now" data-id="' + e.id + '" title="Envia este agora (fora da fila)">▶ Agora</button><button class="sec sm" data-a="dec" data-id="' + e.id + '" data-c="reset" title="Recomeça a contar o tempo">↻ Resetar</button><button class="sec sm red" data-a="dec" data-id="' + e.id + '" data-c="cancel">✕</button></div>').join('') : '<div class="empty">Fila vazia.</div>')
@@ -312,7 +342,7 @@
         + (a.kind === 'replied' ? '<div class="meta">Respondeu antes do disparo' + (a.ruleName ? ' do follow up <b>' + esc(a.ruleName) + '</b>' : '') + '. O envio dele está <b>pausado</b>.</div>' : '')
         + '<div class="meta">“' + esc((a.text || '').slice(0, 300)) + '”</div>' + (a.resumo ? '<div class="meta">' + esc(a.resumo) + '</div>' : '') + (a.suggestion ? '<div class="sug">💡 Sugestão: ' + esc(a.suggestion) + '</div>' : '')
         + '<div class="row" style="margin-top:10px">' + (apv ? '<button class="pri sm" data-a="dec" data-id="' + a.enrId + '" data-c="approve" style="padding:6px 14px;font-size:12px">Aprovar envio</button><button class="sec sm red" data-a="dec" data-id="' + a.enrId + '" data-c="cancel">Cancelar</button>' : '') + (asks ? '<button class="pri sm" data-a="dec" data-id="' + a.enrId + '" data-c="keep" style="padding:6px 14px;font-size:12px">Manter no follow up</button><button class="sec sm" data-a="dec" data-id="' + a.enrId + '" data-c="reset">↻ Resetar o tempo</button><button class="sec sm red" data-a="dec" data-id="' + a.enrId + '" data-c="cancel">Cancelar follow up</button>' : '')
-        + (a.kind === 'replied' ? '<button class="sec sm" data-a="open" data-n="' + esc(a.contact) + '">💬 Abrir conversa</button>' : '') + '<button class="sec sm" data-a="dis" data-id="' + a.id + '">Dispensar</button></div></div>';
+        + (a.kind === 'error' && a.enrId && cache.enrs.some(e => e.id === a.enrId && e.state === 'error') ? '<button class="pri sm" data-a="now" data-id="' + a.enrId + '" style="padding:6px 14px;font-size:12px">▶ Enviar agora</button>' : '') + (a.kind === 'replied' || a.kind === 'error' ? '<button class="sec sm" data-a="open" data-n="' + esc(a.contact) + '">💬 Abrir conversa</button>' : '') + '<button class="sec sm" data-a="dis" data-id="' + a.id + '">Dispensar</button></div></div>';
     }).join('') : '<div class="empty">Nenhum aviso.<br>Quando um cliente responder antes do disparo, aparece aqui com as opções.</div>';
     $ft.innerHTML = al.length ? '<button class="sec" data-a="disall">Dispensar todos</button>' : '';
   }

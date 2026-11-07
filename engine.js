@@ -335,6 +335,14 @@
         }
       } else { log('ponte não abriu a conversa:', r && r.reason); }
     }
+    // 2ª tentativa: pelo id interno da conversa (vale mesmo se o nome mudou)
+    if (W && W.bridgeOk && W.bridgeOk()) {
+      try {
+        const map = (await sget('wcrm_idmap')) || {}; const nn = norm(name);
+        const cid = Object.keys(map).find(k => norm(map[k]) === nn);
+        if (cid) { const r1 = await W.bridgeCall('OPEN', { chat: cid }, 10000); if (r1 && r1.ok) { for (let i = 0; i < 12; i++) { await sleep(400); if (document.querySelector('#main footer')) { await sleep(900); return true; } } } }
+      } catch (x) {}
+    }
     // contato que ainda aparece como número (ou foi salvo depois): abre direto pelo telefone
     const dg = String(name || '').replace(/\D/g, '');
     if (W && W.bridgeOk && W.bridgeOk() && dg.length >= 10 && dg.length <= 13 && !/[a-zà-ú]/i.test(name)) {
@@ -436,6 +444,7 @@
       const rule = (cfg.rules || []).find(r => r.id === x.ruleId) || { trigger: {} };
       if (choice === 'keep') { x.state = 'waiting'; x.ignoreInUntil = now; x.dueAt = Math.max(x.dueAt || 0, now + 2 * 60e3); }
       else if (choice === 'reset') { x.state = 'waiting'; x.ignoreInUntil = now; x.enteredAt = now; x.dueAt = dueAtFor(rule, now); x.fails = 0; }
+      else if (choice === 'retry') { if (!['waiting', 'stale', 'error', 'approval', 'asked'].includes(x.state)) return; x.state = 'waiting'; x.fails = 0; x.dueAt = now; delete x.reason; }
       else if (choice === 'release') { x.state = 'waiting'; x.dueAt = now; }
       else if (choice === 'approve') { x.state = 'waiting'; x.approved = true; x.dueAt = Math.min(x.dueAt || now, now); }
       else if (choice === 'cancel') { x.state = 'cancelled'; x.reason = 'cancelado por você'; x.endedAt = now; }
@@ -773,9 +782,9 @@
     const act = rule.action || {};
     const fail = async (why, alertText) => {
       const fails = (enr.fails || 0) + 1;
-      await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x) { x.fails = fails; x.dueAt = Date.now() + 20 * 60e3; if (fails >= 3) { x.state = 'error'; x.reason = why; } } });
+      await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x) { x.fails = fails; x.dueAt = Date.now() + 20 * 60e3; if (fails >= 3) { x.state = 'error'; x.reason = why; x.errAt = Date.now(); } } });
       await addLog(why + ' ("' + enr.contact + '", tentativa ' + fails + ')');
-      if (fails >= 3) await addAlert('error', enr.contact, alertText || why);
+      if (fails >= 3) await addAlert('error', enr.contact, alertText || why, { enrId: enrId });
     };
 
     const ok = await openChat(enr.contact);
@@ -852,6 +861,7 @@
       await mutateRt(r => { r.lastAlive = now; });
       await mutateEnr(l => { l.forEach(e => { if (e.state === 'sending' && now - (e.claimAt || 0) > 15 * 60e3) { e.state = 'stale'; delete e.claim; } }); });
       await syncRenames();
+      await mutateEnr(l => { l.forEach(e => { if (e.state === 'error' && (e.rounds || 0) < 3 && now - (e.errAt || 0) > 60 * 60e3) { e.state = 'waiting'; e.fails = 0; e.rounds = (e.rounds || 0) + 1; e.dueAt = now; } }); });
       await trackAndEnroll();
       await replyScan();
       const enrs = await getEnrs(), rt = await getRt();
@@ -903,7 +913,7 @@
       L.push('   estado: ' + (rt.state || '—') + ' · enviadas hoje: ' + (rt.sent || 0));
       reply({ type: 'ENGINE_DIAG_RESULT', lines: L });
     }
-    if (t === 'ENGINE_SEND_NOW' && e.data.id) { tick(e.data.id); }
+    if (t === 'ENGINE_SEND_NOW' && e.data.id) { await decideEnr(e.data.id, 'retry'); tick(e.data.id); }
     if (t === 'ENGINE_DECIDE' && e.data.id) { await decideEnr(e.data.id, e.data.choice); }
     if (t === 'ENGINE_DECIDE_ALL') {
       const ids = (await getEnrs()).filter(x => x.state === e.data.from).map(x => x.id);
