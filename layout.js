@@ -312,8 +312,11 @@
     const vbn = e.target.closest && e.target.closest('#wcrm-vbtn'); if (!vbn) return;
     const w = me(); if (!w) { toast('Abra uma conversa primeiro'); return; }
     const m = saleOf(w);
-    if (!m) { markSale(w); toast('💰 ' + w + ' → venda ' + todayLbl()); return; }
-    popAt(vbn, '<div class="ttl">💰 Venda de ' + esc(m.day) + '</div><div class="it" data-vs="day"><span class="ck"></span>📅 Mudar a data…</div><div class="it" data-vs="rm"><span class="ck"></span>✕ Tirar a marcação</div><div class="it" data-vs="list"><span class="ck"></span>👁 Ver as vendas de ' + esc(m.day) + '</div>', 'left');
+    const lbls = []; Object.values(sales.marks || {}).sort((x, y) => (y.at || 0) - (x.at || 0)).forEach(x => { if (!lbls.includes(x.day)) lbls.push(x.day); });
+    popAt(vbn, '<div class="ttl">💰 Etiqueta de venda' + (m ? ' — ' + esc(m.day) : '') + '</div>'
+      + lbls.slice(0, 12).map(d => '<div class="it" data-vs="set" data-d="' + esc(d) + '"><span class="ck">' + (m && m.day === d ? '✓' : '') + '</span>Vendas ' + esc(d) + '</div>').join('')
+      + '<div class="it" data-vs="today"><span class="ck"></span>＋ Hoje (' + todayLbl() + ')</div><div class="it" data-vs="day"><span class="ck"></span>✏️ Nova etiqueta (data ou nome)…</div>'
+      + (m ? '<div class="it" data-vs="list"><span class="ck"></span>👁 Ver as vendas de ' + esc(m.day) + '</div><div class="it" data-vs="rm"><span class="ck"></span>✕ Tirar a marcação</div>' : ''), 'left');
   });
   setInterval(decorateRows, 1200);
   try {
@@ -393,7 +396,7 @@
   document.getElementById('wcrm-tb-refresh').addEventListener('click', () => { post({ type: 'GET_CONVERSATIONS' }); window.postMessage({ tag: 'WCRM_CONTENT', kind: 'SYNC' }, '*'); loadBar(); });
   pop.addEventListener('input', e => { if (e.target.id === 'wcrm-tabsearch') { const q = norm(e.target.value); pop.querySelectorAll('#wcrm-tablist .it').forEach(x => { x.style.display = !q || (x.dataset.s || '').includes(q) ? '' : 'none'; }); } });
   pop.addEventListener('keydown', e => {
-    if (e.target.id === 'wcrm-saleday' && e.key === 'Enter') { const v = e.target.value.trim(); closePop(); if (/^\d{1,2}\/\d{1,2}$/.test(v)) { const [d, m] = v.split('/'); markSale(me(), pad2(+d) + '/' + pad2(+m)); toast('💰 Data da venda: ' + pad2(+d) + '/' + pad2(+m)); } else toast('⚠️ Use o formato dd/mm'); }
+    if (e.target.id === 'wcrm-saleday' && e.key === 'Enter') { let v = e.target.value.trim().replace(/^vendas\s+/i, ''); closePop(); if (!v) return; if (/^\d{1,2}\/\d{1,2}$/.test(v)) { const [d, m] = v.split('/'); v = pad2(+d) + '/' + pad2(+m); } markSale(me(), v); toast('💰 Etiqueta de venda: ' + v); }
     if (e.target.id === 'wcrm-rentab' && e.key === 'Enter') {
       const to = e.target.value.trim(), from = pop.dataset.tabn; closePop();
       if (!to || to === from) return;
@@ -414,9 +417,11 @@
     const it = e.target.closest('.it'); if (!it) return;
     if (it.dataset.vs) {
       const w = me(), act = it.dataset.vs, m = saleOf(w);
-      if (act === 'rm') { closePop(); unmarkSale(w); toast('💰 Marcação tirada de ' + w); }
+      if (act === 'set') { closePop(); markSale(w, it.dataset.d); toast('💰 ' + w + ' → Vendas ' + it.dataset.d); }
+      else if (act === 'today') { closePop(); markSale(w); toast('💰 ' + w + ' → Vendas ' + todayLbl()); }
+      else if (act === 'rm') { closePop(); unmarkSale(w); toast('💰 Marcação tirada de ' + w); }
       else if (act === 'list' && m) { closePop(); activeChip = { mode: 'sales', name: m.day }; renderChips(); applyFilter(); }
-      else if (act === 'day') { pop.innerHTML = '<div class="ttl">Data da venda (dd/mm)</div><input id="wcrm-saleday" maxlength="5" value="' + esc(m ? m.day : todayLbl()) + '">'; setTimeout(() => { const i = document.getElementById('wcrm-saleday'); i && (i.focus(), i.select()); }, 30); }
+      else if (act === 'day') { pop.innerHTML = '<div class="ttl">Nome da etiqueta (data ou qualquer nome) + Enter</div><input id="wcrm-saleday" maxlength="24" placeholder="ex: 08/11 ou Black Friday" value="' + esc(m ? m.day : todayLbl()) + '">'; setTimeout(() => { const i = document.getElementById('wcrm-saleday'); i && (i.focus(), i.select()); }, 30); }
       return;
     }
     if (it.dataset.te) {
