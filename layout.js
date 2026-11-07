@@ -259,12 +259,13 @@
   // ── 💰 VENDA: etiqueta virtual do sistema (não é aba do CRM nem etiqueta do WhatsApp) ──
   let sales = { marks: {} };
   const pad2 = n => String(n).padStart(2, '0');
-  const dayLbl = off => { const d = new Date(); d.setDate(d.getDate() - (off || 0)); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1); };
+  const dayLbl = off => { const d = new Date(); d.setDate(d.getDate() - (off || 0)); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + String(d.getFullYear()).slice(2); };
+  const normDay = v => { v = String(v || '').trim().replace(/^vendas\s+/i, ''); let m = v.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2}|\d{4}))?$/); if (!m) return v; const y = m[3] ? m[3].slice(-2) : String(new Date().getFullYear()).slice(2); return pad2(+m[1]) + '/' + pad2(+m[2]) + '/' + y; };
   const todayLbl = () => dayLbl(0);
   const salesSave = () => { try { chrome.storage.local.set({ wcrm_sales: sales }); } catch (e) {} };
   const saleOf = n => (sales.marks || {})[norm(n)];
   const salesCss = document.createElement('style');
-  salesCss.textContent = '.wcrm-vb{position:absolute;right:12px;bottom:7px;background:#d4af37;color:#111;font:800 10.5px/1.5 Segoe UI,Arial,sans-serif;border-radius:6px;padding:0 7px;z-index:3;pointer-events:none;letter-spacing:.2px}'
+  salesCss.textContent = '.wcrm-vb{position:absolute;right:12px;bottom:6px;background:rgba(212,175,55,.14);color:#d9bb5a;border:1px solid rgba(212,175,55,.4);font:600 9.5px/1.45 Segoe UI,Arial,sans-serif;border-radius:5px;padding:0 5px;z-index:3;pointer-events:none}'
     + '#wcrm-salesm{position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.55);display:none;align-items:flex-start;justify-content:center;padding-top:70px;font-family:Segoe UI,Helvetica Neue,Arial,sans-serif}#wcrm-salesm.show{display:flex}'
     + '#wcrm-salesm .sm-c{background:#14181c;color:#e9edef;border:1px solid #2a3238;border-radius:14px;width:min(560px,94vw);max-height:80vh;overflow:auto;padding:16px;box-shadow:0 14px 40px rgba(0,0,0,.7)}'
     + '#wcrm-salesm h2{margin:0 0 4px;font-size:17px;color:#d4af37}#wcrm-salesm .sm-s{font-size:12px;color:#9aa6ad;margin-bottom:12px}'
@@ -278,7 +279,7 @@
     const ps = document.getElementById('pane-side'); if (!ps) return;
     ps.querySelectorAll('[role="listitem"], [role="row"]').forEach(row => {
       const t = row.querySelector('span[title]'); const nm = t && t.getAttribute('title'); const m = nm && saleOf(nm); let b = row.querySelector('.wcrm-vb');
-      if (m) { if (!b) { b = document.createElement('span'); b.className = 'wcrm-vb'; if (getComputedStyle(row).position === 'static') row.style.position = 'relative'; row.appendChild(b); } const tx = '💰 VENDA ' + m.day; if (b.textContent !== tx) b.textContent = tx; }
+      if (m) { if (!b) { b = document.createElement('span'); b.className = 'wcrm-vb'; if (getComputedStyle(row).position === 'static') row.style.position = 'relative'; row.appendChild(b); } const tx = '💰 Venda ' + m.day; if (b.textContent !== tx) b.textContent = tx; }
       else if (b) b.remove();
     });
   }
@@ -290,14 +291,19 @@
   function salesChanged() { decorateRows(); updateSaleBtn(); if (activeChip && activeChip.mode === 'sales') startList(); if (sm.classList.contains('show')) drawSalesModal(); }
   function markSale(n, day) { if (!n) return; sales.marks = sales.marks || {}; sales.marks[norm(n)] = { name: n, day: day || todayLbl(), at: Date.now() }; salesSave(); salesChanged(); }
   function unmarkSale(n) { if (sales.marks && sales.marks[norm(n)]) { delete sales.marks[norm(n)]; salesSave(); salesChanged(); } }
+  let smEdit = null;
   function drawSalesModal() {
     const by = {}; Object.values(sales.marks || {}).forEach(m => { (by[m.day] = by[m.day] || []).push(m); });
     const days = Object.keys(by).sort((a, b) => Math.max(...by[b].map(x => x.at || 0)) - Math.max(...by[a].map(x => x.at || 0)));
-    sm.innerHTML = '<div class="sm-c"><div style="display:flex;align-items:center"><h2 style="flex:1">💰 Vendas marcadas</h2><button data-sm="close">✕ Fechar</button></div><div class="sm-s">Etiqueta virtual do CRM — não mistura com abas nem etiquetas do WhatsApp. Marque pelo botão 💰 na barra da conversa.</div>'
-      + (days.length ? days.map(d => '<div class="sm-d"><div class="sm-h"><b>Vendas ' + esc(d) + ' · ' + by[d].length + '</b><button data-sm="view" data-d="' + esc(d) + '">👁 Ver na lista</button><button data-sm="copy" data-d="' + esc(d) + '">📋 Copiar nomes</button></div>' + by[d].sort((x, y) => (y.at || 0) - (x.at || 0)).map(m => '<div class="sm-n"><span data-sm="open" data-n="' + esc(m.name) + '">' + esc(m.name) + '</span><i data-sm="rm" data-n="' + esc(m.name) + '" title="Tirar marcação">✕</i></div>').join('') + '</div>').join('') : '<div class="sm-e">Nenhuma venda marcada ainda.<br>Abra a conversa do cliente e clique em 💰.</div>')
+    sm.innerHTML = '<div class="sm-c"><div style="display:flex;align-items:center"><h2 style="flex:1">💰 Vendas marcadas</h2><button data-sm="close">✕ Fechar</button></div><div class="sm-s">✏️ renomeia · 🗑 exclui a etiqueta. Etiqueta virtual do CRM — não mistura com abas nem etiquetas do WhatsApp. Marque pelo botão 💰 na barra da conversa.</div>'
+      + (days.length ? days.map(d => '<div class="sm-d"><div class="sm-h"><b>Vendas ' + esc(d) + ' · ' + by[d].length + '</b><button data-sm="view" data-d="' + esc(d) + '">👁 Ver</button><button data-sm="copy" data-d="' + esc(d) + '">📋 Copiar</button><button data-sm="ren" data-d="' + esc(d) + '">✏️</button><button data-sm="del" data-d="' + esc(d) + '" style="' + (smEdit && smEdit.k === 'del' && smEdit.d === d ? 'border-color:#f87171;color:#f87171' : '') + '">' + (smEdit && smEdit.k === 'del' && smEdit.d === d ? 'Confirmar excluir?' : '🗑') + '</button></div>' + (smEdit && smEdit.k === 'ren' && smEdit.d === d ? '<div class="sm-n"><input id="wcrm-smren" data-d="' + esc(d) + '" maxlength="24" value="' + esc(d) + '" style="flex:1;background:#0f1215;color:#e9edef;border:1px solid #3a434a;border-radius:8px;padding:6px 8px"><span style="flex:0;font-size:11px;color:#9aa6ad;white-space:nowrap">Enter salva</span></div>' : '') + by[d].sort((x, y) => (y.at || 0) - (x.at || 0)).map(m => '<div class="sm-n"><span data-sm="open" data-n="' + esc(m.name) + '">' + esc(m.name) + '</span><i data-sm="rm" data-n="' + esc(m.name) + '" title="Tirar marcação">✕</i></div>').join('') + '</div>').join('') : '<div class="sm-e">Nenhuma venda marcada ainda.<br>Abra a conversa do cliente e clique em 💰.</div>')
       + '<div style="display:flex;gap:8px;margin-top:6px"><button data-sm="all">👁 Ver todas na lista</button><button data-sm="mark">＋ Marcar conversa aberta (hoje)</button></div></div>';
   }
-  const openSalesModal = () => { drawSalesModal(); sm.classList.add('show'); };
+  sm.addEventListener('keydown', e => {
+    if (e.target.id === 'wcrm-smren' && e.key === 'Enter') { const v = normDay(e.target.value), from = e.target.dataset.d; if (v && v !== from) { Object.values(sales.marks || {}).forEach(m => { if (m.day === from) m.day = v; }); salesSave(); salesChanged(); toast('✏️ Etiqueta renomeada: ' + v); } smEdit = null; drawSalesModal(); }
+    if (e.key === 'Escape' && smEdit) { smEdit = null; drawSalesModal(); }
+  });
+  const openSalesModal = () => { smEdit = null; drawSalesModal(); sm.classList.add('show'); };
   sm.addEventListener('click', e => {
     const b = e.target.closest('[data-sm]'); if (!b) { if (e.target === sm) sm.classList.remove('show'); return; } const k = b.dataset.sm;
     if (k === 'close') sm.classList.remove('show');
@@ -305,6 +311,11 @@
     else if (k === 'all') { sm.classList.remove('show'); activeChip = { mode: 'sales', name: '' }; renderChips(); applyFilter(); }
     else if (k === 'copy') { const n = Object.values(sales.marks || {}).filter(m => m.day === b.dataset.d).map(m => m.name); try { navigator.clipboard.writeText(n.join('\n')).then(() => toast('📋 ' + n.length + ' nome(s) copiado(s)'), () => toast('⚠️ Não consegui copiar')); } catch (x) { toast('⚠️ Não consegui copiar'); } }
     else if (k === 'rm') unmarkSale(b.dataset.n);
+    else if (k === 'ren') { smEdit = { k: 'ren', d: b.dataset.d }; drawSalesModal(); setTimeout(() => { const i = document.getElementById('wcrm-smren'); i && (i.focus(), i.select()); }, 30); }
+    else if (k === 'del') {
+      if (smEdit && smEdit.k === 'del' && smEdit.d === b.dataset.d) { Object.keys(sales.marks || {}).forEach(x => { if (sales.marks[x].day === b.dataset.d) delete sales.marks[x]; }); smEdit = null; salesSave(); salesChanged(); toast('🗑 Etiqueta "' + b.dataset.d + '" excluída (as conversas continuam, só sem a marcação)'); }
+      else { smEdit = { k: 'del', d: b.dataset.d }; drawSalesModal(); }
+    }
     else if (k === 'open') { sm.classList.remove('show'); try { W().bridgeCall('OPEN', { chat: b.dataset.n }, 8000); } catch (x) {} }
     else if (k === 'mark') { const w = me(); if (!w) toast('Abra uma conversa primeiro'); else { markSale(w); toast('💰 ' + w + ' marcada como venda ' + todayLbl()); } }
   });
@@ -317,12 +328,13 @@
     popAt(vbn, '<div class="ttl">💰 Etiqueta de venda' + (m ? ' — ' + esc(m.day) : '') + '</div>'
       + lbls.slice(0, 12).map(d => '<div class="it" data-vs="set" data-d="' + esc(d) + '"><span class="ck">' + (m && m.day === d ? '✓' : '') + '</span>Vendas ' + esc(d) + '</div>').join('')
       + '<div class="it" data-vs="today"><span class="ck">' + (m && m.day === todayLbl() ? '✓' : '') + '</span>📅 Hoje (' + todayLbl() + ')</div><div class="it" data-vs="back1"><span class="ck">' + (m && m.day === dayLbl(1) ? '✓' : '') + '</span>📅 Ontem (' + dayLbl(1) + ')</div><div class="it" data-vs="back2"><span class="ck">' + (m && m.day === dayLbl(2) ? '✓' : '') + '</span>📅 Anteontem (' + dayLbl(2) + ')</div><div class="it" data-vs="day"><span class="ck"></span>✏️ Nova etiqueta (data ou nome)…</div>'
-      + (m ? '<div class="it" data-vs="list"><span class="ck"></span>👁 Ver as vendas de ' + esc(m.day) + '</div><div class="it" data-vs="rm"><span class="ck"></span>✕ Tirar a marcação</div>' : ''), 'left');
+      + '<div class="it" data-vs="manage"><span class="ck"></span>⚙️ Editar / excluir etiquetas…</div>' + (m ? '<div class="it" data-vs="list"><span class="ck"></span>👁 Ver as vendas de ' + esc(m.day) + '</div><div class="it" data-vs="rm"><span class="ck"></span>✕ Tirar a marcação</div>' : ''), 'left');
   });
   setInterval(decorateRows, 1200);
   try {
     chrome.storage.local.get('wcrm_sales', o => {
-      const v = o.wcrm_sales || {}; sales = { marks: v.marks || {} };
+      const v = o.wcrm_sales || {}; sales = { marks: v.marks || {} }; let mg = false;
+      Object.values(sales.marks).forEach(m => { if (/^\d\d\/\d\d$/.test(m.day || '')) { m.day += '/' + String(new Date(m.at || Date.now()).getFullYear()).slice(2); mg = true; } }); if (mg) salesSave();
       if (Array.isArray(v.days)) { v.days.forEach(d => { const day = String(d.name || '').replace(/^Vendas\s*/i, '') || todayLbl(); (d.contacts || []).forEach(c => { if (!sales.marks[norm(c)]) sales.marks[norm(c)] = { name: c, day, at: Date.now() }; }); }); salesSave(); }
       salesChanged();
     });
@@ -397,7 +409,7 @@
   document.getElementById('wcrm-tb-refresh').addEventListener('click', () => { post({ type: 'GET_CONVERSATIONS' }); window.postMessage({ tag: 'WCRM_CONTENT', kind: 'SYNC' }, '*'); loadBar(); });
   pop.addEventListener('input', e => { if (e.target.id === 'wcrm-tabsearch') { const q = norm(e.target.value); pop.querySelectorAll('#wcrm-tablist .it').forEach(x => { x.style.display = !q || (x.dataset.s || '').includes(q) ? '' : 'none'; }); } });
   pop.addEventListener('keydown', e => {
-    if (e.target.id === 'wcrm-saleday' && e.key === 'Enter') { let v = e.target.value.trim().replace(/^vendas\s+/i, ''); closePop(); if (!v) return; if (/^\d{1,2}\/\d{1,2}$/.test(v)) { const [d, m] = v.split('/'); v = pad2(+d) + '/' + pad2(+m); } markSale(me(), v); toast('💰 Etiqueta de venda: ' + v); }
+    if (e.target.id === 'wcrm-saleday' && e.key === 'Enter') { const v = normDay(e.target.value); closePop(); if (!v) return; markSale(me(), v); toast('💰 Etiqueta de venda: ' + v); }
     if (e.target.id === 'wcrm-rentab' && e.key === 'Enter') {
       const to = e.target.value.trim(), from = pop.dataset.tabn; closePop();
       if (!to || to === from) return;
@@ -418,12 +430,13 @@
     const it = e.target.closest('.it'); if (!it) return;
     if (it.dataset.vs) {
       const w = me(), act = it.dataset.vs, m = saleOf(w);
-      if (act === 'set') { closePop(); markSale(w, it.dataset.d); toast('💰 ' + w + ' → Vendas ' + it.dataset.d); }
+      if (act === 'manage') { closePop(); smEdit = null; openSalesModal(); }
+      else if (act === 'set') { closePop(); markSale(w, it.dataset.d); toast('💰 ' + w + ' → Vendas ' + it.dataset.d); }
       else if (act === 'back1' || act === 'back2') { const dl = dayLbl(act === 'back1' ? 1 : 2); closePop(); markSale(w, dl); toast('💰 ' + w + ' → Vendas ' + dl); }
       else if (act === 'today') { closePop(); markSale(w); toast('💰 ' + w + ' → Vendas ' + todayLbl()); }
       else if (act === 'rm') { closePop(); unmarkSale(w); toast('💰 Marcação tirada de ' + w); }
       else if (act === 'list' && m) { closePop(); activeChip = { mode: 'sales', name: m.day }; renderChips(); applyFilter(); }
-      else if (act === 'day') { pop.innerHTML = '<div class="ttl">Nome da etiqueta (data ou qualquer nome) + Enter</div><input id="wcrm-saleday" maxlength="24" placeholder="ex: 08/11 ou Black Friday" value="' + esc(m ? m.day : todayLbl()) + '">'; setTimeout(() => { const i = document.getElementById('wcrm-saleday'); i && (i.focus(), i.select()); }, 30); }
+      else if (act === 'day') { pop.innerHTML = '<div class="ttl">Nome da etiqueta (data ou qualquer nome) + Enter</div><input id="wcrm-saleday" maxlength="24" placeholder="ex: 08/11/26 ou Black Friday" value="' + esc(m ? m.day : todayLbl()) + '">'; setTimeout(() => { const i = document.getElementById('wcrm-saleday'); i && (i.focus(), i.select()); }, 30); }
       return;
     }
     if (it.dataset.te) {
