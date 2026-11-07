@@ -54,6 +54,13 @@
   #wcrm-fu .tog.on i{background:#16a34a;} #wcrm-fu .tog.on i:after{left:20px;}
   #wcrm-fu input[type=text],#wcrm-fu input[type=time],#wcrm-fu input[type=number],#wcrm-fu textarea,#wcrm-fu select{background:#0f1316;color:#e9edef;border:1px solid #38424a;border-radius:9px;padding:9px 11px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;}
   #wcrm-fu input:focus,#wcrm-fu textarea:focus,#wcrm-fu select:focus{border-color:#d4af37;}
+  #wcrm-fu .bb-wrap{display:flex;justify-content:flex-end;background:#0b141a;background-image:radial-gradient(#ffffff08 1px,transparent 1px);background-size:14px 14px;border-radius:12px;padding:14px;margin-top:8px}
+  #wcrm-fu .bb{background:#144d37;color:#e9edef;border-radius:10px 10px 2px 10px;padding:4px;max-width:340px;min-width:200px;box-shadow:0 1px 2px #0008}
+  #wcrm-fu .bb-m{display:block;width:100%;max-height:340px;object-fit:cover;border-radius:7px}
+  #wcrm-fu .bb-doc{padding:10px 12px;background:#0e3a29;border-radius:7px;font-size:13px}
+  #wcrm-fu .bb-c{padding:6px 6px 2px;font-size:14px;line-height:1.35;word-break:break-word;white-space:normal}
+  #wcrm-fu .bb-t{font-size:11px;color:#8fb5a3;text-align:right;padding:0 6px 2px}
+  #wcrm-fu textarea.cap-ta{min-height:110px}
   #wcrm-fu .full{width:100%;} #wcrm-fu textarea{width:100%;min-height:120px;resize:vertical;line-height:1.5;}
   #wcrm-fu .acc{background:#1a2025;border:1px solid #2a3238;border-radius:12px;margin-bottom:10px;overflow:hidden;}
   #wcrm-fu .acc-h{padding:13px 16px;font-weight:800;font-size:15px;cursor:pointer;display:flex;justify-content:space-between;} #wcrm-fu .acc-b{padding:6px 16px 16px;}
@@ -189,12 +196,23 @@
     const lblList = '<datalist id="fu-dl-l">' + waLabels().map(n => '<option value="' + esc(n) + '">').join('') + '</datalist><datalist id="fu-dl-t">' + crmTabs().map(n => '<option value="' + esc(n) + '">').join('') + '</datalist>';
     const inp = (id, f, v, ph, w, list) => '<input class="' + (w ? '' : 'full') + '" ' + (w ? 'style="width:' + w + '" ' : '') + 'type="text" ' + (list ? 'list="' + list + '" ' : '') + 'data-sf="' + id + '|' + f + '" value="' + esc(v || '') + '" placeholder="' + esc(ph || '') + '">';
     const fld = (l, h) => '<div style="font-size:12px;color:#8696a0;margin:8px 0 3px">' + l + '</div>' + h;
+    const fmtCap = x => esc(x || '').replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/(^|[\s(])_([^_\n]+)_(?=$|[\s).,!?])/g, '$1<i>$2</i>').replace(/~([^~\n]+)~/g, '<s>$1</s>').replace(/\n/g, '<br>');
+    const bubble = st => {
+      const du = st.dataUrl, t = st.type; let media = '';
+      if (du && /^data:image/.test(du)) media = '<img src="' + du + '" class="bb-m">';
+      else if (du && /^data:video/.test(du)) media = '<video src="' + du + '" controls class="bb-m"></video>';
+      else if (du && /^data:audio/.test(du)) media = '<audio src="' + du + '" controls style="width:100%;margin:2px 0 4px"></audio>';
+      else if (du) media = '<div class="bb-doc">📄 ' + esc(st.name || 'documento') + '</div>';
+      if (!media) return '';
+      const hasCap = t !== 'sticker' && t !== 'audio';
+      return '<div class="bb-wrap"><div class="bb">' + media + (hasCap ? '<div class="bb-c" data-capprev="' + st.id + '">' + (st.caption ? fmtCap(st.caption) : '<span style="opacity:.45">A legenda aparece aqui…</span>') + '</div>' : '') + '<div class="bb-t">agora ✓✓</div></div></div>';
+    };
     const stepBody = st => {
       const t = st.type, id = st.id;
       if (t === 'text') return fld('Mensagem (deixe uma linha em branco entre textos = variações que alternam sozinhas). Use #primeiroNome.', '<textarea data-sf="' + id + '|vars" placeholder="Oi #primeiroNome! Tudo bem?...">' + esc((st.variations || []).join('\n\n')) + '</textarea>');
       if (MEDIA[t]) return '<div class="row" style="margin-top:6px"><label class="sec sm" style="cursor:pointer;display:inline-block;border:1px solid #38424a;border-radius:8px;padding:6px 12px;font-size:12px">📎 ' + (st.dataUrl ? 'Trocar arquivo' : 'Escolher arquivo') + '<input type="file" accept="' + MEDIA[t] + '" data-file="' + id + '" style="display:none"></label><span class="meta" style="margin:0">' + (st.dataUrl ? '✅ ' + esc(st.name || 'arquivo') + ' (' + Math.round((st.dataUrl.length * 0.75) / 1024) + ' KB)' : '<span style="color:#f87171">nenhum arquivo</span>') + '</span></div>'
-        + (st.dataUrl ? (/^data:image/.test(st.dataUrl) ? '<img src="' + st.dataUrl + '" style="max-width:220px;max-height:180px;border-radius:10px;margin-top:8px;display:block;border:1px solid #38424a">' : /^data:video/.test(st.dataUrl) ? '<video src="' + st.dataUrl + '" controls style="max-width:260px;max-height:180px;border-radius:10px;margin-top:8px;display:block"></video>' : /^data:audio/.test(st.dataUrl) ? '<audio src="' + st.dataUrl + '" controls style="margin-top:8px;display:block"></audio>' : '<div class="meta">📄 ' + esc(st.name || '') + '</div>') : '')
-        + (t === 'sticker' || t === 'audio' ? '' : fld('Legenda (opcional)', inp(id, 'caption', st.caption, 'Legenda da mídia')))
+        + bubble(st)
+        + (t === 'sticker' || t === 'audio' ? '' : fld('✍️ Legenda — o texto que vai junto com ' + (t === 'image' ? 'a imagem' : t === 'video' ? 'o vídeo' : 'o arquivo') + ' (Enter = nova linha · *negrito* · _itálico_ · #primeiroNome)', '<textarea class="cap-ta" data-sf="' + id + '|caption" placeholder="Escreva a legenda aqui…">' + esc(st.caption || '') + '</textarea>'))
         + (t === 'audio' ? '<div class="info">O áudio vai como <b>mensagem de voz gravada</b> (com ondinha), e o cliente vê “gravando áudio…” uns segundos antes. Se não der pra mandar como voz, ele NÃO é enviado como arquivo.</div>' : '') + (t === 'sticker' ? '<div class="info">Use uma imagem .webp. Pode ser enviada como imagem comum dependendo da versão do WhatsApp.</div>' : '');
       if (t === 'quick') return fld('Resposta rápida do CRM (envia todas as ações dela: textos, mídias, esperas)', '<select class="full" data-sf="' + id + '|msgId"><option value="">Escolher…</option>' + quick.replace('value="' + esc(st.msgId) + '"', 'value="' + esc(st.msgId) + '" selected') + '</select>');
       if (t === 'pix') return '<div class="row"><div class="grow">' + fld('Favorecido', inp(id, 'name', st.name, 'Zambonini Imports')) + '</div><div class="grow">' + fld('Chave Pix', inp(id, 'key', st.key, 'CNPJ, e-mail, telefone…')) + '</div></div><div class="row"><div class="grow">' + fld('Valor (opcional)', inp(id, 'value', st.value, 'R$ 0,00')) + '</div><div class="grow">' + fld('Tipo da chave', inp(id, 'keyType', st.keyType, 'CNPJ')) + '</div></div>' + fld('Observação (opcional)', inp(id, 'note', st.note, 'Envie o comprovante por aqui'));
@@ -404,6 +422,7 @@
         else if (f === 'items') st.items = t.value.split('\n').map(x => x.trim()).filter(Boolean);
         else if (f === 'seconds') st.seconds = Math.max(0, +t.value || 0);
         else st[f] = t.value;
+        if (f === 'caption') { const pv = root.querySelector('[data-capprev="' + sid + '"]'); if (pv) pv.innerHTML = t.value ? t.value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/(^|[\s(])_([^_\n]+)_(?=$|[\s).,!?])/g, '$1<i>$2</i>').replace(/~([^~\n]+)~/g, '<s>$1</s>').replace(/\n/g, '<br>') : '<span style="opacity:.45">A legenda aparece aqui…</span>'; }
       }
     }
     if (t.dataset.sfs && draft) {

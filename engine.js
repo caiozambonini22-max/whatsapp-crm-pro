@@ -611,7 +611,9 @@
     } else {
       if (!st.dataUrl) return { ok: false, sent: false, why: 'passo de ' + st.type + ' sem arquivo anexado' };
       if (st.type === 'audio') { await actBridge('recording', enr.contact); await sleep(rndMs(3000, 6500)); await actBridge('paused', enr.contact); }   // “gravando áudio…” antes de mandar
-      ok = await sendMedia(W, st); text = '[' + st.type + '] ' + (st.name || '');
+      let m2 = st;
+      if (st.caption && /#primeiroNome/i.test(st.caption) && W.applyNomeLive) { try { m2 = Object.assign({}, st, { caption: String((await W.applyNomeLive(st.caption)) || '').replace(/#primeiroNome/gi, '') }); } catch (x) {} }
+      ok = await sendMedia(W, m2); text = '[' + st.type + '] ' + (st.name || '');
     }
     if (ok) { if (!(await gotNew(2))) await addLog('⚠️ Envio para "' + enr.contact + '" aceito pelo WhatsApp, mas não vi a mensagem na conversa — NÃO reenviei (confira)'); return { ok: true, sent: true, text }; }
     // o envio disse que falhou: só confirma que realmente NÃO saiu antes de permitir nova tentativa
