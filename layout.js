@@ -125,11 +125,11 @@
   const tlCss = document.createElement('style');
   tlCss.textContent = '#wcrm-tabview{position:fixed;z-index:2147483640;display:none;flex-direction:column;overflow:hidden;box-sizing:border-box;font-family:Segoe UI,Helvetica Neue,Arial,sans-serif}'
     + '#wcrm-tabview .tl-h{flex:none;display:flex;align-items:center;gap:8px;padding:8px 16px;font-size:12.5px;opacity:.75;border-bottom:1px solid rgba(128,128,128,.18)}#wcrm-tabview .tl-h b{flex:1;font-weight:600}#wcrm-tabview .tl-h button{border:1px solid rgba(128,128,128,.4);background:transparent;color:inherit;border-radius:8px;padding:3px 10px;font-size:12px;cursor:pointer}'
-    + '#wcrm-tabview .tl-b{flex:1;overflow-y:auto}#wcrm-tabview .tl-row{display:flex;gap:13px;padding:0 14px;height:72px;align-items:center;cursor:pointer;border-bottom:1px solid rgba(128,128,128,.1)}#wcrm-tabview .tl-row:hover{background:rgba(128,128,128,.12)}#wcrm-tabview .tl-row.act{background:rgba(128,128,128,.2)}'
+    + '#wcrm-tabview .tl-b{flex:1;overflow-y:auto}#wcrm-tabview .tl-row{display:flex;gap:13px;padding:6px 14px;min-height:72px;box-sizing:border-box;align-items:center;cursor:pointer;border-bottom:1px solid rgba(128,128,128,.1)}#wcrm-tabview .tl-row:hover{background:rgba(128,128,128,.12)}#wcrm-tabview .tl-row.act{background:rgba(128,128,128,.2)}'
     + '#wcrm-tabview .tl-av{width:49px;height:49px;border-radius:50%;background:#2a3942 center/cover no-repeat;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#cfd6db}'
     + '#wcrm-tabview .tl-m{flex:1;min-width:0}#wcrm-tabview .tl-t1{display:flex;justify-content:space-between;gap:8px;align-items:baseline}#wcrm-tabview .tl-n{font-size:16.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#wcrm-tabview .tl-tm{font-size:12px;opacity:.7;flex:none}'
     + '#wcrm-tabview .tl-t2{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:3px}#wcrm-tabview .tl-p{font-size:14px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#wcrm-tabview .tl-u{background:#25d366;color:#111;border-radius:99px;font-size:12px;font-weight:700;padding:1px 7px;flex:none}'
-    + '#wcrm-tabview .tl-e{padding:34px 22px;text-align:center;opacity:.65;font-size:14px;line-height:1.5}';
+    + '#wcrm-tabview .tl-l{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;max-height:20px;overflow:hidden}#wcrm-tabview .tl-l span{font-size:10.5px;font-weight:700;color:#fff;border-radius:5px;padding:1px 6px;text-transform:uppercase;white-space:nowrap}#wcrm-tabview .tl-e{padding:34px 22px;text-align:center;opacity:.65;font-size:14px;line-height:1.5}';
   document.head.appendChild(tlCss);
   const tl = document.createElement('div'); tl.id = 'wcrm-tabview'; document.body.appendChild(tl);
   let tlTimer = null, tlBusy = false, tlSig = '';
@@ -164,12 +164,15 @@
       let rows = [], miss = 0;
       if (names.length && ok) { const r = await W().bridgeCall('LISTINFO', { names }, 8000); if (r && r.ok) { rows = r.chats || []; miss = (r.missing || []).length; } }
       if (!rows.length && names.length) rows = names.map(n => ({ n, id: '', t: 0, unread: 0, last: '', pic: '' }));
+      const brL = W().getBridge && W().getBridge(); const labBy = new Map(); const labCol = new Map();
+      ((brL && brL.chats) || []).forEach(c => labBy.set(norm(c.name), c.labels || [])); ((brL && brL.labels) || []).forEach(l => labCol.set(norm(l.name), l.color));
+      rows.forEach(r => { r.labels = labBy.get(norm(r.n)) || []; });
       rows.sort((a, b) => ((b.pin ? 1 : 0) - (a.pin ? 1 : 0)) || (b.t - a.t));
-      const sig = JSON.stringify([activeChip, rows.map(r => [r.id || r.n, r.t, r.unread, r.last, r.active, r.pic ? 1 : 0]), miss]);
+      const sig = JSON.stringify([activeChip, rows.map(r => [r.id || r.n, r.t, r.unread, r.last, r.active, r.pic ? 1 : 0, (r.labels || []).join(',')]), miss]);
       if (!force && sig === tlSig && tl.style.display === 'flex') return; tlSig = sig;
       const title = (activeChip.mode === 'labels' ? '🏷️ ' : '📂 ') + esc(activeChip.name);
       tl.innerHTML = '<div class="tl-h"><b>' + title + ' · ' + rows.length + ' conversa' + (rows.length === 1 ? '' : 's') + (miss ? ' (' + miss + ' não achada' + (miss > 1 ? 's' : '') + ')' : '') + '</b><button data-tl="all">✕ Mostrar tudo</button></div><div class="tl-b">'
-        + (rows.length ? rows.map(r => '<div class="tl-row' + (r.active ? ' act' : '') + '" data-id="' + esc(r.id || '') + '" data-n="' + esc(r.n) + '"><div class="tl-av"' + (r.pic ? ' style="background-image:url(\'' + esc(r.pic) + '\')"' : '') + '>' + (r.pic ? '' : esc((r.n || '?').trim().charAt(0).toUpperCase())) + '</div><div class="tl-m"><div class="tl-t1"><span class="tl-n">' + esc(r.n) + '</span><span class="tl-tm">' + esc(fmtT(r.t)) + '</span></div><div class="tl-t2"><span class="tl-p">' + (r.mine ? '✓ ' : '') + esc(r.last || '') + '</span>' + (r.unread ? '<span class="tl-u">' + r.unread + '</span>' : '') + '</div></div></div>').join('')
+        + (rows.length ? rows.map(r => '<div class="tl-row' + (r.active ? ' act' : '') + '" data-id="' + esc(r.id || '') + '" data-n="' + esc(r.n) + '"><div class="tl-av"' + (r.pic ? ' style="background-image:url(\'' + esc(r.pic) + '\')"' : '') + '>' + (r.pic ? '' : esc((r.n || '?').trim().charAt(0).toUpperCase())) + '</div><div class="tl-m"><div class="tl-t1"><span class="tl-n">' + esc(r.n) + '</span><span class="tl-tm">' + esc(fmtT(r.t)) + '</span></div><div class="tl-t2"><span class="tl-p">' + (r.mine ? '✓ ' : '') + esc(r.last || '') + '</span>' + (r.unread ? '<span class="tl-u">' + r.unread + '</span>' : '') + '</div>' + ((r.labels || []).length ? '<div class="tl-l">' + r.labels.map(l => '<span style="background:' + esc(labCol.get(norm(l)) || '#3a434a') + '">' + esc(l) + '</span>').join('') + '</div>' : '') + '</div></div>').join('')
           : '<div class="tl-e">Essa ' + (activeChip.mode === 'labels' ? 'etiqueta' : 'aba') + ' está vazia.<br>Arraste uma conversa para ela ou use o botão de aba no cabeçalho da conversa.</div>') + '</div>';
       tl.style.display = 'flex';
     } catch (e) { } finally { tlBusy = false; }

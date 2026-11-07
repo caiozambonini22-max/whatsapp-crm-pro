@@ -139,7 +139,7 @@
       if (!okKind || !(rule.funnel || []).some(f => fkey(f) === ev.key)) return;
       const open = e => e.ruleId === rule.id && e.nk === ev.nk && ['waiting', 'stale', 'asked', 'approval', 'sending'].includes(e.state);
       if (enrs.some(open) || out.some(open)) return;
-      if (enrs.some(e => e.ruleId === rule.id && e.nk === ev.nk && e.state === 'sent' && now - (e.endedAt || 0) < 10 * 60e3)) return;   // acabou de receber esse follow up (ex.: aba piscou): não repete
+      if (enrs.some(e => e.ruleId === rule.id && e.nk === ev.nk && e.state === 'sent' && now - (e.endedAt || 0) < 2 * 60e3)) return;   // acabou de receber esse follow up (ex.: aba piscou): não repete
       out.push({ id: 'e' + now + Math.floor(Math.random() * 99999), ruleId: rule.id, contact: ev.n, nk: ev.nk, state: 'waiting', enteredAt: now, dueAt: dueAtFor(rule, now), ignoreInUntil: 0, fails: 0, history: [], from: ev.key });
     }));
     return out;

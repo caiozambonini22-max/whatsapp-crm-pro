@@ -131,7 +131,13 @@
       var last = null;
       try { var l = arr(c.msgs); for (var i = l.length - 1; i >= 0; i--) { var m = l[i]; if (m && m.id && !m.isNotification && !SKIP_TYPES.test(m.type || '')) { last = m; break; } } } catch (e) { }
       var ct = c.contact || {}; var pic = '';
-      try { var pt = ct.profilePicThumb; pic = (pt && (pt.eurl || pt.img || pt.imgFull)) || ''; if (typeof pic !== 'string') pic = ''; } catch (e) { }
+      try {
+        var pcm = mod(getReq(), 'WAWebProfilePicThumbCollection'); var PC = pcm && (pcm.ProfilePicThumbCollection || pcm.default);
+        var pm = PC && (PC.get(c.id) || PC.get(c.id._serialized)); var pa = pm && (pm.attributes || pm);
+        pic = (pa && (pa.previewEurl || pa.eurl || pa.img || pa.imgFull)) || '';
+        if (!pic) { var pt = ct.profilePicThumb; pic = (pt && (pt.previewEurl || pt.eurl || pt.img || pt.imgFull)) || ''; }
+        if (typeof pic !== 'string') pic = '';
+      } catch (e) { }
       out.push({ n: chatName(c), id: c.id._serialized, t: ((c.t || (last && last.t) || 0)) * 1000, unread: c.unreadCount || 0, pin: !!c.pin, group: !!(c.isGroup || (c.id && c.id.server === 'g.us')), active: !!c.active,
         last: last ? msgText(last).slice(0, 120) : '', mine: !!(last && last.id && last.id.fromMe), pic: pic });
     });
