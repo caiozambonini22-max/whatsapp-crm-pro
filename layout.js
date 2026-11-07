@@ -259,7 +259,8 @@
   // ── 💰 VENDA: etiqueta virtual do sistema (não é aba do CRM nem etiqueta do WhatsApp) ──
   let sales = { marks: {} };
   const pad2 = n => String(n).padStart(2, '0');
-  const todayLbl = () => { const d = new Date(); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1); };
+  const dayLbl = off => { const d = new Date(); d.setDate(d.getDate() - (off || 0)); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1); };
+  const todayLbl = () => dayLbl(0);
   const salesSave = () => { try { chrome.storage.local.set({ wcrm_sales: sales }); } catch (e) {} };
   const saleOf = n => (sales.marks || {})[norm(n)];
   const salesCss = document.createElement('style');
@@ -315,7 +316,7 @@
     const lbls = []; Object.values(sales.marks || {}).sort((x, y) => (y.at || 0) - (x.at || 0)).forEach(x => { if (!lbls.includes(x.day)) lbls.push(x.day); });
     popAt(vbn, '<div class="ttl">💰 Etiqueta de venda' + (m ? ' — ' + esc(m.day) : '') + '</div>'
       + lbls.slice(0, 12).map(d => '<div class="it" data-vs="set" data-d="' + esc(d) + '"><span class="ck">' + (m && m.day === d ? '✓' : '') + '</span>Vendas ' + esc(d) + '</div>').join('')
-      + '<div class="it" data-vs="today"><span class="ck"></span>＋ Hoje (' + todayLbl() + ')</div><div class="it" data-vs="day"><span class="ck"></span>✏️ Nova etiqueta (data ou nome)…</div>'
+      + '<div class="it" data-vs="today"><span class="ck">' + (m && m.day === todayLbl() ? '✓' : '') + '</span>📅 Hoje (' + todayLbl() + ')</div><div class="it" data-vs="back1"><span class="ck">' + (m && m.day === dayLbl(1) ? '✓' : '') + '</span>📅 Ontem (' + dayLbl(1) + ')</div><div class="it" data-vs="back2"><span class="ck">' + (m && m.day === dayLbl(2) ? '✓' : '') + '</span>📅 Anteontem (' + dayLbl(2) + ')</div><div class="it" data-vs="day"><span class="ck"></span>✏️ Nova etiqueta (data ou nome)…</div>'
       + (m ? '<div class="it" data-vs="list"><span class="ck"></span>👁 Ver as vendas de ' + esc(m.day) + '</div><div class="it" data-vs="rm"><span class="ck"></span>✕ Tirar a marcação</div>' : ''), 'left');
   });
   setInterval(decorateRows, 1200);
@@ -418,6 +419,7 @@
     if (it.dataset.vs) {
       const w = me(), act = it.dataset.vs, m = saleOf(w);
       if (act === 'set') { closePop(); markSale(w, it.dataset.d); toast('💰 ' + w + ' → Vendas ' + it.dataset.d); }
+      else if (act === 'back1' || act === 'back2') { const dl = dayLbl(act === 'back1' ? 1 : 2); closePop(); markSale(w, dl); toast('💰 ' + w + ' → Vendas ' + dl); }
       else if (act === 'today') { closePop(); markSale(w); toast('💰 ' + w + ' → Vendas ' + todayLbl()); }
       else if (act === 'rm') { closePop(); unmarkSale(w); toast('💰 Marcação tirada de ' + w); }
       else if (act === 'list' && m) { closePop(); activeChip = { mode: 'sales', name: m.day }; renderChips(); applyFilter(); }
