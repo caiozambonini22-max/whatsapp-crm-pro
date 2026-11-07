@@ -139,6 +139,7 @@
       if (!okKind || !(rule.funnel || []).some(f => fkey(f) === ev.key)) return;
       const open = e => e.ruleId === rule.id && e.nk === ev.nk && ['waiting', 'stale', 'asked', 'approval', 'sending'].includes(e.state);
       if (enrs.some(open) || out.some(open)) return;
+      if (enrs.some(e => e.ruleId === rule.id && e.nk === ev.nk && e.state === 'sent' && now - (e.endedAt || 0) < 10 * 60e3)) return;   // acabou de receber esse follow up (ex.: aba piscou): não repete
       out.push({ id: 'e' + now + Math.floor(Math.random() * 99999), ruleId: rule.id, contact: ev.n, nk: ev.nk, state: 'waiting', enteredAt: now, dueAt: dueAtFor(rule, now), ignoreInUntil: 0, fails: 0, history: [], from: ev.key });
     }));
     return out;
@@ -672,6 +673,7 @@
       else if (t === 'tab_add' || t === 'tab_rm' || t === 'tab_rmall') {
         try {
           const f = document.getElementById('wcrm-iframe');
+          if (!(f && f.contentWindow)) { await fail('Painel do CRM não carregado — não consegui mudar a aba', 'Não consegui mudar a aba de "' + enr.contact + '": o painel do CRM não está carregado (F5 no WhatsApp).'); return { ok: false }; }
           const msg = t === 'tab_add' ? { type: 'SET_TAB', contact: enr.contact, tab: st.name, newTab: st.name, mode: 'add' } : t === 'tab_rm' ? { type: 'SET_TAB', contact: enr.contact, tab: st.name, mode: 'remove' } : { type: 'SET_TAB', contact: enr.contact, tab: '', mode: 'clear' };
           f && f.contentWindow && f.contentWindow.postMessage(msg, '*');
         } catch (e) {}
@@ -770,6 +772,12 @@
     try {
       if (!root.__wcrm || !document.querySelector('#pane-side')) return;
       const cfg = await getCfg(); const rt0 = await getRt(); const now = Date.now();
+      // só UMA aba do WhatsApp comanda o robô (a que tem o painel do CRM carregado) — evita duas abas mexendo na mesma fila
+      const hasPanel = !!(document.getElementById('wcrm-iframe') && document.getElementById('wcrm-iframe').contentWindow);
+      const L = rt0.leader;
+      if (L && L.id !== INST && now - L.at < 30000 && !force) return;
+      if (!hasPanel) { if (!(L && L.id !== INST && now - L.at < 30000) && now - (root.__wcrmNoPanelLog || 0) > 10 * 60e3) { root.__wcrmNoPanelLog = now; try { await addLog('⚠️ Esta aba do WhatsApp está sem o painel do CRM (mudar aba/etiqueta não funciona) — o robô não vai rodar aqui. Aperte F5.'); } catch (x) {} } return; }
+      await mutateRt(r => { r.leader = { id: INST, at: now }; });
       if (bootPrevAlive === null) {
         bootPrevAlive = rt0.lastAlive || now;
         if (now - bootPrevAlive > (cfg.staleMin || 120) * 60e3) await markStale(now);   // computador ficou desligado
@@ -901,6 +909,7 @@
       if (!root.__wcrm || !document.querySelector('#pane-side')) return;
       const b = await getBulk(); const job = b.jobs.find(j => j.status === 'running'); if (!job) return;
       const cfg = await getCfg(); const rt = await getRt();
+      if (rt.leader && rt.leader.id !== INST && Date.now() - rt.leader.at < 30000) return;   // outra aba comanda
       const g = bulkGate(job, rt, cfg, Date.now());
       if (job.waitWhy !== (g.go ? '' : g.why)) await mutateBulk(x => { const j = x.jobs.find(y => y.id === job.id); if (j) j.waitWhy = g.go ? '' : g.why; });
       if (!g.go) return;
