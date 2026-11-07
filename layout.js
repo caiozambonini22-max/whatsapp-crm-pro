@@ -116,23 +116,78 @@
   function domClear() { while (domHidden.length) { const r = domHidden.pop(); r.style.display = ''; } }
 
   async function applyFilter() {
-    const b = W().bridgeCall; const ok = W().bridgeOk && W().bridgeOk();
     domClear();
-    if (!activeChip) { if (ok) await b('FILTER', { mode: 'all' }); return; }
-    if (activeChip.mode === 'labels') {
-      if (!ok) { toast('⚠️ Etiquetas do WhatsApp indisponíveis (ponte). Veja 📋 → Etiquetas WA'); return; }
-      const r = await b('FILTER', { mode: 'labels', label: activeChip.name });
-      if (!r.ok) toast('⚠️ ' + (r.reason || 'não consegui filtrar'));
-    } else {
-      const tab = (barData.tabs || []).find(t => t.name === activeChip.name); const names = (tab && tab.contacts) || [];
-      if (!names.length) { toast('Essa aba está vazia — arraste uma conversa para ela'); }
-      if (ok) {
-        const r = await b('FILTER', { mode: 'custom', names });
-        if (!r.ok) { domFilter(names); }
-        else if (r.missing) toast('ℹ️ ' + r.missing + ' contato(s) da aba não achados nas conversas');
-      } else domFilter(names);
-    }
+    if (!activeChip) { hideList(); return; }
+    startList();
   }
+
+  // ── LISTA PRÓPRIA (compacta) da aba/etiqueta: lê as conversas direto do WhatsApp, sem buracos e sem depender do filtro interno dele ──
+  const tlCss = document.createElement('style');
+  tlCss.textContent = '#wcrm-tablist{position:fixed;z-index:2147483640;display:none;flex-direction:column;overflow:hidden;box-sizing:border-box;font-family:Segoe UI,Helvetica Neue,Arial,sans-serif}'
+    + '#wcrm-tablist .tl-h{flex:none;display:flex;align-items:center;gap:8px;padding:8px 16px;font-size:12.5px;opacity:.75;border-bottom:1px solid rgba(128,128,128,.18)}#wcrm-tablist .tl-h b{flex:1;font-weight:600}#wcrm-tablist .tl-h button{border:1px solid rgba(128,128,128,.4);background:transparent;color:inherit;border-radius:8px;padding:3px 10px;font-size:12px;cursor:pointer}'
+    + '#wcrm-tablist .tl-b{flex:1;overflow-y:auto}#wcrm-tablist .tl-row{display:flex;gap:13px;padding:0 14px;height:72px;align-items:center;cursor:pointer;border-bottom:1px solid rgba(128,128,128,.1)}#wcrm-tablist .tl-row:hover{background:rgba(128,128,128,.12)}#wcrm-tablist .tl-row.act{background:rgba(128,128,128,.2)}'
+    + '#wcrm-tablist .tl-av{width:49px;height:49px;border-radius:50%;background:#2a3942 center/cover no-repeat;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#cfd6db}'
+    + '#wcrm-tablist .tl-m{flex:1;min-width:0}#wcrm-tablist .tl-t1{display:flex;justify-content:space-between;gap:8px;align-items:baseline}#wcrm-tablist .tl-n{font-size:16.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#wcrm-tablist .tl-tm{font-size:12px;opacity:.7;flex:none}'
+    + '#wcrm-tablist .tl-t2{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:3px}#wcrm-tablist .tl-p{font-size:14px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#wcrm-tablist .tl-u{background:#25d366;color:#111;border-radius:99px;font-size:12px;font-weight:700;padding:1px 7px;flex:none}'
+    + '#wcrm-tablist .tl-e{padding:34px 22px;text-align:center;opacity:.65;font-size:14px;line-height:1.5}';
+  document.head.appendChild(tlCss);
+  const tl = document.createElement('div'); tl.id = 'wcrm-tablist'; document.body.appendChild(tl);
+  let tlTimer = null, tlBusy = false, tlSig = '';
+  const fmtT = ts => { if (!ts) return ''; const d = new Date(ts), n = new Date(); const p = x => String(x).padStart(2, '0');
+    if (d.toDateString() === n.toDateString()) return p(d.getHours()) + ':' + p(d.getMinutes());
+    const y = new Date(n); y.setDate(n.getDate() - 1); if (d.toDateString() === y.toDateString()) return 'Ontem';
+    return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + String(d.getFullYear()).slice(2); };
+  function listNames() {
+    if (!activeChip) return [];
+    if (activeChip.mode === 'labels') { const br = W().getBridge && W().getBridge(); return ((br && br.chats) || []).filter(c => (c.labels || []).some(l => norm(l) === norm(activeChip.name))).map(c => c.name); }
+    const tab = (barData.tabs || []).find(t => t.name === activeChip.name); return (tab && tab.contacts) || [];
+  }
+  function placeList() {
+    const ps = document.getElementById('pane-side'); if (!ps) return false;
+    const r = ps.getBoundingClientRect(); if (!r.width || !r.height) return false;
+    tl.style.left = r.left + 'px'; tl.style.top = r.top + 'px'; tl.style.width = r.width + 'px'; tl.style.height = r.height + 'px';
+    let bg = '', el = ps; while (el && el !== document.documentElement) { const c = getComputedStyle(el).backgroundColor; if (c && !/rgba?\(0, 0, 0, 0\)|transparent/.test(c)) { bg = c; break; } el = el.parentElement; }
+    tl.style.background = bg || '#111b21';
+    const sp = ps.querySelector('span[title]'); tl.style.color = sp ? getComputedStyle(sp).color : '#e9edef';
+    return true;
+  }
+  function hideList() { clearInterval(tlTimer); tlTimer = null; tl.style.display = 'none'; tl.innerHTML = ''; tlSig = ''; }
+  function startList() { clearInterval(tlTimer); tlSig = ''; drawList(true); tlTimer = setInterval(() => drawList(false), 4000); }
+  async function drawList(force) {
+    if (tlBusy) return; tlBusy = true;
+    try {
+      if (!activeChip) { hideList(); return; }
+      const sb = document.querySelector('#side [contenteditable="true"]');
+      if (sb && (sb.textContent || '').trim()) { tl.style.display = 'none'; return; }   // pesquisando: deixa o WhatsApp mostrar
+      if (!placeList()) { tl.style.display = 'none'; return; }
+      const names = listNames(); const ok = W().bridgeOk && W().bridgeOk();
+      let rows = [], miss = 0;
+      if (names.length && ok) { const r = await W().bridgeCall('LISTINFO', { names }, 8000); if (r && r.ok) { rows = r.chats || []; miss = (r.missing || []).length; } }
+      if (!rows.length && names.length) rows = names.map(n => ({ n, id: '', t: 0, unread: 0, last: '', pic: '' }));
+      rows.sort((a, b) => ((b.pin ? 1 : 0) - (a.pin ? 1 : 0)) || (b.t - a.t));
+      const sig = JSON.stringify([activeChip, rows.map(r => [r.id || r.n, r.t, r.unread, r.last, r.active, r.pic ? 1 : 0]), miss]);
+      if (!force && sig === tlSig && tl.style.display === 'flex') return; tlSig = sig;
+      const title = (activeChip.mode === 'labels' ? '🏷️ ' : '📂 ') + esc(activeChip.name);
+      tl.innerHTML = '<div class="tl-h"><b>' + title + ' · ' + rows.length + ' conversa' + (rows.length === 1 ? '' : 's') + (miss ? ' (' + miss + ' não achada' + (miss > 1 ? 's' : '') + ')' : '') + '</b><button data-tl="all">✕ Mostrar tudo</button></div><div class="tl-b">'
+        + (rows.length ? rows.map(r => '<div class="tl-row' + (r.active ? ' act' : '') + '" data-id="' + esc(r.id || '') + '" data-n="' + esc(r.n) + '"><div class="tl-av"' + (r.pic ? ' style="background-image:url(\'' + esc(r.pic) + '\')"' : '') + '>' + (r.pic ? '' : esc((r.n || '?').trim().charAt(0).toUpperCase())) + '</div><div class="tl-m"><div class="tl-t1"><span class="tl-n">' + esc(r.n) + '</span><span class="tl-tm">' + esc(fmtT(r.t)) + '</span></div><div class="tl-t2"><span class="tl-p">' + (r.mine ? '✓ ' : '') + esc(r.last || '') + '</span>' + (r.unread ? '<span class="tl-u">' + r.unread + '</span>' : '') + '</div></div></div>').join('')
+          : '<div class="tl-e">Essa ' + (activeChip.mode === 'labels' ? 'etiqueta' : 'aba') + ' está vazia.<br>Arraste uma conversa para ela ou use o botão de aba no cabeçalho da conversa.</div>') + '</div>';
+      tl.style.display = 'flex';
+    } catch (e) { } finally { tlBusy = false; }
+  }
+  tl.addEventListener('click', async e => {
+    if (e.target.closest('[data-tl="all"]')) { activeChip = null; renderChips(); hideList(); return; }
+    const row = e.target.closest('.tl-row'); if (!row) return;
+    try { const r = await W().bridgeCall('OPEN', { chat: row.dataset.id || row.dataset.n }, 8000); if (!(r && r.ok)) toast('⚠️ Não consegui abrir essa conversa'); } catch (x) {}
+    setTimeout(() => drawList(true), 600);
+  });
+  // clicar nos filtros do próprio WhatsApp (Tudo, Não lidas, Favoritas, Grupos…) sai da aba
+  document.addEventListener('click', e => {
+    if (!activeChip || tl.contains(e.target)) return;
+    const b = e.target.closest && e.target.closest('#side button, #side [role="button"], #side [role="tab"], #side [role="radio"]'); if (!b) return;
+    if (/^(tudo|n[aã]o lidas|favoritas|grupos|rascunhos|comunidades|listas)\b/i.test((b.innerText || '').trim())) { activeChip = null; renderChips(); hideList(); }
+  }, true);
+  window.addEventListener('resize', () => { if (activeChip) placeList(); });
+  document.addEventListener('wcrm-bridge', () => { if (activeChip) drawList(false); });
 
   function chipList() {
     if (mode === 'labels') {
@@ -152,20 +207,21 @@
       el.innerHTML = '<span class="tb-empty">' + (mode === 'tabs' ? 'Nenhuma aba — clique em ＋ para criar e arraste conversas para ela.' : (br && !br.ok ? 'Sem etiquetas: ' + esc(br.reason) : 'Sem etiquetas ainda (WhatsApp Business → crie etiquetas).')) + '</span>';
       return;
     }
-    el.innerHTML = list.map(c => `<button class="tb-chip${activeChip && activeChip.mode === mode && activeChip.name === c.name ? ' on' : ''}" data-n="${esc(c.name)}">${esc(c.name)}<b>${c.count || 0}</b></button>`).join('');
+    el.innerHTML = '<button class="tb-chip' + (!activeChip ? ' on' : '') + '" data-all="1">Tudo</button>' + list.map(c => `<button class="tb-chip${activeChip && activeChip.mode === mode && activeChip.name === c.name ? ' on' : ''}" data-n="${esc(c.name)}">${esc(c.name)}<b>${c.count || 0}</b></button>`).join('');
   }
   document.getElementById('wcrm-chips').addEventListener('click', e => {
     const b = e.target.closest('.tb-chip'); if (!b) return;
+    if (b.dataset.all) { activeChip = null; renderChips(); applyFilter(); return; }
     const n = b.dataset.n;
-    activeChip = (activeChip && activeChip.mode === mode && activeChip.name === n) ? null : { mode, name: n };
+    activeChip = { mode, name: n };   // clicar noutra aba troca direto; para sair, use "Tudo"
     renderChips(); applyFilter();
   });
   // arrastar conversa para uma aba
   const chipsEl = document.getElementById('wcrm-chips');
-  chipsEl.addEventListener('dragover', e => { const b = e.target.closest('.tb-chip'); if (mode === 'tabs' && b) { e.preventDefault(); chipsEl.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); b.classList.add('drop'); } });
+  chipsEl.addEventListener('dragover', e => { const b = e.target.closest('.tb-chip'); if (mode === 'tabs' && b && !b.dataset.all) { e.preventDefault(); chipsEl.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); b.classList.add('drop'); } });
   chipsEl.addEventListener('dragleave', e => { const b = e.target.closest('.tb-chip'); b && b.classList.remove('drop'); });
   chipsEl.addEventListener('drop', e => {
-    const b = e.target.closest('.tb-chip'); if (mode !== 'tabs' || !b) return; e.preventDefault(); b.classList.remove('drop');
+    const b = e.target.closest('.tb-chip'); if (mode !== 'tabs' || !b || b.dataset.all) return; e.preventDefault(); b.classList.remove('drop');
     const name = e.dataTransfer.getData('text/wcrm-contact'); if (!name) return;
     setTab(name, b.dataset.n);
   });

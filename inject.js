@@ -121,6 +121,22 @@
     out.sort(function (a, b) { return a.ts - b.ts; });
     return { ok: true, name: chatName(chat), id: chat.id && chat.id._serialized, messages: out.slice(-(msg.max || 60)) };
   }
+
+  // dados para a lista própria de abas/etiquetas (nome, última mensagem, hora, não lidas, foto)
+  function listInfo(d) {
+    var s = stores(); if (s.err) return { ok: false, reason: s.err };
+    var out = [], miss = [];
+    (d.names || []).forEach(function (n) {
+      var c = findChat(s, n); if (!c || !c.id) { miss.push(n); return; }
+      var last = null;
+      try { var l = arr(c.msgs); for (var i = l.length - 1; i >= 0; i--) { var m = l[i]; if (m && m.id && !m.isNotification && !SKIP_TYPES.test(m.type || '')) { last = m; break; } } } catch (e) { }
+      var ct = c.contact || {}; var pic = '';
+      try { var pt = ct.profilePicThumb; pic = (pt && (pt.eurl || pt.img || pt.imgFull)) || ''; if (typeof pic !== 'string') pic = ''; } catch (e) { }
+      out.push({ n: chatName(c), id: c.id._serialized, t: ((c.t || (last && last.t) || 0)) * 1000, unread: c.unreadCount || 0, pin: !!c.pin, group: !!(c.isGroup || (c.id && c.id.server === 'g.us')), active: !!c.active,
+        last: last ? msgText(last).slice(0, 120) : '', mine: !!(last && last.id && last.id.fromMe), pic: pic });
+    });
+    return { ok: true, chats: out, missing: miss };
+  }
   async function openChat(msg) {
     var req = getReq(); var s = stores(); if (s.err) return { ok: false, reason: s.err };
     var chat = findChat(s, msg.chat); if (!chat) return { ok: false, reason: 'Conversa não encontrada: ' + msg.chat };
@@ -352,8 +368,8 @@ function oggSalt(u8) {
     if (e.source !== window || !e.data || e.data.tag !== 'WCRM_CONTENT') return;
     var d = e.data;
     if (d.kind === 'SYNC') push(true);
-    if (d.kind === 'OPEN' || d.kind === 'OPEN_NUMBER' || d.kind === 'READ' || d.kind === 'FILTER' || d.kind === 'ACTIVE' || d.kind === 'ACT' || d.kind === 'SENDMEDIA' || d.kind === 'SENDTEXT' || d.kind === 'PROBE') {
-      var rr; try { rr = d.kind === 'OPEN' ? await openChat(d) : d.kind === 'OPEN_NUMBER' ? await openNumber(d) : d.kind === 'READ' ? readChat(d) : d.kind === 'FILTER' ? await filterList(d) : d.kind === 'ACT' ? await actChat(d) : d.kind === 'SENDMEDIA' ? await sendMediaDirect(d) : d.kind === 'SENDTEXT' ? await sendTextDirect(d) : d.kind === 'PROBE' ? probeMedia() : activeChat(); } catch (err) { rr = { ok: false, reason: String(err && err.message || err) }; }
+    if (d.kind === 'OPEN' || d.kind === 'OPEN_NUMBER' || d.kind === 'READ' || d.kind === 'LISTINFO' || d.kind === 'FILTER' || d.kind === 'ACTIVE' || d.kind === 'ACT' || d.kind === 'SENDMEDIA' || d.kind === 'SENDTEXT' || d.kind === 'PROBE') {
+      var rr; try { rr = d.kind === 'OPEN' ? await openChat(d) : d.kind === 'OPEN_NUMBER' ? await openNumber(d) : d.kind === 'READ' ? readChat(d) : d.kind === 'LISTINFO' ? listInfo(d) : d.kind === 'FILTER' ? await filterList(d) : d.kind === 'ACT' ? await actChat(d) : d.kind === 'SENDMEDIA' ? await sendMediaDirect(d) : d.kind === 'SENDTEXT' ? await sendTextDirect(d) : d.kind === 'PROBE' ? probeMedia() : activeChat(); } catch (err) { rr = { ok: false, reason: String(err && err.message || err) }; }
       send({ kind: 'RESULT', reqId: d.reqId, result: rr });
     }
     if (d.kind === 'APPLY') { var r = await apply(d); r = r || {}; send({ kind: 'APPLY_RESULT', reqId: d.reqId, result: r }); setTimeout(function () { push(false); }, 600); }
