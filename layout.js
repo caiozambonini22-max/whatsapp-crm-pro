@@ -21,15 +21,15 @@
   // ── CSS ──
   const st = document.createElement('style');
   st.textContent = `
-    html.wcrm-bar body{padding-top:${BAR_H}px !important;box-sizing:border-box !important;}
-    html.wcrm-bar #app{top:${BAR_H}px !important;height:calc(100vh - ${BAR_H}px) !important;}
-    html.wcrm-bar #wcrm-wrap{top:${BAR_H}px !important;}
+    html.wcrm-bar body{padding-top:var(--wcrm-bh,${BAR_H}px) !important;box-sizing:border-box !important;}
+    html.wcrm-bar #app{top:var(--wcrm-bh,${BAR_H}px) !important;height:calc(100vh - var(--wcrm-bh,${BAR_H}px)) !important;}
+    html.wcrm-bar #wcrm-wrap{top:var(--wcrm-bh,${BAR_H}px) !important;}
     html.wcrm-open #app{width:calc(100vw - var(--wcrm-pw,${PANEL_W}px)) !important;}
     html.wcrm-left #app{left:56px !important;width:calc(100vw - 56px) !important;}
     html.wcrm-left.wcrm-open #app{width:calc(100vw - 56px - var(--wcrm-pw,${PANEL_W}px)) !important;}
     html.wcrm-open #wcrm-topbar{right:0;}
     #wcrm-left{position:fixed;left:0;top:0;bottom:0;width:56px;z-index:2147483641;background:#0d0f11;border-right:1px solid #2a3238;display:none;flex-direction:column;align-items:center;gap:8px;padding-top:10px;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif;}
-    html.wcrm-left #wcrm-left{display:flex;} html.wcrm-bar #wcrm-left{top:${BAR_H}px;}
+    html.wcrm-left #wcrm-left{display:flex;} html.wcrm-bar #wcrm-left{top:var(--wcrm-bh,${BAR_H}px);}
     #wcrm-left button{width:42px;height:42px;border-radius:12px;border:1px solid #2a3238;background:#181d21;color:#e9edef;font-size:19px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
     #wcrm-left button:hover{background:#d4af37;color:#111;border-color:#d4af37;}
     #wcrm-start{position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;font-family:'Segoe UI',Arial,sans-serif;}
@@ -44,14 +44,27 @@
     #wcrm-topbar{position:fixed;top:0;left:0;right:0;height:${BAR_H}px;z-index:2147483644;background:#0d0f11;border-bottom:1px solid #2a3238;display:none;align-items:center;gap:8px;padding:0 10px;}
     html.wcrm-bar #wcrm-topbar{display:flex;}
     #wcrm-topbar .tb-logo{height:30px;width:30px;object-fit:contain;border-radius:6px;flex-shrink:0;}
+    #wcrm-sub{position:fixed;top:${BAR_H}px;left:0;right:0;height:34px;z-index:2147483644;background:#0d0f11;border-bottom:1px solid #2a3238;display:none;align-items:center;gap:8px;padding:0 10px;font-family:'Segoe UI',Arial,sans-serif;}
+    html.wcrm-bar.wcrm-sub #wcrm-sub{display:flex;} html.wcrm-open #wcrm-sub{right:0;}
+    #wcrm-sub .sb-t{color:#d4af37;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
+    #wcrm-sub .sb-b{flex:0 0 auto;border:1px solid #3a434a;background:#181d21;color:#e9edef;border-radius:999px;font-size:12px;font-weight:700;padding:4px 12px;cursor:pointer;white-space:nowrap;} #wcrm-sub .sb-b:hover{border-color:#d4af37;color:#d4af37;}
+    #wcrm-sub .tb-chip{padding:3px 5px 3px 11px;font-size:12px;}
     #wcrm-topbar .tb-chips{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--wcrm-acc,#d4af37) transparent;align-items:center;padding-bottom:2px;}
+    #wcrm-sub .tb-chips{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--wcrm-acc,#d4af37) transparent;align-items:center;padding-bottom:2px;}
     #wcrm-topbar .tb-chips::-webkit-scrollbar{height:7px;} #wcrm-topbar .tb-chips::-webkit-scrollbar-thumb{background:var(--wcrm-acc,#d4af37);border-radius:6px;} #wcrm-topbar .tb-chips::-webkit-scrollbar-track{background:transparent;}
+    #wcrm-sub .tb-chips::-webkit-scrollbar{height:7px;} #wcrm-sub .tb-chips::-webkit-scrollbar-thumb{background:var(--wcrm-acc,#d4af37);border-radius:6px;} #wcrm-sub .tb-chips::-webkit-scrollbar-track{background:transparent;}
     #wcrm-topbar .tb-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 12px;border-radius:999px;border:1px solid #3a434a;background:#181d21;color:#e9edef;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;}
+    #wcrm-sub .tb-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 12px;border-radius:999px;border:1px solid #3a434a;background:#181d21;color:#e9edef;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;}
     #wcrm-topbar .tb-chip:hover{border-color:#d4af37;}
+    #wcrm-sub .tb-chip:hover{border-color:#d4af37;}
     #wcrm-topbar .tb-chip.on{background:#d4af37;border-color:#d4af37;color:#111;}
+    #wcrm-sub .tb-chip.on{background:#d4af37;border-color:#d4af37;color:#111;}
     #wcrm-topbar .tb-chip.drop{background:#2d3a1e;border-color:#84cc16;box-shadow:0 0 0 2px #84cc16;}
+    #wcrm-sub .tb-chip.drop{background:#2d3a1e;border-color:#84cc16;box-shadow:0 0 0 2px #84cc16;}
     #wcrm-topbar .tb-chip b{background:#d4af37;color:#111;border-radius:999px;min-width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;padding:0 5px;}
+    #wcrm-sub .tb-chip b{background:#d4af37;color:#111;border-radius:999px;min-width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;padding:0 5px;}
     #wcrm-topbar .tb-chip.on b{background:#111;color:#d4af37;}
+    #wcrm-sub .tb-chip.on b{background:#111;color:#d4af37;}
     #wcrm-topbar .tb-mode{flex:0 0 auto;font-size:10px;font-weight:800;letter-spacing:.5px;color:#d4af37;border:1px solid #5b4b17;border-radius:6px;padding:3px 6px;text-transform:uppercase;}
     #wcrm-topbar .tb-empty{color:#8696a0;font-size:12px;}
     #wcrm-topbar .tb-btn{flex:0 0 auto;width:32px;height:32px;border-radius:9px;border:1px solid #2a3238;background:#181d21;color:#cfd6db;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;}
@@ -64,7 +77,7 @@
     #wcrm-strip button:hover{background:#d4af37;color:#111;}
     #wcrm-strip button.on{background:#d4af37;color:#111;}
     #wcrm-strip button i{font-style:normal;position:absolute;top:-5px;right:-5px;background:#d4af37;color:#111;border-radius:999px;min-width:16px;height:16px;font-size:10px;display:flex;align-items:center;justify-content:center;padding:0 4px;}
-    #wcrm-stripopen{position:fixed;top:${BAR_H}px;right:240px;z-index:2147483642;background:#0d0f11;border:1px solid #2a3238;border-top:none;color:#d4af37;border-radius:0 0 8px 8px;font-size:10px;padding:1px 10px;cursor:pointer;display:none;font-family:'Segoe UI',Arial,sans-serif;}
+    #wcrm-stripopen{position:fixed;top:var(--wcrm-bh,${BAR_H}px);right:240px;z-index:2147483642;background:#0d0f11;border:1px solid #2a3238;border-top:none;color:#d4af37;border-radius:0 0 8px 8px;font-size:10px;padding:1px 10px;cursor:pointer;display:none;font-family:'Segoe UI',Arial,sans-serif;}
     html:not(.wcrm-strip) #wcrm-stripopen{display:block;}
     #wcrm-strip .hint{font-size:11px;color:#8696a0;margin-left:auto;} #wcrm-strip .min{margin-left:8px;min-width:30px;padding:0 8px;font-size:13px;}
     #wcrm-rail{position:fixed;z-index:2147483643;display:flex;flex-direction:column;gap:8px;padding:8px 6px;background:#0d0f11f2;border:1px solid #2a3238;border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.5);}
@@ -89,6 +102,9 @@
     <button class="tb-btn" id="wcrm-tb-add" title="Nova aba" style="display:none">＋</button>
     <button class="tb-btn" id="wcrm-tb-refresh" title="Atualizar">↻</button><button class="tb-btn" id="wcrm-tb-menu" title="Menu">≡</button>`;
   document.body.appendChild(bar);
+  const sub = document.createElement('div'); sub.id = 'wcrm-sub';
+  sub.innerHTML = '<span class="sb-t">💰 Vendas do dia</span><div class="tb-chips" id="wcrm-subchips"></div><button class="sb-b" id="wcrm-sub-today" title="Cria a aba de hoje">＋ Hoje</button><button class="sb-b" id="wcrm-sub-copy" title="Copiar os nomes da aba de venda selecionada">📋 Copiar nomes</button>';
+  document.body.appendChild(sub);
   const reopen = document.createElement('div'); reopen.id = 'wcrm-tabopen'; reopen.textContent = '⌄ etiquetas e abas'; reopen.title = 'Mostrar barra';
   document.body.appendChild(reopen);
   const so = document.createElement('div'); so.id = 'wcrm-stripopen'; so.textContent = '▾ barra'; so.title = 'Mostrar barra da conversa'; document.body.appendChild(so);
@@ -200,33 +216,84 @@
     }
     return (barData.tabs || []).map(t => ({ name: t.name, count: t.count }));
   }
+  const isSale = n => /^vendas\b/i.test(String(n || '').trim());
+  function chipHtml(c) { return `<button class="tb-chip${activeChip && activeChip.mode === mode && activeChip.name === c.name ? ' on' : ''}" data-n="${esc(c.name)}">${esc(c.name)}<b>${c.count || 0}</b></button>`; }
   function renderChips() {
     const el = document.getElementById('wcrm-chips'); if (!el) return;
     document.getElementById('wcrm-mode').textContent = mode === 'labels' ? 'Etiquetas' : 'Abas';
     document.getElementById('wcrm-tb-add').style.display = mode === 'tabs' ? 'flex' : 'none';
-    const list = chipList();
+    const showSub = mode === 'tabs';
+    document.documentElement.classList.toggle('wcrm-sub', showSub);
+    document.documentElement.style.setProperty('--wcrm-bh', (showSub ? BAR_H + 34 : BAR_H) + 'px');
+    const all = chipList();
+    const list = mode === 'tabs' ? all.filter(c => !isSale(c.name)) : all;
+    const sl = mode === 'tabs' ? all.filter(c => isSale(c.name)) : [];
+    const se = document.getElementById('wcrm-subchips');
+    if (se) se.innerHTML = sl.length ? sl.map(chipHtml).join('') : '<span class="tb-empty" style="font-size:11.5px">Nenhuma aba de venda — clique em ＋ Hoje e arraste quem comprou para ela.</span>';
     if (!list.length) {
       const br = W().getBridge && W().getBridge();
-      el.innerHTML = '<span class="tb-empty">' + (mode === 'tabs' ? 'Nenhuma aba — clique em ＋ para criar e arraste conversas para ela.' : (br && !br.ok ? 'Sem etiquetas: ' + esc(br.reason) : 'Sem etiquetas ainda (WhatsApp Business → crie etiquetas).')) + '</span>';
+      el.innerHTML = '<button class="tb-chip' + (!activeChip ? ' on' : '') + '" data-all="1">Tudo</button>' + '<span class="tb-empty">' + (mode === 'tabs' ? (sl.length ? '' : 'Nenhuma aba — clique em ＋ para criar e arraste conversas para ela.') : (br && !br.ok ? 'Sem etiquetas: ' + esc(br.reason) : 'Sem etiquetas ainda (WhatsApp Business → crie etiquetas).')) + '</span>';
       return;
     }
-    el.innerHTML = '<button class="tb-chip' + (!activeChip ? ' on' : '') + '" data-all="1">Tudo</button>' + list.map(c => `<button class="tb-chip${activeChip && activeChip.mode === mode && activeChip.name === c.name ? ' on' : ''}" data-n="${esc(c.name)}">${esc(c.name)}<b>${c.count || 0}</b></button>`).join('');
+    el.innerHTML = '<button class="tb-chip' + (!activeChip ? ' on' : '') + '" data-all="1">Tudo</button>' + list.map(chipHtml).join('');
   }
+  const subEl = document.getElementById('wcrm-sub');
+  const on2 = (t, fn) => { chipsEl0b().addEventListener(t, fn); subEl.addEventListener(t, fn); };
+  function chipsEl0b() { return document.getElementById('wcrm-chips'); }
+  document.getElementById('wcrm-subchips').addEventListener('wheel', e => { const c = e.currentTarget; if (c.scrollWidth > c.clientWidth) { c.scrollLeft += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY); e.preventDefault(); } }, { passive: false });
+  document.getElementById('wcrm-sub-today').addEventListener('click', () => {
+    const d = new Date(), nm = 'Vendas ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+    if (!(barData.tabs || []).some(t => t.name === nm)) { post({ type: 'SET_TAB', contact: '', tab: '', newTab: nm }); barData.tabs = (barData.tabs || []).concat([{ name: nm, count: 0, contacts: [] }]); toast('💰 Aba "' + nm + '" criada — arraste quem comprou para ela'); }
+    activeChip = { mode: 'tabs', name: nm }; renderChips(); applyFilter();
+  });
+  document.getElementById('wcrm-sub-copy').addEventListener('click', () => {
+    if (!activeChip || activeChip.mode !== 'tabs') { toast('Selecione uma aba de venda primeiro', '#e74c3c'); return; }
+    const names = listNames(); if (!names.length) { toast('Aba vazia', '#e74c3c'); return; }
+    const txt = names.join('\n');
+    try { navigator.clipboard.writeText(txt).then(() => toast('📋 ' + names.length + ' nome(s) copiado(s)'), () => toast('⚠️ Não consegui copiar', '#e74c3c')); } catch (e) { toast('⚠️ Não consegui copiar', '#e74c3c'); }
+  });
   // roda do mouse = rola as abas para o lado; a aba escolhida sempre fica visível
   document.getElementById('wcrm-chips').addEventListener('wheel', e => { const c = e.currentTarget; if (c.scrollWidth > c.clientWidth) { c.scrollLeft += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY); e.preventDefault(); } }, { passive: false });
-  document.getElementById('wcrm-chips').addEventListener('click', e => {
+  on2('click', e => {
     const b = e.target.closest('.tb-chip'); if (!b) return;
     if (b.dataset.all) { activeChip = null; renderChips(); applyFilter(); return; }
     const n = b.dataset.n;
     activeChip = { mode, name: n };   // clicar noutra aba troca direto; para sair, use "Tudo"
     renderChips(); applyFilter();
-    try { const on = document.querySelector('#wcrm-chips .tb-chip.on'); on && on.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (x) {}
+    try { const on = document.querySelector('#wcrm-topbar .tb-chip.on, #wcrm-sub .tb-chip.on'); on && on.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (x) {}
   });
+  // editar / excluir aba (botão direito ou duplo clique na aba)
+  function patchRules(oldN, newN) {
+    try {
+      chrome.storage.local.get('wcrm_cfg', o => {
+        const cfg = o.wcrm_cfg; if (!cfg || !cfg.rules) return; let ch = 0;
+        const walk = x => {
+          if (Array.isArray(x)) { x.forEach(walk); return; }
+          if (!x || typeof x !== 'object') return;
+          Object.keys(x).forEach(k => {
+            const v = x[k];
+            if ((k === 'name' || k === 'tab') && v === oldN) { x[k] = newN; ch++; }
+            else if ((k === 'excludeTabs' || k === 'tabs') && Array.isArray(v)) { v.forEach((t, i) => { if (t === oldN) { v[i] = newN; ch++; } }); }
+            else walk(v);
+          });
+        };
+        walk(cfg.rules); if (ch) chrome.storage.local.set({ wcrm_cfg: cfg });
+      });
+    } catch (e) {}
+  }
+  function tabMenu(chip, x, y) {
+    const n = chip.dataset.n; if (!n || mode !== 'tabs') return;
+    const r = chip.getBoundingClientRect();
+    popAt(chip, `<div class="ttl">Aba “${esc(n)}”</div><div class="it" data-te="ren">✏️ Renomear</div><div class="it" data-te="del">🗑️ Excluir aba</div>`, 'left');
+    pop.dataset.tabn = n;
+  }
+  on2('contextmenu', e => { const b = e.target.closest('.tb-chip'); if (!b || b.dataset.all || mode !== 'tabs') return; e.preventDefault(); tabMenu(b); });
+  on2('dblclick', e => { const b = e.target.closest('.tb-chip'); if (!b || b.dataset.all || mode !== 'tabs') return; e.preventDefault(); tabMenu(b); });
   // arrastar conversa para uma aba
   const chipsEl = document.getElementById('wcrm-chips');
-  chipsEl.addEventListener('dragover', e => { const b = e.target.closest('.tb-chip'); if (mode === 'tabs' && b && !b.dataset.all) { e.preventDefault(); chipsEl.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); b.classList.add('drop'); } });
-  chipsEl.addEventListener('dragleave', e => { const b = e.target.closest('.tb-chip'); b && b.classList.remove('drop'); });
-  chipsEl.addEventListener('drop', e => {
+  on2('dragover', e => { const b = e.target.closest('.tb-chip'); if (mode === 'tabs' && b && !b.dataset.all) { e.preventDefault(); document.querySelectorAll('.tb-chip.drop').forEach(x => x.classList.remove('drop')); b.classList.add('drop'); } });
+  on2('dragleave', e => { const b = e.target.closest('.tb-chip'); b && b.classList.remove('drop'); });
+  on2('drop', e => {
     const b = e.target.closest('.tb-chip'); if (mode !== 'tabs' || !b || b.dataset.all) return; e.preventDefault(); b.classList.remove('drop');
     const name = e.dataTransfer.getData('text/wcrm-contact'); if (!name) return;
     setTab(name, b.dataset.n);
@@ -291,6 +358,16 @@
   document.getElementById('wcrm-tb-refresh').addEventListener('click', () => { post({ type: 'GET_CONVERSATIONS' }); window.postMessage({ tag: 'WCRM_CONTENT', kind: 'SYNC' }, '*'); loadBar(); });
   pop.addEventListener('input', e => { if (e.target.id === 'wcrm-tabsearch') { const q = norm(e.target.value); pop.querySelectorAll('#wcrm-tablist .it').forEach(x => { x.style.display = !q || (x.dataset.s || '').includes(q) ? '' : 'none'; }); } });
   pop.addEventListener('keydown', e => {
+    if (e.target.id === 'wcrm-rentab' && e.key === 'Enter') {
+      const to = e.target.value.trim(), from = pop.dataset.tabn; closePop();
+      if (!to || to === from) return;
+      if ((barData.tabs || []).some(t => t.name === to)) { toast('⚠️ Já existe uma aba com esse nome', '#e74c3c'); return; }
+      post({ type: 'KANBAN_TAB_OP', op: 'rename', name: from, to });
+      patchRules(from, to);
+      barData.tabs = (barData.tabs || []).map(t => t.name === from ? Object.assign({}, t, { name: to }) : t);
+      if (activeChip && activeChip.name === from) activeChip = { mode: 'tabs', name: to };
+      renderChips(); applyFilter(); toast('✏️ "' + from + '" → "' + to + '"');
+    }
     if (e.target.id === 'wcrm-newtab' && e.key === 'Enter') {
       const n = e.target.value.trim(); if (!n) return; closePop();
       post({ type: 'SET_TAB', contact: '', tab: '', newTab: n });
@@ -299,6 +376,23 @@
   });
   pop.addEventListener('click', async e => {
     const it = e.target.closest('.it'); if (!it) return;
+    if (it.dataset.te) {
+      const n = pop.dataset.tabn; const act = it.dataset.te;
+      if (act === 'ren') {
+        pop.innerHTML = '<div class="ttl">Renomear “' + esc(n) + '”</div><input id="wcrm-rentab" maxlength="30" value="' + esc(n) + '">'; pop.dataset.tabn = n;
+        setTimeout(() => { const i = document.getElementById('wcrm-rentab'); i && (i.focus(), i.select()); }, 30);
+      } else if (act === 'del') {
+        const c = ((barData.tabs || []).find(t => t.name === n) || {}).count || 0;
+        pop.innerHTML = '<div class="ttl">Excluir “' + esc(n) + '”?</div><div style="padding:4px 10px 8px;font-size:12px;color:#c9d1d6">' + c + ' conversa(s) saem desta aba (nenhum contato é apagado). Follow ups que usam esta aba podem parar de funcionar.</div><div class="it" data-te="delok" style="color:#f87171">🗑️ Sim, excluir</div><div class="it" data-te="no">Cancelar</div>';
+      } else if (act === 'delok') {
+        closePop();
+        post({ type: 'KANBAN_TAB_OP', op: 'delete', name: n });
+        barData.tabs = (barData.tabs || []).filter(t => t.name !== n);
+        if (activeChip && activeChip.name === n) { activeChip = null; applyFilter(); }
+        renderChips(); toast('🗑️ Aba "' + n + '" excluída');
+      } else closePop();
+      return;
+    }
     const m = it.dataset.m;
     if (m === 'tabs' || m === 'labels') { mode = m; lsSet('wcrm_mode', m); activeChip = null; applyFilter(); renderChips(); closePop(); }
     else if (m === 'strip') { setStrip(!document.documentElement.classList.contains('wcrm-strip')); closePop(); }
