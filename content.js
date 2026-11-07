@@ -25,7 +25,7 @@
   ]);
   // "test" só é bloqueado como nome de UI se vier sozinho de uma fonte não confiável;
   // o nome da agenda é aceito mesmo assim (ver isValidName com trusted=true).
-  const UI_PHRASE = /(clique|click|toque|tap)\b.*(aqui|here|dados|info|contato|contact)|dados d[oa] (contato|grupo|empresa)|contact info|group info|visto por último|last seen|^hoje\b|^ontem\b|^today\b|^yesterday\b|mensagens temporárias|disappearing|conta comercial|business account|conta empresarial|^online$|digitando|escrevendo|gravando|typing|recording|^[a-z][a-z0-9]*(-[a-z0-9]+){2,}$/i;
+  const UI_PHRASE = /(clique|click|toque|tap)\b.*(aqui|here|dados|info|contato|contact)|dados d[oa] (contato|grupo|empresa)|contact info|group info|visto por último|last seen|^hoje\b|^ontem\b|^today\b|^yesterday\b|mensagens temporárias|disappearing|conta comercial|business account|conta empresarial|^online$|^adicionar (à|a|na|em)\b|add to list|^adicionar$|^follow\b.*\bhoje$|^etiquetas?$|^labels?$|^pesquisar|^search\b|^mais$|digitando|escrevendo|gravando|typing|recording|^[a-z][a-z0-9]*(-[a-z0-9]+){2,}$/i;
 
   function isValidName(v, trusted) {
     if (!v) return false;

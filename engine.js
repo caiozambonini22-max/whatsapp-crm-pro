@@ -772,6 +772,24 @@
   // ── processa UM inscrito (um envio) ──
   let busy = false;
   const INST = Math.random().toString(36).slice(2, 8);
+  // nome que não existe na lista de conversas do WhatsApp (ex.: texto de botão/etiqueta lido como contato)
+  const alnum = x => norm(x).replace(/[^a-z0-9]/g, '');
+  async function isJunkName(name) {
+    const br = root.__wcrm && root.__wcrm.getBridge && root.__wcrm.getBridge(); if (!br || !br.ok) return false;
+    const all = (br.all || []).concat(br.act || []); if (all.length < 20) return false;
+    const a = alnum(name); if (!a) return true; if (a.length >= 10 && /^\d+$/.test(a)) return false;
+    return !all.some(x => { const b = alnum(x.n); return b === a || (a.length >= 5 && (b.includes(a) || a.includes(b)) && b.length >= 5); });
+  }
+  async function dropJunk(enr, why) {
+    await mutateEnr(l => { const x = l.find(e => e.id === enr.id); if (x) { x.state = 'cancelled'; x.reason = why; x.endedAt = Date.now(); } });
+    await mutateRt(r => { r.alerts = (r.alerts || []).filter(a => a.enrId !== enr.id); });
+    await addLog('🧹 Removido do Follow Up: "' + enr.contact + '" — ' + why);
+    const f = document.getElementById('wcrm-iframe'); try { f && f.contentWindow && f.contentWindow.postMessage({ type: 'PURGE_JUNK', contact: enr.contact }, '*'); } catch (e) {}
+  }
+  async function sweepJunk() {
+    const enrs = await getEnrs(); let n = 0;
+    for (const e of enrs) { if (['error', 'waiting', 'stale'].includes(e.state) && (e.fails || 0) >= 1 && await isJunkName(e.contact)) { await dropJunk(e, 'não é uma conversa (texto da tela virou "contato")'); n++; } }
+  }
   async function processEnrollment(enrId) {
     // TRAVA: reserva o contato ("sending") antes de mexer em qualquer coisa → impossível enviar 2x o mesmo follow-up
     const myId = INST + '-' + Date.now(); let claimed = false;
@@ -798,6 +816,7 @@
     };
 
     const ok = await openChat(enr.contact);
+    if (!ok && await isJunkName(enr.contact)) { await dropJunk(enr, 'não é uma conversa (texto da tela virou "contato")'); return; }
     if (!ok) return fail('Não achei/abri a conversa', 'Não consegui abrir a conversa 3 vezes. Follow-up parado para esse contato.');
     const before = await readMsgs(enr.contact, 60);
     const base = Math.max(enr.enteredAt || 0, enr.ignoreInUntil || 0);
@@ -871,6 +890,7 @@
       await mutateRt(r => { r.lastAlive = now; });
       await mutateEnr(l => { l.forEach(e => { if (e.state === 'sending' && now - (e.claimAt || 0) > 15 * 60e3) { e.state = 'stale'; delete e.claim; } }); });
       await syncRenames();
+      await sweepJunk();
       await mutateEnr(l => { l.forEach(e => { if (e.state === 'error' && (e.rounds || 0) < 3 && now - (e.errAt || 0) > 60 * 60e3) { e.state = 'waiting'; e.fails = 0; e.rounds = (e.rounds || 0) + 1; e.dueAt = now; } }); });
       await trackAndEnroll();
       await replyScan();

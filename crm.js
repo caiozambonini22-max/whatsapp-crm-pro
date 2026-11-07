@@ -106,6 +106,11 @@ window.addEventListener('message', e => {
     }
     if (activeContact && contacts[activeContact]) updateContactPanel();
   }
+  if (e.data?.type === 'PURGE_JUNK') {
+    const nz = x => (x || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const k = Object.keys(contacts).find(x => nz(x) === nz(e.data.contact));
+    if (k) { delete contacts[k]; if (activeContact === k) activeContact = ''; try { saveAutoBackup(); } catch (x) {} }
+  }
   if (e.data?.type === 'RENAME_CONTACT') {
     const f = e.data.from, t = e.data.to;
     if (f && t && f !== t && contacts[f]) {
