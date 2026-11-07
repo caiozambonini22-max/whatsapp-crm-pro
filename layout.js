@@ -44,27 +44,14 @@
     #wcrm-topbar{position:fixed;top:0;left:0;right:0;height:${BAR_H}px;z-index:2147483644;background:#0d0f11;border-bottom:1px solid #2a3238;display:none;align-items:center;gap:8px;padding:0 10px;}
     html.wcrm-bar #wcrm-topbar{display:flex;}
     #wcrm-topbar .tb-logo{height:30px;width:30px;object-fit:contain;border-radius:6px;flex-shrink:0;}
-    #wcrm-sub{position:fixed;top:${BAR_H}px;left:0;right:0;height:34px;z-index:2147483644;background:#0d0f11;border-bottom:1px solid #2a3238;display:none;align-items:center;gap:8px;padding:0 10px;font-family:'Segoe UI',Arial,sans-serif;}
-    html.wcrm-bar.wcrm-sub #wcrm-sub{display:flex;} html.wcrm-open #wcrm-sub{right:0;}
-    #wcrm-sub .sb-t{color:#d4af37;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
-    #wcrm-sub .sb-b{flex:0 0 auto;border:1px solid #3a434a;background:#181d21;color:#e9edef;border-radius:999px;font-size:12px;font-weight:700;padding:4px 12px;cursor:pointer;white-space:nowrap;} #wcrm-sub .sb-b:hover{border-color:#d4af37;color:#d4af37;}
-    #wcrm-sub .tb-chip{padding:3px 5px 3px 11px;font-size:12px;}
     #wcrm-topbar .tb-chips{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--wcrm-acc,#d4af37) transparent;align-items:center;padding-bottom:2px;}
-    #wcrm-sub .tb-chips{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--wcrm-acc,#d4af37) transparent;align-items:center;padding-bottom:2px;}
     #wcrm-topbar .tb-chips::-webkit-scrollbar{height:7px;} #wcrm-topbar .tb-chips::-webkit-scrollbar-thumb{background:var(--wcrm-acc,#d4af37);border-radius:6px;} #wcrm-topbar .tb-chips::-webkit-scrollbar-track{background:transparent;}
-    #wcrm-sub .tb-chips::-webkit-scrollbar{height:7px;} #wcrm-sub .tb-chips::-webkit-scrollbar-thumb{background:var(--wcrm-acc,#d4af37);border-radius:6px;} #wcrm-sub .tb-chips::-webkit-scrollbar-track{background:transparent;}
     #wcrm-topbar .tb-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 12px;border-radius:999px;border:1px solid #3a434a;background:#181d21;color:#e9edef;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;}
-    #wcrm-sub .tb-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 12px;border-radius:999px;border:1px solid #3a434a;background:#181d21;color:#e9edef;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;}
     #wcrm-topbar .tb-chip:hover{border-color:#d4af37;}
-    #wcrm-sub .tb-chip:hover{border-color:#d4af37;}
     #wcrm-topbar .tb-chip.on{background:#d4af37;border-color:#d4af37;color:#111;}
-    #wcrm-sub .tb-chip.on{background:#d4af37;border-color:#d4af37;color:#111;}
     #wcrm-topbar .tb-chip.drop{background:#2d3a1e;border-color:#84cc16;box-shadow:0 0 0 2px #84cc16;}
-    #wcrm-sub .tb-chip.drop{background:#2d3a1e;border-color:#84cc16;box-shadow:0 0 0 2px #84cc16;}
     #wcrm-topbar .tb-chip b{background:#d4af37;color:#111;border-radius:999px;min-width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;padding:0 5px;}
-    #wcrm-sub .tb-chip b{background:#d4af37;color:#111;border-radius:999px;min-width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;padding:0 5px;}
     #wcrm-topbar .tb-chip.on b{background:#111;color:#d4af37;}
-    #wcrm-sub .tb-chip.on b{background:#111;color:#d4af37;}
     #wcrm-topbar .tb-mode{flex:0 0 auto;font-size:10px;font-weight:800;letter-spacing:.5px;color:#d4af37;border:1px solid #5b4b17;border-radius:6px;padding:3px 6px;text-transform:uppercase;}
     #wcrm-topbar .tb-empty{color:#8696a0;font-size:12px;}
     #wcrm-topbar .tb-btn{flex:0 0 auto;width:32px;height:32px;border-radius:9px;border:1px solid #2a3238;background:#181d21;color:#cfd6db;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;}
@@ -102,9 +89,6 @@
     <button class="tb-btn" id="wcrm-tb-add" title="Nova aba" style="display:none">＋</button>
     <button class="tb-btn" id="wcrm-tb-refresh" title="Atualizar">↻</button><button class="tb-btn" id="wcrm-tb-menu" title="Menu">≡</button>`;
   document.body.appendChild(bar);
-  const sub = document.createElement('div'); sub.id = 'wcrm-sub';
-  sub.innerHTML = '<span class="sb-t">💰 Vendas do dia</span><div class="tb-chips" id="wcrm-subchips"></div><button class="sb-b" id="wcrm-sub-today" title="Cria a aba de hoje">＋ Hoje</button><button class="sb-b" id="wcrm-sub-copy" title="Copiar os nomes da aba de venda selecionada">📋 Copiar nomes</button>';
-  document.body.appendChild(sub);
   const reopen = document.createElement('div'); reopen.id = 'wcrm-tabopen'; reopen.textContent = '⌄ etiquetas e abas'; reopen.title = 'Mostrar barra';
   document.body.appendChild(reopen);
   const so = document.createElement('div'); so.id = 'wcrm-stripopen'; so.textContent = '▾ barra'; so.title = 'Mostrar barra da conversa'; document.body.appendChild(so);
@@ -156,6 +140,7 @@
   function listNames() {
     if (!activeChip) return [];
     if (activeChip.mode === 'labels') { const br = W().getBridge && W().getBridge(); return ((br && br.chats) || []).filter(c => (c.labels || []).some(l => norm(l) === norm(activeChip.name))).map(c => c.name); }
+    if (activeChip.mode === 'sales') { const d = (sales.days || []).find(x => x.name === activeChip.name); return (d && d.contacts) || []; }
     const tab = (barData.tabs || []).find(t => t.name === activeChip.name); return (tab && tab.contacts) || [];
   }
   function placeList() {
@@ -186,7 +171,7 @@
       rows.sort((a, b) => ((b.pin ? 1 : 0) - (a.pin ? 1 : 0)) || (b.t - a.t));
       const sig = JSON.stringify([activeChip, rows.map(r => [r.id || r.n, r.t, r.unread, r.last, r.active, r.pic ? 1 : 0, (r.labels || []).join(',')]), miss]);
       if (!force && sig === tlSig && tl.style.display === 'flex') return; tlSig = sig;
-      const title = (activeChip.mode === 'labels' ? '🏷️ ' : '📂 ') + esc(activeChip.name);
+      const title = (activeChip.mode === 'labels' ? '🏷️ ' : activeChip.mode === 'sales' ? '💰 ' : '📂 ') + esc(activeChip.name);
       tl.innerHTML = '<div class="tl-h"><b>' + title + ' · ' + rows.length + ' conversa' + (rows.length === 1 ? '' : 's') + (miss ? ' (' + miss + ' não achada' + (miss > 1 ? 's' : '') + ')' : '') + '</b><button data-tl="all">✕ Mostrar tudo</button></div><div class="tl-b">'
         + (rows.length ? rows.map(r => '<div class="tl-row' + (r.active ? ' act' : '') + '" data-id="' + esc(r.id || '') + '" data-n="' + esc(r.n) + '"><div class="tl-av"' + (r.pic ? ' style="background-image:url(\'' + esc(r.pic) + '\')"' : '') + '>' + (r.pic ? '' : esc((r.n || '?').trim().charAt(0).toUpperCase())) + '</div><div class="tl-m"><div class="tl-t1"><span class="tl-n">' + esc(r.n) + '</span><span class="tl-tm">' + esc(fmtT(r.t)) + '</span></div><div class="tl-t2"><span class="tl-p">' + (r.mine ? '✓ ' : '') + esc(r.last || '') + '</span>' + (r.unread ? '<span class="tl-u">' + r.unread + '</span>' : '') + '</div>' + ((r.labels || []).length ? '<div class="tl-l">' + r.labels.map(l => '<span style="background:' + esc(labCol.get(norm(l)) || '#3a434a') + '">' + esc(l) + '</span>').join('') + '</div>' : '') + '</div></div>').join('')
           : '<div class="tl-e">Essa ' + (activeChip.mode === 'labels' ? 'etiqueta' : 'aba') + ' está vazia.<br>Arraste uma conversa para ela ou use o botão de aba no cabeçalho da conversa.</div>') + '</div>';
@@ -216,42 +201,22 @@
     }
     return (barData.tabs || []).map(t => ({ name: t.name, count: t.count }));
   }
-  const isSale = n => /^vendas\b/i.test(String(n || '').trim());
   function chipHtml(c) { return `<button class="tb-chip${activeChip && activeChip.mode === mode && activeChip.name === c.name ? ' on' : ''}" data-n="${esc(c.name)}">${esc(c.name)}<b>${c.count || 0}</b></button>`; }
   function renderChips() {
     const el = document.getElementById('wcrm-chips'); if (!el) return;
     document.getElementById('wcrm-mode').textContent = mode === 'labels' ? 'Etiquetas' : 'Abas';
     document.getElementById('wcrm-tb-add').style.display = mode === 'tabs' ? 'flex' : 'none';
-    const showSub = mode === 'tabs';
-    document.documentElement.classList.toggle('wcrm-sub', showSub);
-    document.documentElement.style.setProperty('--wcrm-bh', (showSub ? BAR_H + 34 : BAR_H) + 'px');
+    renderSales();
     const all = chipList();
-    const list = mode === 'tabs' ? all.filter(c => !isSale(c.name)) : all;
-    const sl = mode === 'tabs' ? all.filter(c => isSale(c.name)) : [];
-    const se = document.getElementById('wcrm-subchips');
-    if (se) se.innerHTML = sl.length ? sl.map(chipHtml).join('') : '<span class="tb-empty" style="font-size:11.5px">Nenhuma aba de venda — clique em ＋ Hoje e arraste quem comprou para ela.</span>';
+    const list = all;
     if (!list.length) {
       const br = W().getBridge && W().getBridge();
-      el.innerHTML = '<button class="tb-chip' + (!activeChip ? ' on' : '') + '" data-all="1">Tudo</button>' + '<span class="tb-empty">' + (mode === 'tabs' ? (sl.length ? '' : 'Nenhuma aba — clique em ＋ para criar e arraste conversas para ela.') : (br && !br.ok ? 'Sem etiquetas: ' + esc(br.reason) : 'Sem etiquetas ainda (WhatsApp Business → crie etiquetas).')) + '</span>';
+      el.innerHTML = '<button class="tb-chip' + (!activeChip ? ' on' : '') + '" data-all="1">Tudo</button>' + '<span class="tb-empty">' + (mode === 'tabs' ? 'Nenhuma aba — clique em ＋ para criar e arraste conversas para ela.' : (br && !br.ok ? 'Sem etiquetas: ' + esc(br.reason) : 'Sem etiquetas ainda (WhatsApp Business → crie etiquetas).')) + '</span>';
       return;
     }
     el.innerHTML = '<button class="tb-chip' + (!activeChip ? ' on' : '') + '" data-all="1">Tudo</button>' + list.map(chipHtml).join('');
   }
-  const subEl = document.getElementById('wcrm-sub');
-  const on2 = (t, fn) => { chipsEl0b().addEventListener(t, fn); subEl.addEventListener(t, fn); };
-  function chipsEl0b() { return document.getElementById('wcrm-chips'); }
-  document.getElementById('wcrm-subchips').addEventListener('wheel', e => { const c = e.currentTarget; if (c.scrollWidth > c.clientWidth) { c.scrollLeft += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY); e.preventDefault(); } }, { passive: false });
-  document.getElementById('wcrm-sub-today').addEventListener('click', () => {
-    const d = new Date(), nm = 'Vendas ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
-    if (!(barData.tabs || []).some(t => t.name === nm)) { post({ type: 'SET_TAB', contact: '', tab: '', newTab: nm }); barData.tabs = (barData.tabs || []).concat([{ name: nm, count: 0, contacts: [] }]); toast('💰 Aba "' + nm + '" criada — arraste quem comprou para ela'); }
-    activeChip = { mode: 'tabs', name: nm }; renderChips(); applyFilter();
-  });
-  document.getElementById('wcrm-sub-copy').addEventListener('click', () => {
-    if (!activeChip || activeChip.mode !== 'tabs') { toast('Selecione uma aba de venda primeiro', '#e74c3c'); return; }
-    const names = listNames(); if (!names.length) { toast('Aba vazia', '#e74c3c'); return; }
-    const txt = names.join('\n');
-    try { navigator.clipboard.writeText(txt).then(() => toast('📋 ' + names.length + ' nome(s) copiado(s)'), () => toast('⚠️ Não consegui copiar', '#e74c3c')); } catch (e) { toast('⚠️ Não consegui copiar', '#e74c3c'); }
-  });
+  const on2 = (t, fn) => document.getElementById('wcrm-chips').addEventListener(t, fn);
   // roda do mouse = rola as abas para o lado; a aba escolhida sempre fica visível
   document.getElementById('wcrm-chips').addEventListener('wheel', e => { const c = e.currentTarget; if (c.scrollWidth > c.clientWidth) { c.scrollLeft += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY); e.preventDefault(); } }, { passive: false });
   on2('click', e => {
@@ -260,7 +225,7 @@
     const n = b.dataset.n;
     activeChip = { mode, name: n };   // clicar noutra aba troca direto; para sair, use "Tudo"
     renderChips(); applyFilter();
-    try { const on = document.querySelector('#wcrm-topbar .tb-chip.on, #wcrm-sub .tb-chip.on'); on && on.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (x) {}
+    try { const on = document.querySelector('#wcrm-topbar .tb-chip.on'); on && on.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (x) {}
   });
   // editar / excluir aba (botão direito ou duplo clique na aba)
   function patchRules(oldN, newN) {
@@ -289,6 +254,59 @@
   }
   on2('contextmenu', e => { const b = e.target.closest('.tb-chip'); if (!b || b.dataset.all || mode !== 'tabs') return; e.preventDefault(); tabMenu(b); });
   on2('dblclick', e => { const b = e.target.closest('.tb-chip'); if (!b || b.dataset.all || mode !== 'tabs') return; e.preventDefault(); tabMenu(b); });
+
+  // ── VENDAS DO DIA: abas próprias (não misturam com as abas do CRM), numa gaveta flutuante no canto da lista ──
+  let sales = { days: [] }; let salesOpen = lsGet('wcrm_sales_open') === '1';
+  const salesSave = () => { try { chrome.storage.local.set({ wcrm_sales: sales }); } catch (e) {} };
+  const salesCss = document.createElement('style');
+  salesCss.textContent = '#wcrm-sales{position:fixed;z-index:2147483641;display:none;font-family:Segoe UI,Helvetica Neue,Arial,sans-serif;color:#e9edef}html.wcrm-bar #wcrm-sales.show{display:block}'
+    + '#wcrm-sales .sv-btn{border:1px solid #d4af37;background:#14181c;color:#d4af37;border-radius:999px;font-size:12.5px;font-weight:800;padding:7px 14px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.5)}'
+    + '#wcrm-sales .sv-card{background:#14181c;border:1px solid #2a3238;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.6);padding:10px;max-height:300px;overflow:auto}'
+    + '#wcrm-sales .sv-h{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:800;color:#d4af37;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}#wcrm-sales .sv-h span{cursor:pointer;color:#9aa6ad;font-size:14px}'
+    + '#wcrm-sales .sv-ch{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}'
+    + '#wcrm-sales .sv-c{display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 11px;border-radius:999px;border:1px solid #3a434a;background:#181d21;color:#e9edef;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}#wcrm-sales .sv-c:hover{border-color:#d4af37}#wcrm-sales .sv-c.on{background:#d4af37;color:#111;border-color:#d4af37}#wcrm-sales .sv-c.drop{background:#2d3a1e;border-color:#84cc16;box-shadow:0 0 0 2px #84cc16}'
+    + '#wcrm-sales .sv-c b{background:#d4af37;color:#111;border-radius:999px;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10.5px;padding:0 5px}#wcrm-sales .sv-c.on b{background:#111;color:#d4af37}'
+    + '#wcrm-sales .sv-a{display:flex;flex-wrap:wrap;gap:6px}#wcrm-sales .sv-a button{border:1px solid #3a434a;background:#181d21;color:#e9edef;border-radius:8px;font-size:11.5px;font-weight:700;padding:5px 9px;cursor:pointer}#wcrm-sales .sv-a button:hover{border-color:#d4af37;color:#d4af37}'
+    + '#wcrm-sales .sv-e{font-size:11.5px;color:#9aa6ad;margin-bottom:8px}#wcrm-sales .sv-t{font-size:10.5px;color:#7d8a92;margin-top:6px}';
+  document.head.appendChild(salesCss);
+  const sv = document.createElement('div'); sv.id = 'wcrm-sales'; document.body.appendChild(sv);
+  function placeSales() {
+    const ps = document.getElementById('pane-side'); if (!ps) { sv.classList.remove('show'); return; }
+    const r = ps.getBoundingClientRect(); if (!r.width || !r.height) { sv.classList.remove('show'); return; }
+    sv.classList.add('show'); sv.style.left = Math.round(r.left + 10) + 'px'; sv.style.bottom = Math.round(window.innerHeight - r.bottom + 10) + 'px'; sv.style.width = salesOpen ? Math.round(r.width - 20) + 'px' : 'auto';
+  }
+  function renderSales() {
+    const act = activeChip && activeChip.mode === 'sales' ? activeChip.name : '';
+    if (!salesOpen) { sv.innerHTML = '<button class="sv-btn" data-sv="open">💰 Vendas do dia' + ((sales.days || []).length ? ' · ' + sales.days.length : '') + ' ▴</button>'; placeSales(); return; }
+    const days = sales.days || [];
+    sv.innerHTML = '<div class="sv-card"><div class="sv-h">💰 Vendas do dia<span data-sv="close" title="Recolher">▾</span></div>'
+      + (days.length ? '<div class="sv-ch">' + days.map(d => '<button class="sv-c' + (d.name === act ? ' on' : '') + '" data-d="' + esc(d.name) + '">' + esc(d.name) + '<b>' + (d.contacts || []).length + '</b></button>').join('') + '</div>' : '<div class="sv-e">Nenhuma aba de venda ainda. Clique em ＋ Hoje e arraste quem comprou para ela.</div>')
+      + '<div class="sv-a"><button data-sv="today">＋ Hoje</button><button data-sv="new">＋ Outra data</button>' + (act ? '<button data-sv="addme">＋ Conversa aberta</button><button data-sv="rmme">− Tirar conversa aberta</button><button data-sv="copy">📋 Copiar nomes</button>' : '') + '</div>'
+      + '<div class="sv-t">' + (act ? 'Arraste conversas para a aba · clique direito na aba: renomear/excluir' : 'Estas abas não se misturam com as do CRM') + '</div></div>';
+    placeSales();
+  }
+  const salesPick = name => { activeChip = { mode: 'sales', name }; renderChips(); applyFilter(); };
+  function salesAdd(name, contact) { const d = (sales.days || []).find(x => x.name === name); if (!d || !contact) return false; d.contacts = d.contacts || []; if (d.contacts.some(c => norm(c) === norm(contact))) { toast('Já está em ' + name); return false; } d.contacts.push(contact); salesSave(); toast('💰 ' + contact + ' → ' + name); if (activeChip && activeChip.mode === 'sales' && activeChip.name === name) startList(); renderSales(); return true; }
+  function salesNewDay(nm) { nm = (nm || '').trim().slice(0, 30); if (!nm) return; if (!(sales.days || []).some(d => d.name === nm)) { sales.days = (sales.days || []).concat([{ name: nm, contacts: [] }]); salesSave(); toast('💰 Aba "' + nm + '" criada'); } salesPick(nm); }
+  sv.addEventListener('click', e => {
+    const c = e.target.closest('.sv-c'); if (c) { salesPick(c.dataset.d); return; }
+    const b = e.target.closest('[data-sv]'); if (!b) return; const k = b.dataset.sv;
+    if (k === 'open') { salesOpen = true; lsSet('wcrm_sales_open', '1'); renderSales(); }
+    else if (k === 'close') { salesOpen = false; lsSet('wcrm_sales_open', '0'); renderSales(); }
+    else if (k === 'today') { const d = new Date(); salesNewDay('Vendas ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0')); }
+    else if (k === 'new') { popAt(b, '<div class="ttl">Nome da aba de venda</div><input id="wcrm-newsale" placeholder="ex.: Vendas 08/11 e Enter" maxlength="30">', 'left'); setTimeout(() => { const i = document.getElementById('wcrm-newsale'); i && i.focus(); }, 30); }
+    else if (k === 'addme') { const w = me(); w ? salesAdd(activeChip.name, w) : toast('Abra uma conversa primeiro'); }
+    else if (k === 'rmme') { const w = me(), d = (sales.days || []).find(x => x.name === activeChip.name); if (d && w) { d.contacts = (d.contacts || []).filter(c => norm(c) !== norm(w)); salesSave(); toast('💰 ' + w + ' saiu de ' + d.name); startList(); renderSales(); } }
+    else if (k === 'copy') { const n = listNames(); if (!n.length) { toast('Aba vazia'); return; } try { navigator.clipboard.writeText(n.join('\n')).then(() => toast('📋 ' + n.length + ' nome(s) copiado(s)'), () => toast('⚠️ Não consegui copiar')); } catch (x) { toast('⚠️ Não consegui copiar'); } }
+  });
+  sv.addEventListener('contextmenu', e => { const c = e.target.closest('.sv-c'); if (!c) return; e.preventDefault(); popAt(c, `<div class="ttl">Venda “${esc(c.dataset.d)}”</div><div class="it" data-se="ren">✏️ Renomear</div><div class="it" data-se="del">🗑️ Excluir aba</div>`, 'left'); pop.dataset.saleN = c.dataset.d; });
+  sv.addEventListener('dragover', e => { const c = e.target.closest('.sv-c'); if (c) { e.preventDefault(); sv.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); c.classList.add('drop'); } });
+  sv.addEventListener('dragleave', e => { const c = e.target.closest('.sv-c'); c && c.classList.remove('drop'); });
+  sv.addEventListener('drop', e => { const c = e.target.closest('.sv-c'); if (!c) return; e.preventDefault(); c.classList.remove('drop'); const n = e.dataTransfer.getData('text/wcrm-contact'); if (n) salesAdd(c.dataset.d, n); });
+  // arrastar conversa: abre a gaveta para facilitar o encaixe
+  document.addEventListener('dragstart', e => { if (!salesOpen && (e.target.closest && (e.target.closest('#main header') || e.target.closest('#pane-side [role="listitem"], #pane-side [role="row"]')))) { /* mantém recolhido; só abre se o usuário quiser */ } }, true);
+  try { chrome.storage.local.get('wcrm_sales', o => { if (o.wcrm_sales && o.wcrm_sales.days) { sales = o.wcrm_sales; renderSales(); } }); chrome.storage.onChanged.addListener((ch, a) => { if (a === 'local' && ch.wcrm_sales && ch.wcrm_sales.newValue) { sales = ch.wcrm_sales.newValue; renderSales(); if (activeChip && activeChip.mode === 'sales') startList(); } }); } catch (e) {}
+  setInterval(placeSales, 1500); window.addEventListener('resize', placeSales);
   // arrastar conversa para uma aba
   const chipsEl = document.getElementById('wcrm-chips');
   on2('dragover', e => { const b = e.target.closest('.tb-chip'); if (mode === 'tabs' && b && !b.dataset.all) { e.preventDefault(); document.querySelectorAll('.tb-chip.drop').forEach(x => x.classList.remove('drop')); b.classList.add('drop'); } });
@@ -339,7 +357,7 @@
   function popAt(el, html, align) {
     pop.innerHTML = html; pop.style.display = 'block';
     const r = el.getBoundingClientRect(); const pw = pop.offsetWidth;
-    pop.style.top = Math.round(r.bottom + 6) + 'px';
+    const ph = pop.offsetHeight; pop.style.top = Math.round(r.bottom + 6 + ph > window.innerHeight - 8 ? Math.max(8, r.top - ph - 6) : r.bottom + 6) + 'px';
     pop.style.left = Math.round(Math.max(8, Math.min(window.innerWidth - pw - 8, align === 'right' ? r.right - pw : r.left))) + 'px';
   }
   const closePop = () => { pop.style.display = 'none'; pop.innerHTML = ''; };
@@ -358,6 +376,14 @@
   document.getElementById('wcrm-tb-refresh').addEventListener('click', () => { post({ type: 'GET_CONVERSATIONS' }); window.postMessage({ tag: 'WCRM_CONTENT', kind: 'SYNC' }, '*'); loadBar(); });
   pop.addEventListener('input', e => { if (e.target.id === 'wcrm-tabsearch') { const q = norm(e.target.value); pop.querySelectorAll('#wcrm-tablist .it').forEach(x => { x.style.display = !q || (x.dataset.s || '').includes(q) ? '' : 'none'; }); } });
   pop.addEventListener('keydown', e => {
+    if (e.target.id === 'wcrm-newsale' && e.key === 'Enter') { const n = e.target.value; closePop(); salesNewDay(n); }
+    if (e.target.id === 'wcrm-rensale' && e.key === 'Enter') {
+      const to = e.target.value.trim().slice(0, 30), from = pop.dataset.saleN; closePop(); if (!to || to === from) return;
+      if ((sales.days || []).some(d => d.name === to)) { toast('⚠️ Já existe uma aba com esse nome'); return; }
+      sales.days = (sales.days || []).map(d => d.name === from ? Object.assign({}, d, { name: to }) : d); salesSave();
+      if (activeChip && activeChip.mode === 'sales' && activeChip.name === from) activeChip = { mode: 'sales', name: to };
+      renderSales(); if (activeChip) startList(); toast('✏️ "' + from + '" → "' + to + '"');
+    }
     if (e.target.id === 'wcrm-rentab' && e.key === 'Enter') {
       const to = e.target.value.trim(), from = pop.dataset.tabn; closePop();
       if (!to || to === from) return;
@@ -376,6 +402,14 @@
   });
   pop.addEventListener('click', async e => {
     const it = e.target.closest('.it'); if (!it) return;
+    if (it.dataset.se) {
+      const n = pop.dataset.saleN, act = it.dataset.se;
+      if (act === 'ren') { pop.innerHTML = '<div class="ttl">Renomear “' + esc(n) + '”</div><input id="wcrm-rensale" maxlength="30" value="' + esc(n) + '">'; pop.dataset.saleN = n; setTimeout(() => { const i = document.getElementById('wcrm-rensale'); i && (i.focus(), i.select()); }, 30); }
+      else if (act === 'del') { const d = (sales.days || []).find(x => x.name === n); pop.innerHTML = '<div class="ttl">Excluir “' + esc(n) + '”?</div><div style="padding:4px 10px 8px;font-size:12px;color:#c9d1d6">' + ((d && d.contacts || []).length) + ' conversa(s) saem desta aba de venda (nenhum contato é apagado).</div><div class="it" data-se="delok" style="color:#f87171">🗑️ Sim, excluir</div><div class="it" data-se="no">Cancelar</div>'; }
+      else if (act === 'delok') { closePop(); sales.days = (sales.days || []).filter(x => x.name !== n); salesSave(); if (activeChip && activeChip.mode === 'sales' && activeChip.name === n) { activeChip = null; applyFilter(); renderChips(); } renderSales(); toast('🗑️ "' + n + '" excluída'); }
+      else closePop();
+      return;
+    }
     if (it.dataset.te) {
       const n = pop.dataset.tabn; const act = it.dataset.te;
       if (act === 'ren') {
