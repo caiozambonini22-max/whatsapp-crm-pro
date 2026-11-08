@@ -125,14 +125,18 @@
     if (!lead) h += `<div class="mut" style="margin-top:4px">Conversa anterior ao Track (${esc(fone(chat.phone))}). Se marcar venda, ela é registrada e enviada pra Meta mesmo assim.</div>`;
     if (l.ad_title) h += `<div class="ad" title="${esc(l.ad_title)}">📢 ${esc(l.ad_title)}</div>`;
     if (lead && lead.stage === 'comprou') h += `<div class="mut" style="margin-top:4px">💰 Venda: <b style="color:#25d366">${brl(lead.sale_value)}</b>${lead.product ? ' · ' + esc(lead.product) : ''}</div>`;
+    const auto = [lead && lead.zip && 'CEP ' + String(lead.zip).replace(/(\d{5})(\d{3})/, '$1-$2'), lead && lead.city && lead.city + (lead.state ? '/' + lead.state : ''), lead && lead.email && 'e-mail'].filter(Boolean);
+    if (auto.length && stg !== 'comprou') h += `<div class="mut" style="margin-top:6px;color:#25d366">📍 Já capturado: ${esc(auto.join(' · '))} — vai junto na venda</div>`;
     h += `<div class="mut" style="margin-top:6px">Força dos dados pra Meta: <b class="scn">${s.n}/10</b></div><div class="meter"></div><div class="chips"></div>`;
     h += `<div class="acts">
       <button data-st="qualificado" class="${ORDER[stg] >= 1 ? 'on' : ''}">Qualificado</button>
       <button data-st="checkout" class="${ORDER[stg] >= 2 ? 'on' : ''}">Quase fechando</button>
       <button data-act="sale" class="sale">💰 ${stg === 'comprou' ? 'Editar venda' : 'Venda'}</button></div>
-      <div style="text-align:right;margin-top:6px"><a data-act="ficha">📋 Abrir ficha completa</a></div>`;
+      <div style="display:flex;justify-content:space-between;margin-top:6px">${stg === 'perdido' ? '<span class="mut">✗ Marcado como perdido</span>' : (stg !== 'comprou' ? '<a data-act="lost" style="color:#f15c6d">✗ Perdido</a>' : '<span></span>')}<a data-act="ficha">📋 Abrir ficha completa</a></div>`;
     if (ask) {
-      h += ask.back
+      h += ask.lost
+        ? `<div class="ask back">✗ Marcar este lead como <b>Perdido</b>?<br>Não envia nada pra Meta — serve pros seus relatórios. Se ele voltar a comprar, é só marcar a venda normalmente.<div class="acts"><button data-act="no">Cancelar</button><button data-act="yes" style="background:#e74c3c;border-color:#e74c3c;color:#fff">Marcar perdido</button></div></div>`
+        : ask.back
         ? `<div class="ask back">↩️ Voltar <b>${esc(STAGES[ask.from])}</b> para <b>${esc(STAGES[ask.to])}</b>?<br>Só corrige no Track — o evento que já foi pra Meta continua lá (a Meta não deixa apagar).<div class="acts"><button data-act="no">Cancelar</button><button data-act="yes">Voltar etapa</button></div></div>`
         : `<div class="ask">⚠️ Marcar como <b>${esc(STAGES[ask.to])}</b>?<br>Isso envia o evento <b>${EVT[ask.to]}</b> pra Meta. Depois de enviado, não dá pra apagar na Meta.<div class="acts"><button data-act="no">Cancelar</button><button data-act="yes" class="sale">Confirmar e enviar</button></div></div>`;
     }
@@ -172,7 +176,7 @@
   }
   // mantém o status do CRM igual ao do Track
   function syncCrmStatus(stage) {
-    const map = { comprou: 'comprou', qualificado: 'negociando', checkout: 'negociando', contato: 'lead' };
+    const map = { comprou: 'comprou', qualificado: 'negociando', checkout: 'negociando', contato: 'lead', perdido: 'inativo' };
     const sel = document.getElementById('cc-status'); if (!sel || !map[stage]) return;
     if (sel.value === map[stage] || sel.value === 'posVenda') return;
     sel.value = map[stage];
@@ -216,6 +220,7 @@
     if (a === 'refresh') load();
     if (a === 'sale') { ask = null; showSale = false; render(); openWin(true); }
     if (a === 'ficha') openWin(false);
+    if (a === 'lost') { ask = { lost: true, to: 'perdido' }; render(); }
     if (a === 'cancel') { showSale = false; render(); }
     if (a === 'no') { ask = null; render(); }
     if (a === 'yes' && ask) { const q = ask; ask = null; setStage(q.to); }
@@ -237,6 +242,7 @@
     if (e.target.id !== 'cc-status' || !cfg || !chat.phone) return;
     const v = e.target.value;
     if (v === 'comprou' && (!lead || lead.stage !== 'comprou')) { openWin(true); note('💰 Preencha a venda na janela do Track pra enviar pra Meta'); }
+    if (v === 'inativo' && lead && lead.stage !== 'perdido' && lead.stage !== 'comprou') { ask = { lost: true, to: 'perdido' }; render(); }
     if (v === 'negociando' && (!lead || ORDER[lead.stage] < 1)) { ask = { back: false, to: 'qualificado' }; showSale = false; render(); }
   });
 
