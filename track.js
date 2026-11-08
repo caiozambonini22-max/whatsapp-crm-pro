@@ -8,7 +8,9 @@
   const STAGES = { contato: 'Fez contato', qualificado: 'Qualificado', checkout: 'Quase fechando', comprou: 'Comprou ✅', perdido: 'Perdido' };
   const ORIG = { meta_ads: '📢 Anúncio Meta', bio: '🔗 Link da bio', nao_rastreada: '❔ Não rastreada' };
   const ORDER = { contato: 0, qualificado: 1, checkout: 2, comprou: 3, perdido: -1 };
-  let cfg = null, chat = { phone: '', push: '', name: '' }, lead = null, events = [], busy = false, showSale = false, reqSeq = 0;
+  let cfg = null, chat = { phone: '', push: '', name: '' }, lead = null, events = [], busy = false, showSale = false, reqSeq = 0, ask = null;
+  const EVT = { qualificado: 'AddToCart', checkout: 'InitiateCheckout', comprou: 'Purchase' };
+  const PREV = { qualificado: 'contato', checkout: 'qualificado', comprou: 'checkout' };
 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const brl = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -35,7 +37,10 @@
   #trk input,#trk select{box-sizing:border-box;min-width:0;width:100%;background:#202c33;border:1px solid #2a3942;border-radius:7px;padding:6px 8px;color:#e9edef;font-size:12px;font-family:inherit;outline:none}
   #trk input:focus{border-color:#00a884}
   #trk .ev{font-size:10px;margin-top:6px}#trk .ok{color:#25d366}#trk .no{color:#f15c6d}
-  #trk a{color:#53bdeb;cursor:pointer;font-size:11px}`;
+  #trk a{color:#53bdeb;cursor:pointer;font-size:11px}
+  #trk .ask{margin-top:8px;padding:8px;border-radius:8px;background:#2a2410;border:1px solid #6b5a1e;font-size:11px;color:#f5d97a}
+  #trk .ask.back{background:#1d2630;border-color:#2a3942;color:#aebac1}
+  #trk .ask .acts{margin-top:6px}`;
   document.head.appendChild(st);
 
   // ---------- caixa no painel do contato ----------
@@ -107,6 +112,11 @@
       <button data-st="qualificado" class="${ORDER[stg] >= 1 ? 'on' : ''}">Qualificado</button>
       <button data-st="checkout" class="${ORDER[stg] >= 2 ? 'on' : ''}">Quase fechando</button>
       <button data-act="sale" class="sale">💰 ${stg === 'comprou' ? 'Editar venda' : 'Venda'}</button></div>`;
+    if (ask) {
+      h += ask.back
+        ? `<div class="ask back">↩️ Voltar <b>${esc(STAGES[ask.from])}</b> para <b>${esc(STAGES[ask.to])}</b>?<br>Só corrige no Track — o evento que já foi pra Meta continua lá (a Meta não deixa apagar).<div class="acts"><button data-act="no">Cancelar</button><button data-act="yes">Voltar etapa</button></div></div>`
+        : `<div class="ask">⚠️ Marcar como <b>${esc(STAGES[ask.to])}</b>?<br>Isso envia o evento <b>${EVT[ask.to]}</b> pra Meta. Depois de enviado, não dá pra apagar na Meta.<div class="acts"><button data-act="no">Cancelar</button><button data-act="yes" class="sale">Confirmar e enviar</button></div></div>`;
+    }
     if (showSale) {
       const f = k => esc(l[k] == null ? '' : l[k]);
       h += `<div class="g">
@@ -137,15 +147,15 @@
     busy = false;
     if (r.error) { note('Track: ' + r.error, '#e74c3c'); render(r.error); return false; }
     lead = r.lead; const c = r.capi || {};
-    note(c.ok ? '✅ ' + STAGES[stage] + ' — evento enviado pra Meta' : c.skipped ? '✅ Salvo no Track' : '⚠️ Salvo, mas a Meta recusou o evento', c.ok || c.skipped ? '#00a884' : '#e67e22');
+    note(c.ok ? '✅ ' + STAGES[stage] + ' — evento enviado pra Meta' : c.skipped ? '✅ ' + STAGES[stage] + ' — ' + c.skipped : '⚠️ Salvo, mas a Meta recusou o evento', c.ok || c.skipped ? '#00a884' : '#e67e22');
     syncCrmStatus(stage);
     load(); return true;
   }
   // mantém o status do CRM igual ao do Track
   function syncCrmStatus(stage) {
-    const map = { comprou: 'comprou', qualificado: 'negociando', checkout: 'negociando' };
+    const map = { comprou: 'comprou', qualificado: 'negociando', checkout: 'negociando', contato: 'lead' };
     const sel = document.getElementById('cc-status'); if (!sel || !map[stage]) return;
-    if (sel.value === map[stage] || (sel.value === 'comprou' && stage !== 'comprou') || sel.value === 'posVenda') return;
+    if (sel.value === map[stage] || sel.value === 'posVenda') return;
     sel.value = map[stage];
     try { if (typeof saveC === 'function') saveC(); } catch (e) { }
   }
@@ -167,9 +177,12 @@
   async function onClick(e) {
     const b = e.target.closest('[data-act],[data-st]'); if (!b) return;
     if (b.dataset.st) {
-      const s = b.dataset.st;
-      if (lead && ORDER[lead.stage] >= ORDER[s] && lead.stage !== 'perdido') { note('Esse cliente já passou dessa etapa'); return; }
-      return setStage(s);
+      const s = b.dataset.st, cur = (lead && lead.stage) || 'contato';
+      if (ORDER[cur] >= ORDER[s] && cur !== 'perdido') {
+        // clicou numa etapa já marcada -> oferece voltar pra etapa anterior a ela
+        ask = { back: true, from: cur, to: PREV[s] };
+      } else ask = { back: false, to: s };
+      showSale = false; render(); return;
     }
     const a = b.dataset.act;
     if (a === 'connect') {
@@ -182,8 +195,10 @@
     }
     if (a === 'cfg') { if (confirm('Desconectar o Zambonini Track desta extensão?')) { cfg = null; chrome.storage.local.remove('wcrm_track'); render(); } }
     if (a === 'refresh') load();
-    if (a === 'sale') { showSale = !showSale; render(); if (showSale) document.querySelector('#trk [data-f=sale_value]')?.focus(); }
+    if (a === 'sale') { ask = null; showSale = !showSale; render(); if (showSale) document.querySelector('#trk [data-f=sale_value]')?.focus(); }
     if (a === 'cancel') { showSale = false; render(); }
+    if (a === 'no') { ask = null; render(); }
+    if (a === 'yes' && ask) { const q = ask; ask = null; setStage(q.to); }
     if (a === 'save') saveSale();
   }
 
@@ -194,7 +209,7 @@
     const ph = String(e.data.phone || '').replace(/\D/g, '');
     const changed = ph !== chat.phone;
     chat = { phone: ph, push: e.data.push || '', name: e.data.name || '', group: !!e.data.group };
-    if (changed) { lead = null; events = []; showSale = false; }
+    if (changed) { lead = null; events = []; showSale = false; ask = null; }
     load();
   });
   // mudou o Status do contato no CRM -> acompanha no Track
@@ -202,7 +217,7 @@
     if (e.target.id !== 'cc-status' || !cfg || !chat.phone) return;
     const v = e.target.value;
     if (v === 'comprou' && (!lead || lead.stage !== 'comprou')) { showSale = true; render(); document.querySelector('#trk [data-f=sale_value]')?.focus(); note('💰 Preencha o valor pra enviar a venda pra Meta'); }
-    if (v === 'negociando' && (!lead || ORDER[lead.stage] < 1)) setStage('qualificado');
+    if (v === 'negociando' && (!lead || ORDER[lead.stage] < 1)) { ask = { back: false, to: 'qualificado' }; showSale = false; render(); }
   });
 
   chrome.storage.local.get('wcrm_track', o => { cfg = o.wcrm_track || null; render(); requestChat(); });
