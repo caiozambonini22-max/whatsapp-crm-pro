@@ -11,6 +11,24 @@
   let cfg = null, chat = { phone: '', push: '', name: '' }, lead = null, events = [], busy = false, showSale = false, reqSeq = 0, ask = null;
   const EVT = { qualificado: 'AddToCart', checkout: 'InitiateCheckout', comprou: 'Purchase' };
   const PREV = { qualificado: 'contato', checkout: 'qualificado', comprou: 'checkout' };
+  let winId = null;
+  // abre a ficha completa do Track numa janela grande (valor, data/hora, produto, dados, conversa)
+  function openWin(venda) {
+    if (!chat.phone) return;
+    const u = (cfg && cfg.url || DEF_URL) + '/?phone=' + encodeURIComponent(chat.phone) + '&push=' + encodeURIComponent(chat.push || chat.name || '') + (venda ? '&venda=1' : '');
+    const w = 860, h = 920, left = Math.max(0, Math.round((screen.availWidth - w) / 2)), top = Math.max(0, Math.round((screen.availHeight - h) / 2));
+    try {
+      if (winId != null) chrome.windows.remove(winId, () => void chrome.runtime.lastError);
+      chrome.windows.create({ url: u, type: 'popup', width: w, height: Math.min(h, screen.availHeight), left, top }, win => { winId = win && win.id; });
+    } catch (e) { window.open(u, '_blank'); }
+  }
+  try {
+    chrome.windows.onRemoved.addListener(async id => {
+      if (id !== winId) return; winId = null;
+      const antes = lead && lead.stage; await load();
+      if (lead && lead.stage === 'comprou' && antes !== 'comprou') syncCrmStatus('comprou');
+    });
+  } catch (e) { }
 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const brl = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -111,7 +129,8 @@
     h += `<div class="acts">
       <button data-st="qualificado" class="${ORDER[stg] >= 1 ? 'on' : ''}">Qualificado</button>
       <button data-st="checkout" class="${ORDER[stg] >= 2 ? 'on' : ''}">Quase fechando</button>
-      <button data-act="sale" class="sale">💰 ${stg === 'comprou' ? 'Editar venda' : 'Venda'}</button></div>`;
+      <button data-act="sale" class="sale">💰 ${stg === 'comprou' ? 'Editar venda' : 'Venda'}</button></div>
+      <div style="text-align:right;margin-top:6px"><a data-act="ficha">📋 Abrir ficha completa</a></div>`;
     if (ask) {
       h += ask.back
         ? `<div class="ask back">↩️ Voltar <b>${esc(STAGES[ask.from])}</b> para <b>${esc(STAGES[ask.to])}</b>?<br>Só corrige no Track — o evento que já foi pra Meta continua lá (a Meta não deixa apagar).<div class="acts"><button data-act="no">Cancelar</button><button data-act="yes">Voltar etapa</button></div></div>`
@@ -195,7 +214,8 @@
     }
     if (a === 'cfg') { if (confirm('Desconectar o Zambonini Track desta extensão?')) { cfg = null; chrome.storage.local.remove('wcrm_track'); render(); } }
     if (a === 'refresh') load();
-    if (a === 'sale') { ask = null; showSale = !showSale; render(); if (showSale) document.querySelector('#trk [data-f=sale_value]')?.focus(); }
+    if (a === 'sale') { ask = null; showSale = false; render(); openWin(true); }
+    if (a === 'ficha') openWin(false);
     if (a === 'cancel') { showSale = false; render(); }
     if (a === 'no') { ask = null; render(); }
     if (a === 'yes' && ask) { const q = ask; ask = null; setStage(q.to); }
@@ -216,7 +236,7 @@
   document.addEventListener('change', e => {
     if (e.target.id !== 'cc-status' || !cfg || !chat.phone) return;
     const v = e.target.value;
-    if (v === 'comprou' && (!lead || lead.stage !== 'comprou')) { showSale = true; render(); document.querySelector('#trk [data-f=sale_value]')?.focus(); note('💰 Preencha o valor pra enviar a venda pra Meta'); }
+    if (v === 'comprou' && (!lead || lead.stage !== 'comprou')) { openWin(true); note('💰 Preencha a venda na janela do Track pra enviar pra Meta'); }
     if (v === 'negociando' && (!lead || ORDER[lead.stage] < 1)) { ask = { back: false, to: 'qualificado' }; showSale = false; render(); }
   });
 
