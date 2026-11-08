@@ -598,7 +598,7 @@
     setTimeout(() => {
       bridgeCall('ACTIVE', {}, 4000).then(r => {
         const ok = r && r.ok && !r.group;
-        document.getElementById('wcrm-iframe')?.contentWindow?.postMessage({ type: 'TRACK_CHAT', name: name || '', phone: ok ? (r.phone || '') : '', push: ok ? (r.push || r.name || '') : '', group: !!(r && r.group) }, '*');
+        document.getElementById('wcrm-iframe')?.contentWindow?.postMessage({ type: 'TRACK_CHAT', name: name || '', phone: ok ? (r.phone || '') : '', lid: ok ? (r.lid || '') : '', push: ok ? (r.push || r.name || '') : '', group: !!(r && r.group) }, '*');
       });
     }, 350);
   }

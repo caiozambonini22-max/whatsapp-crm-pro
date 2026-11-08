@@ -96,7 +96,7 @@
   async function load() {
     if (!cfg || !chat.phone) { render(); return; }
     const my = ++reqSeq; busy = true; render();
-    const r = await api('lead?a=' + encodeURIComponent(cfg.a) + '&phone=' + encodeURIComponent(chat.phone));
+    const r = await api('lead?a=' + encodeURIComponent(cfg.a) + '&phone=' + encodeURIComponent(chat.phone) + (chat.lid ? '&lid=' + chat.lid : ''));
     if (my !== reqSeq) return; // trocou de conversa no meio
     busy = false;
     if (r.error) { lead = null; events = []; render(r.error); return; }
@@ -108,7 +108,7 @@
   async function loadAI(onlyCache) {
     if (!cfg || !chat.phone) { ai = null; renderAI(); return; }
     const my = ++aiSeq; aiBusy = !onlyCache; aiInfo = ''; renderAI();
-    const r = await api('ai/lead', { phone: chat.phone, only_cache: !!onlyCache, force: !onlyCache && !!ai });
+    const r = await api('ai/lead', { phone: chat.phone, lid: chat.lid, only_cache: !!onlyCache, force: !onlyCache && !!ai });
     if (my !== aiSeq) return;
     aiBusy = false;
     if (r.error && !r.ai) { ai = null; aiInfo = r.error; renderAI(); return; }
@@ -148,7 +148,7 @@
   async function suggest() {
     const hint = (document.getElementById('trk-hint')?.value || (sug && sug.hint) || '').trim();
     const my = aiSeq; sugBusy = true; renderAI();
-    const r = await api('ai/reply', { phone: chat.phone, hint });
+    const r = await api('ai/reply', { phone: chat.phone, lid: chat.lid, hint });
     if (my !== aiSeq) return;
     sugBusy = false;
     if (r.error || !r.text) { sug = null; renderAI(); note('IA: ' + (r.error || 'sem sugestão'), '#e74c3c'); return; }
@@ -244,7 +244,7 @@
   async function setStage(stage, extra) {
     if (busy) return;
     busy = true;
-    const body = Object.assign({ phone: chat.phone, push_name: chat.push, stage }, extra || {});
+    const body = Object.assign({ phone: chat.phone, lid: chat.lid, push_name: chat.push, stage }, extra || {});
     const r = await api('stage', body);
     busy = false;
     if (r.error) { note('Track: ' + r.error, '#e74c3c'); render(r.error); return false; }
@@ -311,9 +311,9 @@
   function requestChat() { try { window.parent.postMessage({ type: 'TRACK_GET_CHAT' }, '*'); } catch (e) { } }
   window.addEventListener('message', e => {
     if (e.data?.type !== 'TRACK_CHAT') return;
-    const ph = String(e.data.phone || '').replace(/\D/g, '');
+    const ph = String(e.data.phone || '').replace(/\D/g, '') || (e.data.lid ? '' : '');
     const changed = ph !== chat.phone;
-    chat = { phone: ph, push: e.data.push || '', name: e.data.name || '', group: !!e.data.group };
+    chat = { phone: ph, lid: String(e.data.lid || '').replace(/\D/g, ''), push: e.data.push || '', name: e.data.name || '', group: !!e.data.group };
     if (changed) { lead = null; events = []; showSale = false; ask = null; ai = null; aiInfo = ''; sug = null; sugBusy = false; aiSeq++; renderAI(); }
     load();
   });
