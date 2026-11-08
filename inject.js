@@ -179,7 +179,9 @@
     var c = arr(s.C).find(function (x) { return x.active; });
     if (!c) return { ok: false, reason: 'nenhuma conversa aberta' };
     var ct = c.contact || {}; var isG = !!(c.isGroup || (c.id && c.id.server === 'g.us'));
-    return { ok: true, id: c.id && c.id._serialized, name: chatName(c), saved: (ct.name || '').toString(), push: (ct.pushname || ct.shortName || '').toString(), group: isG };
+    var phone = ''; // Zambonini Track: telefone da conversa (funciona também em conversas @lid)
+    try { if (c.id && c.id.server === 'c.us') phone = String(c.id.user || ''); else { var pn = ct.phoneNumber || (ct.id && ct.id.server === 'c.us' ? ct.id : null); if (pn) phone = String(pn.user || String(pn._serialized || pn).split('@')[0]); } } catch (e) { }
+    return { ok: true, id: c.id && c.id._serialized, name: chatName(c), saved: (ct.name || '').toString(), push: (ct.pushname || ct.shortName || '').toString(), group: isG, phone: phone };
   }
   // filtro da lista de conversas (lado esquerdo)
   var customSet = null;

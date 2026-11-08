@@ -565,7 +565,9 @@
           type: 'CONTACT', name: getContact(), waLabels: getWALabels(),
           allLabels: getAllWALabels(), conversations: getConversations()
         }, '*');
+        sendTrackChat(getContact());
         break;
+      case 'TRACK_GET_CHAT': sendTrackChat(getContact()); break;
       case 'SYNC_LABELS':
         bridgeSend({ kind: 'SYNC' });
         setTimeout(() => iframe?.contentWindow?.postMessage({ type: 'CONVERSATIONS', conversations: getConversations(), allLabels: getAllWALabels(), bridge: bridge ? { ok: !!bridge.ok, reason: bridge.reason || '', labels: bridge.labels || [], total: (bridge.chats || []).length } : { ok: false, reason: 'ponte não respondeu (recarregue o WhatsApp Web com F5)' } }, '*'), 900);
@@ -591,6 +593,16 @@
     }
   });
 
+  // ── Zambonini Track: avisa o painel qual telefone está aberto ──
+  function sendTrackChat(name) {
+    setTimeout(() => {
+      bridgeCall('ACTIVE', {}, 4000).then(r => {
+        const ok = r && r.ok && !r.group;
+        document.getElementById('wcrm-iframe')?.contentWindow?.postMessage({ type: 'TRACK_CHAT', name: name || '', phone: ok ? (r.phone || '') : '', push: ok ? (r.push || r.name || '') : '', group: !!(r && r.group) }, '*');
+      });
+    }, 350);
+  }
+
   // ── Monitor de conversa — só avisa o painel (NÃO usado no envio) ──
   let lastContact = undefined, debounce = null;
   function updateContactCache() {
@@ -600,6 +612,7 @@
       document.getElementById('wcrm-iframe')?.contentWindow?.postMessage(
         { type: 'CONTACT', name: c, waLabels: getWALabels(), allLabels: getAllWALabels(), conversations: getConversations() }, '*'
       );
+      sendTrackChat(c);
     }
   }
   new MutationObserver(() => {
