@@ -8,7 +8,7 @@
   const STAGES = { contato: 'Fez contato', qualificado: 'Qualificado', checkout: 'Quase fechando', comprou: 'Comprou ✅', perdido: 'Perdido' };
   const ORIG = { meta_ads: '📢 Anúncio Meta', bio: '🔗 Link da bio', nao_rastreada: '❔ Não rastreada' };
   const ORDER = { contato: 0, qualificado: 1, checkout: 2, comprou: 3, perdido: -1 };
-  let cfg = null, chat = { phone: '', push: '', name: '' }, lead = null, events = [], busy = false, showSale = false, reqSeq = 0, ask = null;
+  let hidden = false, cfg = null, chat = { phone: '', push: '', name: '' }, lead = null, events = [], busy = false, showSale = false, reqSeq = 0, ask = null;
   const EVT = { qualificado: 'AddToCart', checkout: 'InitiateCheckout', comprou: 'Purchase' };
   const PREV = { qualificado: 'contato', checkout: 'qualificado', comprou: 'checkout' };
   let winId = null, ai = null, aiInfo = '', aiBusy = false, aiSeq = 0, sug = null, sugBusy = false;
@@ -185,11 +185,14 @@
   // ---------- tela ----------
   function render(err) {
     const box = mount(); if (!box) return;
+    if (!cfg && hidden) { box.style.display = 'none'; return; }
+    box.style.display = '';
     if (!cfg) {
       box.innerHTML = `<div class="th">📍 Zambonini Track<span class="sp"></span></div>
         <div class="mut" style="margin:4px 0 6px">Conecte pra ver a origem do lead e marcar vendas que vão direto pra Meta.</div>
         <div class="g"><label>Conta<input id="trk-a" placeholder="zambonini"></label><label>Senha<input id="trk-k" type="password"></label></div>
-        <div class="acts"><button class="sale" data-act="connect">Conectar</button></div>`;
+        <div class="acts"><button data-act="hide">Ocultar</button><button class="sale" data-act="connect">Conectar</button></div>
+        <div class="mut" style="margin-top:6px">Não usa o Track? Clique em Ocultar. Pra mostrar de novo: clique no painel e aperte Ctrl+Shift+T.</div>`;
       return;
     }
     if (!chat.phone) { box.innerHTML = `<div class="th">📍 Track<span class="sp"></span><a data-act="cfg">⚙</a></div><div class="mut">${chat.group ? 'Grupos não são rastreados.' : 'Abra uma conversa pra ver os dados do Track.'}</div>`; return; }
@@ -284,6 +287,7 @@
       showSale = false; render(); return;
     }
     const a = b.dataset.act;
+    if (a === 'hide') { hidden = true; chrome.storage.local.set({ wcrm_track_hidden: true }); render(); note('Track oculto neste computador'); return; }
     if (a === 'connect') {
       const ac = (document.getElementById('trk-a').value || '').trim().toLowerCase(), k = document.getElementById('trk-k').value;
       if (!ac || !k) return note('Preencha conta e senha', '#e74c3c');
@@ -322,5 +326,7 @@
     if (v === 'negociando' && (!lead || ORDER[lead.stage] < 1)) { ask = { back: false, to: 'qualificado' }; showSale = false; render(); }
   });
 
-  chrome.storage.local.get('wcrm_track', o => { cfg = o.wcrm_track || null; render(); requestChat(); });
+  chrome.storage.local.get(['wcrm_track', 'wcrm_track_hidden'], o => { cfg = o.wcrm_track || null; hidden = !!o.wcrm_track_hidden && !cfg; render(); requestChat(); });
+  // atalho pra reexibir o Track se foi ocultado: Ctrl+Shift+T dentro do painel
+  document.addEventListener('keydown', e => { if (e.ctrlKey && e.shiftKey && (e.key === 'T' || e.key === 't')) { hidden = false; chrome.storage.local.remove('wcrm_track_hidden'); render(); } });
 })();
