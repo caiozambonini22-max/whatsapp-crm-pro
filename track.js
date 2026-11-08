@@ -8,6 +8,11 @@
   const STAGES = { contato: 'Fez contato', qualificado: 'Qualificado', checkout: 'Quase fechando', comprou: 'Comprou ✅', perdido: 'Perdido' };
   const ORIG = { meta_ads: '📢 Anúncio Meta', bio: '🔗 Link da bio', nao_rastreada: '❔ Não rastreada' };
   const ORDER = { contato: 0, qualificado: 1, checkout: 2, comprou: 3, perdido: -1 };
+  // de onde veio o lead, mostrado na hora de confirmar o envio
+  function adInfo(l) {
+    if (l.origin === 'meta_ads') return `<div class="adc">📢 Veio do anúncio: <b>${esc(l.ad_title || '(sem título)')}</b>${l.ad_id ? `<br><span class="mut">ID ${esc(l.ad_id)}</span>` : ''}${l.first_msg_at ? `<span class="mut"> · clique em ${new Date(l.first_msg_at).toLocaleDateString('pt-BR')}</span>` : ''}</div>`;
+    return `<div class="adc warn">Origem: <b>${esc(ORIG[l.origin] || l.origin)}</b>, sem anúncio identificado. O evento vai pra Meta sem o clique do anúncio, então não conta como resultado de campanha.</div>`;
+  }
   let hidden = false, cfg = null, chat = { phone: '', push: '', name: '' }, lead = null, events = [], busy = false, showSale = false, reqSeq = 0, ask = null;
   const EVT = { qualificado: 'AddToCart', checkout: 'InitiateCheckout', comprou: 'Purchase' };
   const PREV = { qualificado: 'contato', checkout: 'qualificado', comprou: 'checkout' };
@@ -56,6 +61,8 @@
   #trk input:focus{border-color:#00a884}
   #trk .ev{font-size:10px;margin-top:6px}#trk .ok{color:#25d366}#trk .no{color:#f15c6d}
   #trk a{color:#53bdeb;cursor:pointer;font-size:11px}
+  #trk .adc{margin-top:6px;padding:5px 6px;border-radius:6px;background:#0b2a20;color:#c9f0dc;font-size:11px}
+  #trk .adc.warn{background:#2b1d1d;color:#f3b4b4}
   #trk .ask{margin-top:8px;padding:8px;border-radius:8px;background:#2a2410;border:1px solid #6b5a1e;font-size:11px;color:#f5d97a}
   #trk .ask.back{background:#1d2630;border-color:#2a3942;color:#aebac1}
   #trk .ask .acts{margin-top:6px}
@@ -202,7 +209,7 @@
     const stg = l.stage || 'contato';
     let h = `<div class="th">📍 Track <span class="pill ${esc(l.origin)}">${esc(ORIG[l.origin] || l.origin)}</span><span class="pill ${esc(stg)}">${esc(STAGES[stg] || stg)}</span><span class="sp"></span><a data-act="refresh" title="Atualizar">↻</a> <a data-act="cfg" title="Configurar">⚙</a></div>`;
     if (!lead) h += `<div class="mut" style="margin-top:4px">Conversa anterior ao Track (${esc(fone(chat.phone))}). Se marcar venda, ela é registrada e enviada pra Meta mesmo assim.</div>`;
-    if (l.ad_title) h += `<div class="ad" title="${esc(l.ad_title)}">📢 ${esc(l.ad_title)}</div>`;
+    if (l.ad_title || l.ad_id) h += `<div class="ad" title="${esc(l.ad_title || '')}">📢 ${esc(l.ad_title || 'Anúncio')}${l.ad_url ? ` · <a href="${esc(l.ad_url)}" target="_blank">ver</a>` : ''}</div>`;
     if (lead && lead.stage === 'comprou') h += `<div class="mut" style="margin-top:4px">💰 Venda: <b style="color:#25d366">${brl(lead.sale_value)}</b>${lead.product ? ' · ' + esc(lead.product) : ''}</div>`;
     const auto = [lead && lead.zip && 'CEP ' + String(lead.zip).replace(/(\d{5})(\d{3})/, '$1-$2'), lead && lead.city && lead.city + (lead.state ? '/' + lead.state : ''), lead && lead.email && 'e-mail'].filter(Boolean);
     if (auto.length && stg !== 'comprou') h += `<div class="mut" style="margin-top:6px;color:#25d366">📍 Já capturado: ${esc(auto.join(' · '))} — vai junto na venda</div>`;
@@ -217,7 +224,7 @@
         ? `<div class="ask back">✗ Marcar este lead como <b>Perdido</b>?<br>Não envia nada pra Meta — serve pros seus relatórios. Se ele voltar a comprar, é só marcar a venda normalmente.<div class="acts"><button data-act="no">Cancelar</button><button data-act="yes" style="background:#e74c3c;border-color:#e74c3c;color:#fff">Marcar perdido</button></div></div>`
         : ask.back
         ? `<div class="ask back">↩️ Voltar <b>${esc(STAGES[ask.from])}</b> para <b>${esc(STAGES[ask.to])}</b>?<br>Só corrige no Track — o evento que já foi pra Meta continua lá (a Meta não deixa apagar).<div class="acts"><button data-act="no">Cancelar</button><button data-act="yes">Voltar etapa</button></div></div>`
-        : `<div class="ask">⚠️ Marcar como <b>${esc(STAGES[ask.to])}</b>?<br>Isso envia o evento <b>${EVT[ask.to]}</b> pra Meta. Depois de enviado, não dá pra apagar na Meta.<div class="acts"><button data-act="no">Cancelar</button><button data-act="yes" class="sale">Confirmar e enviar</button></div></div>`;
+        : `<div class="ask">⚠️ Marcar como <b>${esc(STAGES[ask.to])}</b>?<br>Isso envia o evento <b>${EVT[ask.to]}</b> pra Meta. Depois de enviado, não dá pra apagar na Meta.${adInfo(l)}<div class="acts"><button data-act="no">Cancelar</button><button data-act="yes" class="sale">Confirmar e enviar</button></div></div>`;
     }
     if (showSale) {
       const f = k => esc(l[k] == null ? '' : l[k]);
