@@ -11,7 +11,7 @@
   let cfg = null, chat = { phone: '', push: '', name: '' }, lead = null, events = [], busy = false, showSale = false, reqSeq = 0, ask = null;
   const EVT = { qualificado: 'AddToCart', checkout: 'InitiateCheckout', comprou: 'Purchase' };
   const PREV = { qualificado: 'contato', checkout: 'qualificado', comprou: 'checkout' };
-  let winId = null, ai = null, aiInfo = '', aiBusy = false, aiSeq = 0;
+  let winId = null, ai = null, aiInfo = '', aiBusy = false, aiSeq = 0, sug = null, sugBusy = false;
   // abre a ficha completa do Track numa janela grande (valor, data/hora, produto, dados, conversa)
   function openWin(venda) {
     if (!chat.phone) return;
@@ -135,12 +135,33 @@
       if (ex.length && (!lead || lead.stage !== 'comprou')) h += `<div class="mut" style="margin-top:6px">🧾 Dados do cliente achados na conversa: ${ex.length} — entram no "✨ Preencher com IA" da venda</div>`;
       h += `<div class="mut" style="margin-top:6px">${aiInfo ? '⚠️ ' + esc(aiInfo) + ' · ' : ''}analisado ${new Date(ai.updated_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>`;
     }
+    // 💡 Sugerir resposta — só gasta IA quando clica
+    h += `<div class="k" style="margin-top:10px">💡 Sugerir resposta</div>`;
+    if (sugBusy) h += `<div class="mut">Escrevendo no seu tom…</div>`;
+    else if (sug) h += `<div class="mut">${sug.kind === 'followup' ? 'Follow-up pra retomar a conversa' : 'Resposta pra última mensagem do cliente'} (pode editar):</div><textarea id="trk-sug">${esc(sug.text)}</textarea>
+      <div class="acts"><button data-ai="sug-copy">📋 Copiar</button><button class="pri" data-ai="sug-insert">✍️ Inserir no WhatsApp</button></div>
+      <div style="text-align:right;margin-top:4px"><a data-ai="sug-new">↻ Outra sugestão</a></div>`;
+    else h += `<input id="trk-hint" placeholder="Orientação opcional: ex. oferecer frete grátis" style="width:100%;box-sizing:border-box;background:#202c33;border:1px solid #2a3942;border-radius:7px;padding:6px 8px;color:#e9edef;font-size:11px;margin-top:4px">
+      <div class="acts"><button class="pri" data-ai="sug">💡 Sugerir resposta</button></div>`;
     el.innerHTML = h;
+  }
+  async function suggest() {
+    const hint = (document.getElementById('trk-hint')?.value || (sug && sug.hint) || '').trim();
+    const my = aiSeq; sugBusy = true; renderAI();
+    const r = await api('ai/reply', { phone: chat.phone, hint });
+    if (my !== aiSeq) return;
+    sugBusy = false;
+    if (r.error || !r.text) { sug = null; renderAI(); note('IA: ' + (r.error || 'sem sugestão'), '#e74c3c'); return; }
+    sug = { text: r.text, kind: r.kind, hint }; renderAI();
   }
   function onAiClick(e) {
     const b = e.target.closest('[data-ai]'); if (!b) return;
     const a = b.dataset.ai;
     if (a === 'run') loadAI(false);
+    if (a === 'sug' || a === 'sug-new') suggest();
+    const st = () => (document.getElementById('trk-sug')?.value || '').trim();
+    if (a === 'sug-copy') navigator.clipboard.writeText(st()).then(() => note('📋 Copiado'), () => note('Não consegui copiar'));
+    if (a === 'sug-insert') { const t = st(); if (!t) return; if (/\[[^\]]+\]/.test(t)) note('⚠️ Tem campo entre [colchetes] pra você completar'); try { window.parent.postMessage({ type: 'PREFILL', text: t }, '*'); note('✍️ Colocado na caixa do WhatsApp — revise e envie'); sug = null; renderAI(); } catch (x) { } }
     const txt = () => (document.getElementById('trk-fu')?.value || '').trim();
     if (a === 'copy') { navigator.clipboard.writeText(txt()).then(() => note('📋 Copiado'), () => note('Não consegui copiar')); }
     if (a === 'insert') { const t = txt(); if (!t) return; try { window.parent.postMessage({ type: 'PREFILL', text: t }, '*'); note('✍️ Mensagem colocada na caixa do WhatsApp — revise e aperte enviar'); } catch (x) { } }
@@ -289,7 +310,7 @@
     const ph = String(e.data.phone || '').replace(/\D/g, '');
     const changed = ph !== chat.phone;
     chat = { phone: ph, push: e.data.push || '', name: e.data.name || '', group: !!e.data.group };
-    if (changed) { lead = null; events = []; showSale = false; ask = null; ai = null; aiInfo = ''; aiSeq++; renderAI(); }
+    if (changed) { lead = null; events = []; showSale = false; ask = null; ai = null; aiInfo = ''; sug = null; sugBusy = false; aiSeq++; renderAI(); }
     load();
   });
   // mudou o Status do contato no CRM -> acompanha no Track
