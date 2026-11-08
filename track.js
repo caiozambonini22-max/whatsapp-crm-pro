@@ -11,7 +11,7 @@
   let cfg = null, chat = { phone: '', push: '', name: '' }, lead = null, events = [], busy = false, showSale = false, reqSeq = 0, ask = null;
   const EVT = { qualificado: 'AddToCart', checkout: 'InitiateCheckout', comprou: 'Purchase' };
   const PREV = { qualificado: 'contato', checkout: 'qualificado', comprou: 'checkout' };
-  let winId = null;
+  let winId = null, ai = null, aiInfo = '', aiBusy = false, aiSeq = 0;
   // abre a ficha completa do Track numa janela grande (valor, data/hora, produto, dados, conversa)
   function openWin(venda) {
     if (!chat.phone) return;
@@ -58,7 +58,17 @@
   #trk a{color:#53bdeb;cursor:pointer;font-size:11px}
   #trk .ask{margin-top:8px;padding:8px;border-radius:8px;background:#2a2410;border:1px solid #6b5a1e;font-size:11px;color:#f5d97a}
   #trk .ask.back{background:#1d2630;border-color:#2a3942;color:#aebac1}
-  #trk .ask .acts{margin-top:6px}`;
+  #trk .ask .acts{margin-top:6px}
+  #trk-ai{background:#111b21;border:1px solid #2a3942;border-radius:10px;padding:10px;margin:6px 0 4px;font-size:12px;color:#d1d7db}
+  #trk-ai .th{display:flex;align-items:center;gap:6px;font-weight:700;font-size:12px;color:#e9edef}#trk-ai .sp{flex:1}
+  #trk-ai .tmp{font-size:10px;padding:2px 8px;border-radius:99px;font-weight:700}
+  #trk-ai .tmp.quente{background:#3a1a0b;color:#ff8a4c}#trk-ai .tmp.morno{background:#3a320b;color:#f5d36b}#trk-ai .tmp.frio{background:#0f2340;color:#7db3ff}
+  #trk-ai .k{color:#8696a0;font-size:10px;text-transform:uppercase;letter-spacing:.4px;margin-top:8px;font-weight:600}
+  #trk-ai .fu{background:#0b3d2e;border:1px solid #155e46;border-radius:8px;padding:8px;margin-top:4px;white-space:pre-wrap;color:#e9edef}
+  #trk-ai textarea{width:100%;box-sizing:border-box;background:#0b3d2e;border:1px solid #155e46;border-radius:8px;padding:8px;color:#e9edef;font:inherit;font-size:12px;min-height:70px;resize:vertical;margin-top:4px}
+  #trk-ai .acts{display:flex;gap:5px;margin-top:6px}#trk-ai .acts button{flex:1;padding:7px 4px;border-radius:8px;border:1px solid #2a3942;background:#202c33;color:#e9edef;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
+  #trk-ai .acts button.pri{background:#00a884;border-color:#00a884;color:#fff}#trk-ai .mut{color:#8696a0;font-size:11px}#trk-ai a{color:#53bdeb;cursor:pointer;font-size:11px}
+  #trk-ai .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}#trk-ai .tag{font-size:10px;padding:1px 7px;border-radius:99px;background:#2a3942;color:#aebac1}`;
   document.head.appendChild(st);
 
   // ---------- caixa no painel do contato ----------
@@ -67,6 +77,8 @@
     const card = document.querySelector('#sec-contact .cc-card'); if (!card) return null;
     const box = document.createElement('div'); box.id = 'trk';
     card.insertAdjacentElement('afterend', box);
+    const aib = document.createElement('div'); aib.id = 'trk-ai'; box.insertAdjacentElement('afterend', aib);
+    aib.addEventListener('click', onAiClick);
     box.addEventListener('click', onClick);
     box.addEventListener('input', e => { if (e.target.dataset.f) updScoreLive(); });
     box.addEventListener('focusout', e => { if (e.target.dataset.f === 'zip') viaCep(); });
@@ -89,6 +101,49 @@
     busy = false;
     if (r.error) { lead = null; events = []; render(r.error); return; }
     lead = r.lead; events = r.events || []; render();
+    loadAI(true);
+  }
+
+  // ---------- Agente de IA (caixa 🤖) ----------
+  async function loadAI(onlyCache) {
+    if (!cfg || !chat.phone) { ai = null; renderAI(); return; }
+    const my = ++aiSeq; aiBusy = !onlyCache; aiInfo = ''; renderAI();
+    const r = await api('ai/lead', { phone: chat.phone, only_cache: !!onlyCache, force: !onlyCache && !!ai });
+    if (my !== aiSeq) return;
+    aiBusy = false;
+    if (r.error && !r.ai) { ai = null; aiInfo = r.error; renderAI(); return; }
+    ai = r.ai; aiInfo = r.stale && r.new_msgs > 0 ? r.new_msgs + ' mensagem(ns) nova(s) desde a última análise' : (!r.ai && r.new_msgs ? 'Ainda não analisada' : '');
+    renderAI();
+  }
+  function renderAI() {
+    const el = document.getElementById('trk-ai'); if (!el) return;
+    if (!cfg || !chat.phone) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    const T = { quente: '🔥 Quente', morno: '🌤 Morno', frio: '❄️ Frio' };
+    let h = `<div class="th">🤖 Agente IA ${ai ? `<span class="tmp ${esc(ai.temperature)}">${T[ai.temperature] || ai.temperature}</span>` : ''}<span class="sp"></span>${ai ? `<a data-ai="run" title="Analisar de novo">↻</a>` : ''}</div>`;
+    if (aiBusy) h += `<div class="mut" style="margin-top:6px">Lendo a conversa inteira… (alguns segundos)</div>`;
+    else if (!ai) h += `<div class="mut" style="margin-top:6px">${esc(aiInfo || 'Resumo, temperatura do lead e follow-up sugerido.')}</div><div class="acts"><button class="pri" data-ai="run">✨ Analisar conversa</button></div>`;
+    else {
+      if (ai.reason) h += `<div class="mut" style="margin-top:4px">${esc(ai.reason)}</div>`;
+      h += `<div class="k">Resumo</div><div>${esc(ai.summary)}</div>`;
+      if ((ai.interests || []).length) h += `<div class="k">Interesse</div><div class="tags">${ai.interests.map(x => `<span class="tag">${esc(x)}</span>`).join('')}</div>`;
+      if ((ai.objections || []).length) h += `<div class="k">Dúvidas / objeções</div><div class="tags">${ai.objections.map(x => `<span class="tag">${esc(x)}</span>`).join('')}</div>`;
+      if (ai.next_step) h += `<div class="k">Próximo passo</div><div>👉 ${esc(ai.next_step)}</div>`;
+      if (ai.followup) h += `<div class="k">Follow-up sugerido (pode editar)</div><textarea id="trk-fu">${esc(ai.followup)}</textarea>
+        <div class="acts"><button data-ai="copy">📋 Copiar</button><button class="pri" data-ai="insert">✍️ Inserir no WhatsApp</button></div>`;
+      const ex = Object.keys(ai.extracted || {}).filter(k => ai.extracted[k]);
+      if (ex.length && (!lead || lead.stage !== 'comprou')) h += `<div class="mut" style="margin-top:6px">🧾 Dados do cliente achados na conversa: ${ex.length} — entram no "✨ Preencher com IA" da venda</div>`;
+      h += `<div class="mut" style="margin-top:6px">${aiInfo ? '⚠️ ' + esc(aiInfo) + ' · ' : ''}analisado ${new Date(ai.updated_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>`;
+    }
+    el.innerHTML = h;
+  }
+  function onAiClick(e) {
+    const b = e.target.closest('[data-ai]'); if (!b) return;
+    const a = b.dataset.ai;
+    if (a === 'run') loadAI(false);
+    const txt = () => (document.getElementById('trk-fu')?.value || '').trim();
+    if (a === 'copy') { navigator.clipboard.writeText(txt()).then(() => note('📋 Copiado'), () => note('Não consegui copiar')); }
+    if (a === 'insert') { const t = txt(); if (!t) return; try { window.parent.postMessage({ type: 'PREFILL', text: t }, '*'); note('✍️ Mensagem colocada na caixa do WhatsApp — revise e aperte enviar'); } catch (x) { } }
   }
 
   // ---------- força dos dados ----------
@@ -234,7 +289,7 @@
     const ph = String(e.data.phone || '').replace(/\D/g, '');
     const changed = ph !== chat.phone;
     chat = { phone: ph, push: e.data.push || '', name: e.data.name || '', group: !!e.data.group };
-    if (changed) { lead = null; events = []; showSale = false; ask = null; }
+    if (changed) { lead = null; events = []; showSale = false; ask = null; ai = null; aiInfo = ''; aiSeq++; renderAI(); }
     load();
   });
   // mudou o Status do contato no CRM -> acompanha no Track
