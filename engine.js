@@ -444,7 +444,7 @@
       const rule = (cfg.rules || []).find(r => r.id === x.ruleId) || { trigger: {} };
       if (choice === 'keep') { x.state = 'waiting'; x.ignoreInUntil = now; x.dueAt = Math.max(x.dueAt || 0, now + 2 * 60e3); }
       else if (choice === 'reset') { x.state = 'waiting'; x.ignoreInUntil = now; x.enteredAt = now; x.dueAt = dueAtFor(rule, now); x.fails = 0; }
-      else if (choice === 'retry') { if (!['waiting', 'stale', 'error', 'approval', 'asked'].includes(x.state)) return; x.state = 'waiting'; x.fails = 0; x.dueAt = now; delete x.reason; }
+      else if (choice === 'retry') { if (!['waiting', 'stale', 'error', 'approval', 'asked'].includes(x.state)) return; x.force = true; x.state = 'waiting'; x.fails = 0; x.dueAt = now; delete x.reason; }
       else if (choice === 'release') { x.state = 'waiting'; x.dueAt = now; }
       else if (choice === 'approve') { x.state = 'waiting'; x.approved = true; x.dueAt = Math.min(x.dueAt || now, now); }
       else if (choice === 'cancel') { x.state = 'cancelled'; x.reason = 'cancelado por você'; x.endedAt = now; }
@@ -672,6 +672,17 @@
     }
     return out;
   }
+  // ANTI-DUPLICIDADE: mesmo conteúdo para o mesmo contato em menos de 2h = não reenvia (vale para qualquer follow/resposta automática)
+  const sentKey = (enr, t) => (enr.nk || norm(enr.contact)) + '|' + norm(String(t)).slice(0, 160);
+  async function dupSent(enr, t) {
+    if (enr.force) return false;
+    const rt = await getRt(); const at = (rt.lastSend || {})[sentKey(enr, t)];
+    if (at && Date.now() - at < 2 * 3600e3) { await addLog('🛑 Duplicada evitada: "' + enr.contact + '" já recebeu esse mesmo conteúdo há ' + Math.round((Date.now() - at) / 60000) + ' min — não reenviei'); return true; }
+    return false;
+  }
+  async function noteSent(enr, t) {
+    await mutateRt(r => { r.lastSend = r.lastSend || {}; const n = Date.now(); r.lastSend[sentKey(enr, t)] = n; Object.keys(r.lastSend).forEach(k => { if (n - r.lastSend[k] > 6 * 3600e3) delete r.lastSend[k]; }); });
+  }
   async function sendOne(W, enr, st, rot) {
     // devolve {ok, sent:boolean, text}. Confirma pelo ID das mensagens (não pela contagem: a janela de 60 mensagens "anda").
     const outIds = async () => new Set((await readMsgs(enr.contact, 120)).filter(m => m.from === 'out').map(m => m.id));
@@ -681,15 +692,17 @@
     if (['text', 'pix', 'invite', 'contact', 'banner', 'list'].includes(st.type)) {
       text = st.type === 'text' ? pickVariation(st.variations, rot) : templateText(st);
       if (!text) return { ok: true, sent: false, text: '' };
+      if (await dupSent(enr, text)) return { ok: true, sent: false, text: '' };
       ok = await W.sendMsg(text);
     } else {
       if (!st.dataUrl) return { ok: false, sent: false, why: 'passo de ' + st.type + ' sem arquivo anexado' };
+      if (await dupSent(enr, '[' + st.type + '] ' + (st.name || '') + '|' + String(st.dataUrl).length)) return { ok: true, sent: false, text: '' };
       if (st.type === 'audio') { await actBridge('recording', enr.contact); await sleep(rndMs(3000, 6500)); await actBridge('paused', enr.contact); }   // “gravando áudio…” antes de mandar
       let m2 = st;
       if (st.caption && /#primeiroNome/i.test(st.caption) && W.applyNomeLive) { try { m2 = Object.assign({}, st, { caption: String((await W.applyNomeLive(st.caption)) || '').replace(/#primeiroNome/gi, '') }); } catch (x) {} }
       ok = await sendMedia(W, m2); text = '[' + st.type + '] ' + (st.name || '');
     }
-    if (ok) { if (!(await gotNew(2))) await addLog('⚠️ Envio para "' + enr.contact + '" aceito pelo WhatsApp, mas não vi a mensagem na conversa — NÃO reenviei (confira)'); return { ok: true, sent: true, text }; }
+    if (ok) { await noteSent(enr, st.type === 'text' || ['pix', 'invite', 'contact', 'banner', 'list'].includes(st.type) ? text : '[' + st.type + '] ' + (st.name || '') + '|' + String(st.dataUrl || '').length); if (!(await gotNew(2))) await addLog('⚠️ Envio para "' + enr.contact + '" aceito pelo WhatsApp, mas não vi a mensagem na conversa — NÃO reenviei (confira)'); return { ok: true, sent: true, text }; }
     // o envio disse que falhou: só confirma que realmente NÃO saiu antes de permitir nova tentativa
     if (await gotNew(5)) return { ok: true, sent: true, text };
     return { ok: false, sent: false, why: 'Não consegui confirmar o envio (' + st.type + ')' };
@@ -724,20 +737,22 @@
       if (t === 'quick') {
         const qs = await quickSteps(st.msgId);
         if (!qs) { await addLog('Resposta rápida não encontrada (passo ' + (i + 1) + ') — pulei'); await mark(); continue; }
+        let qj = -1; const qskip = (enr.stepIdx || 0) === i && enr.qi === i ? (enr.qj || 0) : 0;
         for (const q of qs) {
+          qj++; if (qj < qskip) continue;
           if (q.type === 'wait') { await sleep(Math.min(120, +q.seconds || 0) * 1000); continue; }
           if (q.type === 'typing' || q.type === 'recording') { await actBridge(q.type, enr.contact); await sleep((+q.seconds || 3) * 1000); await actBridge('paused', enr.contact); continue; }
           if (AUX.has(q.type)) { await execAux(W, q, enr.contact); continue; }
           const r = await sendOne(W, enr, q, rot);
           if (!r.ok) { await fail(r.why + ' — NÃO avancei', 'Falha no envio do follow-up "' + rule.name + '": ' + r.why); return { ok: false }; }
-          if (r.sent) { sentCount++; firstText = firstText || r.text; await sleep(rndMs(1200, 2500)); }
+          if (r.sent) { sentCount++; firstText = firstText || r.text; const jj = qj + 1; await mutateEnr(l => { const x = l.find(e => e.id === enr.id); if (x) { x.qi = i; x.qj = jj; } }); await sleep(rndMs(1200, 2500)); }
         }
         await mark(); continue;
       }
       if (isSendStep(st)) {
         const r = await sendOne(W, enr, st, rot);
         if (!r.ok) { await fail(r.why + ' — NÃO avancei', 'Falha no passo ' + (i + 1) + ' do follow-up "' + rule.name + '": ' + r.why); return { ok: false }; }
-        if (r.sent) { sentCount++; firstText = firstText || r.text; await sleep(rndMs(1200, 2500)); }
+        if (r.sent) { sentCount++; firstText = firstText || r.text; await mark(); await sleep(rndMs(1200, 2500)); }
       } else if (t === 'wait') { await sleep(Math.min(3600, Math.max(0, +st.seconds || 0)) * 1000); }
       else if (t === 'typing' || t === 'recording') {
         const r = await actBridge(t, enr.contact); if (!r.ok) await addLog('Presença "' + t + '" não aplicada (' + r.reason + ') — só esperei');
@@ -855,7 +870,7 @@
     if (!res.ok) return;
     const text = res.firstText;
     const now = Date.now();
-    await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x) { x.state = 'sent'; x.endedAt = now; x.fails = 0; x.history = hist.concat([{ at: now, text: text || '' }]); x.stepIdx = 0; } });
+    await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x) { x.state = 'sent'; x.force = false; x.endedAt = now; x.fails = 0; x.history = hist.concat([{ at: now, text: text || '' }]); x.stepIdx = 0; } });
     await mutateRt(r => {
       const today = dayKey(new Date(now));
       if (r.day !== today) { r.day = today; r.sent = 0; }
@@ -996,7 +1011,7 @@
     const steps = bulkStepsOf(job, idx);
     if (!steps.length) { await mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (j) j.status = 'paused'; }); await addLog('📣 Disparo "' + job.name + '" sem ações — pausado'); return; }
     if (o.dryRun) { await setC({ state: 'sent', simulated: true }, { nextAt: Date.now() + 1500, longPause: false }); await addLog('🧪 SIMULAÇÃO disparo "' + job.name + '" → "' + c.n + '" (nada enviado)'); return; }
-    const fakeEnr = { id: 'bulk-' + jobId + '-' + idx, contact: c.n, nk: norm(c.n), stepIdx: 0 };
+    const fakeEnr = { id: 'bulk-' + jobId + '-' + idx, contact: c.n, nk: norm(c.n), stepIdx: 0, force: true };
     const failed = async why => {
       const fails = (job.fails || 0) + 1;
       await setC({ state: 'error', why }, { fails, nextAt: gap(false), longPause: false });
