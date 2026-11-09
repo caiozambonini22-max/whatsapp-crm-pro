@@ -673,7 +673,39 @@
     return out;
   }
   // ANTI-DUPLICIDADE: mesmo conteúdo para o mesmo contato em menos de 2h = não reenvia (vale para qualquer follow/resposta automática)
-  const sentKey = (enr, t) => (enr.nk || norm(enr.contact)) + '|' + norm(String(t)).slice(0, 160);
+  // identidade REAL da conversa (mesma pessoa com número ou com nome salvo = mesma identidade)
+  function identOf(name) {
+    const nz = norm(name || ''); const d = String(name || '').replace(/\D/g, '');
+    if (!/[a-zà-ú]/i.test(name || '') && d.length >= 10) return 'p' + d.slice(-9);
+    const br = root.__wcrm && root.__wcrm.getBridge && root.__wcrm.getBridge();
+    const hit = br && ((br.all || []).concat(br.act || [])).find(x => x && x.id && !x.g && norm(x.n) === nz);
+    if (hit) return /@c\.us$/.test(hit.id) ? 'p' + hit.id.replace(/\D/g, '').slice(-9) : hit.id;
+    return 'n' + nz;
+  }
+  const sentKey = (enr, t) => identOf(enr.contact) + '|' + norm(String(t)).slice(0, 160);
+  async function dupRule(enr, rule) {
+    if (enr.force) return false;
+    const id = identOf(enr.contact); if (id[0] === 'n') return false;
+    const rt = await getRt(); const at = ((rt.lastRule || {})[id + '|' + rule.id]);
+    return !!(at && Date.now() - at < 6 * 3600e3);
+  }
+  async function noteRule(enr, rule) {
+    const id = identOf(enr.contact); if (id[0] === 'n') return;
+    await mutateRt(r => { r.lastRule = r.lastRule || {}; const n = Date.now(); r.lastRule[id + '|' + rule.id] = n; Object.keys(r.lastRule).forEach(k => { if (n - r.lastRule[k] > 12 * 3600e3) delete r.lastRule[k]; }); });
+  }
+  // une inscritos duplicados da mesma pessoa (ex.: um pelo número e outro pelo nome salvo) na mesma régua
+  async function consolidateDups() {
+    const enrs = await getEnrs(); const seen = {}; const drop = [];
+    for (const e of enrs) {
+      if (!['waiting', 'stale'].includes(e.state)) continue;
+      const id = identOf(e.contact); if (id[0] === 'n') continue; const k = id + '|' + e.ruleId;
+      if (seen[k]) drop.push([e, seen[k]]); else seen[k] = e;
+    }
+    for (const [e, keep] of drop) {
+      await mutateEnr(l => { const x = l.find(z => z.id === e.id); if (x && ['waiting', 'stale'].includes(x.state)) { x.state = 'cancelled'; x.reason = 'duplicado: mesma conversa de "' + keep.contact + '"'; x.endedAt = Date.now(); } });
+      await addLog('🧬 Inscrição duplicada removida: "' + e.contact + '" é a mesma conversa de "' + keep.contact + '"');
+    }
+  }
   async function dupSent(enr, t) {
     if (enr.force) return false;
     const rt = await getRt(); const at = (rt.lastSend || {})[sentKey(enr, t)];
@@ -830,6 +862,7 @@
       if (fails >= 3) await addAlert('error', enr.contact, alertText || why, { enrId: enrId });
     };
 
+    if (await dupRule(enr, rule)) { await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x) { x.state = 'cancelled'; x.reason = 'duplicado: essa conversa já recebeu este follow-up'; x.endedAt = Date.now(); } }); await addLog('🛑 Duplicada evitada: "' + enr.contact + '" (mesma conversa) já recebeu o follow-up "' + rule.name + '" — cancelei esta inscrição'); return; }
     const ok = await openChat(enr.contact);
     if (!ok && await isJunkName(enr.contact)) { await dropJunk(enr, 'não é uma conversa (texto da tela virou "contato")'); return; }
     if (!ok) return fail('Não achei/abri a conversa', 'Não consegui abrir a conversa 3 vezes. Follow-up parado para esse contato.');
@@ -870,6 +903,7 @@
     if (!res.ok) return;
     const text = res.firstText;
     const now = Date.now();
+    if (res.sentCount) await noteRule(enr, rule);
     await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x) { x.state = 'sent'; x.force = false; x.endedAt = now; x.fails = 0; x.history = hist.concat([{ at: now, text: text || '' }]); x.stepIdx = 0; } });
     await mutateRt(r => {
       const today = dayKey(new Date(now));
@@ -906,6 +940,7 @@
       await mutateEnr(l => { l.forEach(e => { if (e.state === 'sending' && now - (e.claimAt || 0) > 15 * 60e3) { e.state = 'stale'; delete e.claim; } }); });
       await syncRenames();
       await sweepJunk();
+      await consolidateDups();
       await mutateEnr(l => { l.forEach(e => { if (e.state === 'error' && (e.rounds || 0) < 3 && now - (e.errAt || 0) > 60 * 60e3) { e.state = 'waiting'; e.fails = 0; e.rounds = (e.rounds || 0) + 1; e.dueAt = now; } }); });
       await trackAndEnroll();
       await replyScan();
