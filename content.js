@@ -615,6 +615,20 @@
         body: JSON.stringify({ a: cfg.a, r: 'sync', pairs: m.pairs || [], latest_in: m.latest_in || 0 }) });
       const j = await r.json().catch(() => ({}));
       if (j.restarted) console.log('[Track] conexão da Evolution reiniciada (atraso de ' + j.lag_min + ' min)');
+      // segunda fonte: manda as mensagens recentes do WhatsApp Web (o Track ignora as que já tem)
+      const st = await new Promise(r2 => chrome.storage.local.get(['wcrm_track_feed'], r2));
+      const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+      let since = Math.max(Number(st && st.wcrm_track_feed) || d0.getTime(), Date.now() - 48 * 3600e3) - 120e3;
+      for (let i = 0; i < 20; i++) {
+        const rm = await bridgeCall('RECENT', { since }, 10000); if (!rm || !rm.ok || !(rm.messages || []).length) break;
+        const fr = await fetch((cfg.url || 'https://zambonini-track.vercel.app') + '/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-key': cfg.k },
+          body: JSON.stringify({ a: cfg.a, r: 'feed', messages: rm.messages }) });
+        if (!fr.ok) break;
+        const maxT = Math.max(...rm.messages.map(m => (m.t || 0) * 1000));
+        chrome.storage.local.set({ wcrm_track_feed: maxT });
+        if (!rm.more) break;
+        since = maxT;
+      }
     } catch (e) { }
   }
   setTimeout(trackSync, 25000); setInterval(trackSync, 4 * 60 * 1000);

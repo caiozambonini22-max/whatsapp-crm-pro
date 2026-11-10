@@ -200,6 +200,36 @@
     });
     return { ok: true, pairs: pairs.slice(0, 400), latest_in: latest };
   }
+  // Zambonini Track: mensagens recentes (segunda fonte, caso a Evolution trave). Só texto, sem mídia.
+  function adOf(m) {
+    var c = null;
+    try { c = m.ctwaContext || (m.contextInfo && m.contextInfo.externalAdReply) || null; } catch (e) { }
+    if (!c) { try { if (m.conversionSource && /ad|fb|ig/i.test(String(m.conversionSource))) c = {}; } catch (e) { } }
+    if (!c) return null;
+    return { clid: String(c.ctwaClid || c.clid || ''), id: String(c.sourceId || ''), title: String(c.title || ''), url: String(c.sourceUrl || '') };
+  }
+  function recentMsgs(d) {
+    var s = stores(); if (s.err) return { ok: false, reason: s.err };
+    var req = getReq(), since = Number(d.since) || (Date.now() - 3 * 3600e3), out = [];
+    arr(s.C).forEach(function (c) {
+      if (!c || !c.id || c.isGroup || c.id.server === 'g.us' || c.id.server === 'broadcast' || c.id.server === 'newsletter' || c.id._serialized === 'status@broadcast') return;
+      if ((c.t || 0) * 1000 < since) return;
+      var ids = idsOf(c, req); if (!ids.phone && !ids.lid) return;
+      var ct = c.contact || {};
+      var ms = []; try { ms = c.msgs ? (c.msgs.getModelsArray ? c.msgs.getModelsArray() : (c.msgs.models || [])) : []; } catch (e) { }
+      ms.forEach(function (m) {
+        try {
+          if (!m || !m.id || m.isNotification || SKIP_TYPES.test(m.type || '')) return;
+          var t = (m.t || 0) * 1000; if (t < since) return;
+          var txt = m.type === 'chat' ? String(m.body || '') : String(m.caption || '');
+          out.push({ id: String(m.id.id || ''), fromMe: !!m.id.fromMe, t: m.t, type: m.type === 'chat' ? 'conversation' : String(m.type || ''), text: txt.slice(0, 2000),
+            phone: ids.phone, lid: ids.lid, push: String(m.notifyName || ct.pushname || ''), ad: m.id.fromMe ? null : adOf(m) });
+        } catch (e) { }
+      });
+    });
+    out.sort(function (a, b) { return a.t - b.t; });
+    return { ok: true, messages: out.slice(0, 150), more: out.length > 150 };
+  }
   function activeChat() {
     var s = stores(); if (s.err) return { ok: false, reason: s.err };
     var c = arr(s.C).find(function (x) { return x.active; });
@@ -404,8 +434,8 @@ function oggSalt(u8) {
     if (e.source !== window || !e.data || e.data.tag !== 'WCRM_CONTENT') return;
     var d = e.data;
     if (d.kind === 'SYNC') push(true);
-    if (d.kind === 'OPEN' || d.kind === 'OPEN_NUMBER' || d.kind === 'READ' || d.kind === 'LISTINFO' || d.kind === 'FILTER' || d.kind === 'ACTIVE' || d.kind === 'ACT' || d.kind === 'SENDMEDIA' || d.kind === 'SENDTEXT' || d.kind === 'PROBE' || d.kind === 'LIDMAP') {
-      var rr; try { rr = d.kind === 'OPEN' ? await openChat(d) : d.kind === 'OPEN_NUMBER' ? await openNumber(d) : d.kind === 'READ' ? readChat(d) : d.kind === 'LISTINFO' ? listInfo(d) : d.kind === 'FILTER' ? await filterList(d) : d.kind === 'ACT' ? await actChat(d) : d.kind === 'SENDMEDIA' ? await sendMediaDirect(d) : d.kind === 'SENDTEXT' ? await sendTextDirect(d) : d.kind === 'PROBE' ? probeMedia() : d.kind === 'LIDMAP' ? lidMap() : activeChat(); } catch (err) { rr = { ok: false, reason: String(err && err.message || err) }; }
+    if (d.kind === 'OPEN' || d.kind === 'OPEN_NUMBER' || d.kind === 'READ' || d.kind === 'LISTINFO' || d.kind === 'FILTER' || d.kind === 'ACTIVE' || d.kind === 'ACT' || d.kind === 'SENDMEDIA' || d.kind === 'SENDTEXT' || d.kind === 'PROBE' || d.kind === 'LIDMAP' || d.kind === 'RECENT') {
+      var rr; try { rr = d.kind === 'OPEN' ? await openChat(d) : d.kind === 'OPEN_NUMBER' ? await openNumber(d) : d.kind === 'READ' ? readChat(d) : d.kind === 'LISTINFO' ? listInfo(d) : d.kind === 'FILTER' ? await filterList(d) : d.kind === 'ACT' ? await actChat(d) : d.kind === 'SENDMEDIA' ? await sendMediaDirect(d) : d.kind === 'SENDTEXT' ? await sendTextDirect(d) : d.kind === 'PROBE' ? probeMedia() : d.kind === 'LIDMAP' ? lidMap() : d.kind === 'RECENT' ? recentMsgs(d) : activeChat(); } catch (err) { rr = { ok: false, reason: String(err && err.message || err) }; }
       send({ kind: 'RESULT', reqId: d.reqId, result: rr });
     }
     if (d.kind === 'APPLY') { var r = await apply(d); r = r || {}; send({ kind: 'APPLY_RESULT', reqId: d.reqId, result: r }); setTimeout(function () { push(false); }, 600); }
