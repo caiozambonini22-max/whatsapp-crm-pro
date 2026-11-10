@@ -603,6 +603,22 @@
     }, 350);
   }
 
+  // ── Zambonini Track: vigia a cada 4 min ──
+  // Manda pro Track os pares @lid↔telefone (junta cadastros da mesma pessoa) e a hora da última mensagem recebida.
+  // Se o WhatsApp Web tem mensagem nova e o Track não recebeu, o Track reinicia a conexão da Evolution sozinho.
+  async function trackSync() {
+    try {
+      const o = await new Promise(r => chrome.storage.local.get(['wcrm_track'], r));
+      const cfg = o && o.wcrm_track; if (!cfg || !cfg.a || !cfg.k) return;
+      const m = await bridgeCall('LIDMAP', {}, 8000); if (!m || !m.ok) return;
+      const r = await fetch((cfg.url || 'https://zambonini-track.vercel.app') + '/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-key': cfg.k },
+        body: JSON.stringify({ a: cfg.a, r: 'sync', pairs: m.pairs || [], latest_in: m.latest_in || 0 }) });
+      const j = await r.json().catch(() => ({}));
+      if (j.restarted) console.log('[Track] conexão da Evolution reiniciada (atraso de ' + j.lag_min + ' min)');
+    } catch (e) { }
+  }
+  setTimeout(trackSync, 25000); setInterval(trackSync, 4 * 60 * 1000);
+
   // ── Monitor de conversa — só avisa o painel (NÃO usado no envio) ──
   let lastContact = undefined, debounce = null;
   function updateContactCache() {

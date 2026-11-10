@@ -175,6 +175,31 @@
       return { ok: true, digits: digits };
     } catch (e) { return { ok: false, reason: String(e && e.message || e) }; }
   }
+  // Zambonini Track: telefone real e código @lid de uma conversa (o WhatsApp usa os dois)
+  function idsOf(c, req) {
+    var ct = c.contact || {}, phone = '', lid = '';
+    try { if (c.id && c.id.server === 'c.us') phone = String(c.id.user || ''); else { var pn = ct.phoneNumber || (ct.id && ct.id.server === 'c.us' ? ct.id : null); if (pn) phone = String(pn.user || String(pn._serialized || pn).split('@')[0]); } } catch (e) { }
+    try { if (c.id && c.id.server === 'lid') lid = String(c.id.user || ''); else if (ct.lid) lid = String(ct.lid.user || String(ct.lid._serialized || ct.lid).split('@')[0]); } catch (e) { }
+    if ((!phone || !lid) && req) {
+      var A = mod(req, 'WAWebApiContact');
+      try { if (!lid && A && A.getCurrentLid && c.id && c.id.server === 'c.us') { var l = A.getCurrentLid(c.id); if (l) lid = String(l.user || String(l._serialized || l).split('@')[0]); } } catch (e) { }
+      try { if (!phone && A && A.getPhoneNumber && c.id && c.id.server === 'lid') { var p = A.getPhoneNumber(c.id); if (p) phone = String(p.user || String(p._serialized || p).split('@')[0]); } } catch (e) { }
+    }
+    return { phone: phone.replace(/\D/g, ''), lid: lid.replace(/\D/g, '') };
+  }
+  // pares @lid↔telefone das conversas recentes + hora da última mensagem recebida (vigia do Track)
+  function lidMap() {
+    var s = stores(); if (s.err) return { ok: false, reason: s.err };
+    var req = getReq(), pairs = [], latest = 0, lim = Date.now() / 1000 - 4 * 86400;
+    arr(s.C).forEach(function (c) {
+      if (!c || !c.id || c.isGroup || c.id.server === 'g.us' || c.id.server === 'broadcast' || c.id.server === 'newsletter') return;
+      if ((c.t || 0) < lim) return;
+      var ids = idsOf(c, req); if (ids.phone && ids.lid) pairs.push(ids);
+      try { var ms = c.msgs ? (c.msgs.getModelsArray ? c.msgs.getModelsArray() : (c.msgs.models || [])) : [];
+        for (var i = ms.length - 1; i >= 0; i--) { var m = ms[i]; if (!m || !m.id || m.id.fromMe || m.isNotification || SKIP_TYPES.test(m.type || '')) continue; var t = (m.t || 0) * 1000; if (t > latest) latest = t; break; } } catch (e) { }
+    });
+    return { ok: true, pairs: pairs.slice(0, 400), latest_in: latest };
+  }
   function activeChat() {
     var s = stores(); if (s.err) return { ok: false, reason: s.err };
     var c = arr(s.C).find(function (x) { return x.active; });
@@ -183,6 +208,7 @@
     var phone = ''; // Zambonini Track: telefone da conversa (funciona também em conversas @lid)
     try { if (c.id && c.id.server === 'c.us') phone = String(c.id.user || ''); else { var pn = ct.phoneNumber || (ct.id && ct.id.server === 'c.us' ? ct.id : null); if (pn) phone = String(pn.user || String(pn._serialized || pn).split('@')[0]); } } catch (e) { }
     var lid = ''; try { if (c.id && c.id.server === 'lid') lid = String(c.id.user || ''); else if (ct.lid) lid = String(ct.lid.user || String(ct.lid._serialized || ct.lid).split('@')[0]); } catch (e) { }
+    try { var ids2 = idsOf(c, getReq()); if (!phone) phone = ids2.phone; if (!lid) lid = ids2.lid; } catch (e) { }
     return { ok: true, id: c.id && c.id._serialized, name: chatName(c), saved: (ct.name || '').toString(), push: (ct.pushname || ct.shortName || '').toString(), group: isG, phone: phone, lid: lid };
   }
   // filtro da lista de conversas (lado esquerdo)
@@ -378,8 +404,8 @@ function oggSalt(u8) {
     if (e.source !== window || !e.data || e.data.tag !== 'WCRM_CONTENT') return;
     var d = e.data;
     if (d.kind === 'SYNC') push(true);
-    if (d.kind === 'OPEN' || d.kind === 'OPEN_NUMBER' || d.kind === 'READ' || d.kind === 'LISTINFO' || d.kind === 'FILTER' || d.kind === 'ACTIVE' || d.kind === 'ACT' || d.kind === 'SENDMEDIA' || d.kind === 'SENDTEXT' || d.kind === 'PROBE') {
-      var rr; try { rr = d.kind === 'OPEN' ? await openChat(d) : d.kind === 'OPEN_NUMBER' ? await openNumber(d) : d.kind === 'READ' ? readChat(d) : d.kind === 'LISTINFO' ? listInfo(d) : d.kind === 'FILTER' ? await filterList(d) : d.kind === 'ACT' ? await actChat(d) : d.kind === 'SENDMEDIA' ? await sendMediaDirect(d) : d.kind === 'SENDTEXT' ? await sendTextDirect(d) : d.kind === 'PROBE' ? probeMedia() : activeChat(); } catch (err) { rr = { ok: false, reason: String(err && err.message || err) }; }
+    if (d.kind === 'OPEN' || d.kind === 'OPEN_NUMBER' || d.kind === 'READ' || d.kind === 'LISTINFO' || d.kind === 'FILTER' || d.kind === 'ACTIVE' || d.kind === 'ACT' || d.kind === 'SENDMEDIA' || d.kind === 'SENDTEXT' || d.kind === 'PROBE' || d.kind === 'LIDMAP') {
+      var rr; try { rr = d.kind === 'OPEN' ? await openChat(d) : d.kind === 'OPEN_NUMBER' ? await openNumber(d) : d.kind === 'READ' ? readChat(d) : d.kind === 'LISTINFO' ? listInfo(d) : d.kind === 'FILTER' ? await filterList(d) : d.kind === 'ACT' ? await actChat(d) : d.kind === 'SENDMEDIA' ? await sendMediaDirect(d) : d.kind === 'SENDTEXT' ? await sendTextDirect(d) : d.kind === 'PROBE' ? probeMedia() : d.kind === 'LIDMAP' ? lidMap() : activeChat(); } catch (err) { rr = { ok: false, reason: String(err && err.message || err) }; }
       send({ kind: 'RESULT', reqId: d.reqId, result: rr });
     }
     if (d.kind === 'APPLY') { var r = await apply(d); r = r || {}; send({ kind: 'APPLY_RESULT', reqId: d.reqId, result: r }); setTimeout(function () { push(false); }, 600); }

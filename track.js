@@ -20,7 +20,7 @@
   // abre a ficha completa do Track numa janela grande (valor, data/hora, produto, dados, conversa)
   function openWin(venda) {
     if (!chat.phone) return;
-    const u = (cfg && cfg.url || DEF_URL) + '/?phone=' + encodeURIComponent(chat.phone) + '&push=' + encodeURIComponent(chat.push || chat.name || '') + (venda ? '&venda=1' : '');
+    const u = (cfg && cfg.url || DEF_URL) + '/?phone=' + encodeURIComponent(chat.phone) + (chat.lid ? '&lid=' + encodeURIComponent(chat.lid) : '') + '&push=' + encodeURIComponent(chat.push || chat.name || '') + (venda ? '&venda=1' : '');
     const w = 860, h = 920, left = Math.max(0, Math.round((screen.availWidth - w) / 2)), top = Math.max(0, Math.round((screen.availHeight - h) / 2));
     try {
       if (winId != null) chrome.windows.remove(winId, () => void chrome.runtime.lastError);
