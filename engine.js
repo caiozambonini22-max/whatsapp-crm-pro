@@ -679,7 +679,7 @@
     if (!/[a-zà-ú]/i.test(name || '') && d.length >= 10) return 'p' + d.slice(-9);
     const br = root.__wcrm && root.__wcrm.getBridge && root.__wcrm.getBridge();
     const hit = br && ((br.all || []).concat(br.act || [])).find(x => x && x.id && !x.g && norm(x.n) === nz);
-    if (hit) return /@c\.us$/.test(hit.id) ? 'p' + hit.id.replace(/\D/g, '').slice(-9) : hit.id;
+    if (hit) { const ph = String(hit.ph || (/@c\.us$/.test(hit.id) ? hit.id : '')).replace(/\D/g, ''); return ph.length >= 10 ? 'p' + ph.slice(-9) : hit.id; }
     return 'n' + nz;
   }
   const sentKey = (enr, t) => identOf(enr.contact) + '|' + norm(String(t)).slice(0, 160);
@@ -691,7 +691,7 @@
   }
   async function noteRule(enr, rule) {
     const id = identOf(enr.contact); if (id[0] === 'n') return;
-    await mutateRt(r => { r.lastRule = r.lastRule || {}; const n = Date.now(); r.lastRule[id + '|' + rule.id] = n; Object.keys(r.lastRule).forEach(k => { if (n - r.lastRule[k] > 12 * 3600e3) delete r.lastRule[k]; }); });
+    await mutateRt(r => { r.lastRule = r.lastRule || {}; r.lastAny = r.lastAny || {}; const n = Date.now(); r.lastAny[id] = { at: n, rule: rule.id }; Object.keys(r.lastAny).forEach(k => { if (n - r.lastAny[k].at > 12 * 3600e3) delete r.lastAny[k]; }); r.lastRule[id + '|' + rule.id] = n; Object.keys(r.lastRule).forEach(k => { if (n - r.lastRule[k] > 12 * 3600e3) delete r.lastRule[k]; }); });
   }
   // une inscritos duplicados da mesma pessoa (ex.: um pelo número e outro pelo nome salvo) na mesma régua
   async function consolidateDups() {
@@ -719,6 +719,12 @@
     // devolve {ok, sent:boolean, text}. Confirma pelo ID das mensagens (não pela contagem: a janela de 60 mensagens "anda").
     const outIds = async () => new Set((await readMsgs(enr.contact, 120)).filter(m => m.from === 'out').map(m => m.id));
     const beforeIds = await outIds();
+    // envio anterior "sem confirmação" que pode ter saído atrasado (computador dormindo/reconectando): confere antes de mandar de novo
+    if (enr.attempt && enr.id && !enr.force && Date.now() - enr.attempt.at < 8 * 3600e3) {
+      const msgs = (await readMsgs(enr.contact, 60)).filter(m => m.from === 'out' && (m.ts || 0) >= enr.attempt.at - 120000);
+      if (msgs.length) { await mutateEnr(l => { const x = l.find(e => e.id === enr.id); if (x) delete x.attempt; }); await addLog('🔎 O envio anterior para "' + enr.contact + '" apareceu na conversa depois — NÃO reenviei'); return { ok: true, sent: true, text: msgs[msgs.length - 1].text || '(já enviada)' }; }
+    }
+    if (enr.id) { await mutateEnr(l => { const x = l.find(e => e.id === enr.id); if (x) x.attempt = { at: Date.now() }; }); }
     const gotNew = async tries => { for (let i = 0; i < tries; i++) { await sleep(i ? 2500 : 1500); const now = await outIds(); for (const id of now) if (!beforeIds.has(id)) return true; } return false; };
     let ok = false, text = '';
     if (['text', 'pix', 'invite', 'contact', 'banner', 'list'].includes(st.type)) {
@@ -734,9 +740,9 @@
       if (st.caption && /#primeiroNome/i.test(st.caption) && W.applyNomeLive) { try { m2 = Object.assign({}, st, { caption: String((await W.applyNomeLive(st.caption)) || '').replace(/#primeiroNome/gi, '') }); } catch (x) {} }
       ok = await sendMedia(W, m2); text = '[' + st.type + '] ' + (st.name || '');
     }
-    if (ok) { await noteSent(enr, st.type === 'text' || ['pix', 'invite', 'contact', 'banner', 'list'].includes(st.type) ? text : '[' + st.type + '] ' + (st.name || '') + '|' + String(st.dataUrl || '').length); if (!(await gotNew(2))) await addLog('⚠️ Envio para "' + enr.contact + '" aceito pelo WhatsApp, mas não vi a mensagem na conversa — NÃO reenviei (confira)'); return { ok: true, sent: true, text }; }
+    if (ok) { await noteSent(enr, st.type === 'text' || ['pix', 'invite', 'contact', 'banner', 'list'].includes(st.type) ? text : '[' + st.type + '] ' + (st.name || '') + '|' + String(st.dataUrl || '').length); if (await gotNew(2)) { delete enr.attempt; if (enr.id) await mutateEnr(l => { const x = l.find(e => e.id === enr.id); if (x) delete x.attempt; }); } else await addLog('⚠️ Envio para "' + enr.contact + '" aceito pelo WhatsApp, mas não vi a mensagem na conversa — NÃO reenviei (confira)'); return { ok: true, sent: true, text }; }
     // o envio disse que falhou: só confirma que realmente NÃO saiu antes de permitir nova tentativa
-    if (await gotNew(5)) return { ok: true, sent: true, text };
+    if (await gotNew(5)) { delete enr.attempt; if (enr.id) await mutateEnr(l => { const x = l.find(e => e.id === enr.id); if (x) delete x.attempt; }); return { ok: true, sent: true, text }; }
     return { ok: false, sent: false, why: 'Não consegui confirmar o envio (' + st.type + ')' };
   }
   // muda aba do CRM e CONFIRMA que o painel aplicou (tenta de novo se não confirmar)
@@ -862,6 +868,7 @@
       if (fails >= 3) await addAlert('error', enr.contact, alertText || why, { enrId: enrId });
     };
 
+    { const idn = identOf(enr.contact); if (!enr.force && idn[0] !== 'n') { const rt1 = await getRt(); const la = ((rt1.lastAny || {})[idn]); if (la && Date.now() - la.at < 3 * 3600e3 && la.rule !== rule.id) { const nd = la.at + 3 * 3600e3 + rndMs(60000, 240000); await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x && x.state === 'sending') { x.state = 'waiting'; delete x.claim; x.dueAt = nd; } }); await addLog('⏳ "' + enr.contact + '" já recebeu outro follow-up há menos de 3h — adiei este para evitar mensagens coladas'); return; } } }
     if (await dupRule(enr, rule)) { await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x) { x.state = 'cancelled'; x.reason = 'duplicado: essa conversa já recebeu este follow-up'; x.endedAt = Date.now(); } }); await addLog('🛑 Duplicada evitada: "' + enr.contact + '" (mesma conversa) já recebeu o follow-up "' + rule.name + '" — cancelei esta inscrição'); return; }
     const ok = await openChat(enr.contact);
     if (!ok && await isJunkName(enr.contact)) { await dropJunk(enr, 'não é uma conversa (texto da tela virou "contato")'); return; }
@@ -904,7 +911,7 @@
     const text = res.firstText;
     const now = Date.now();
     if (res.sentCount) await noteRule(enr, rule);
-    await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x) { x.state = 'sent'; x.force = false; x.endedAt = now; x.fails = 0; x.history = hist.concat([{ at: now, text: text || '' }]); x.stepIdx = 0; } });
+    await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x) { x.state = 'sent'; x.force = false; delete x.attempt; x.endedAt = now; x.fails = 0; x.history = hist.concat([{ at: now, text: text || '' }]); x.stepIdx = 0; } });
     await mutateRt(r => {
       const today = dayKey(new Date(now));
       if (r.day !== today) { r.day = today; r.sent = 0; }
@@ -923,6 +930,8 @@
     try {
       if (!root.__wcrm || !document.querySelector('#pane-side')) return;
       const cfg = await getCfg(); const rt0 = await getRt(); const now = Date.now();
+      if (root.__wcrmLastTick && now - root.__wcrmLastTick > 120000) root.__wcrmSettle = now + 180000;   // computador acordou: espera o WhatsApp reconectar e sincronizar
+      root.__wcrmLastTick = now; if (!root.__wcrmBoot) { root.__wcrmBoot = now; root.__wcrmSettle = now + 120000; }
       // só UMA aba do WhatsApp comanda o robô (a que tem o painel do CRM carregado) — evita duas abas mexendo na mesma fila
       const hasPanel = !!(document.getElementById('wcrm-iframe') && document.getElementById('wcrm-iframe').contentWindow);
       const L = rt0.leader;
@@ -931,7 +940,7 @@
       await mutateRt(r => { r.leader = { id: INST, at: now }; });
       if (bootPrevAlive === null) {
         bootPrevAlive = rt0.lastAlive || now;
-        if (now - bootPrevAlive > (cfg.staleMin || 120) * 60e3) await markStale(now);   // computador ficou desligado
+        if (now - bootPrevAlive > 15 * 60e3) await markStale(now - 20 * 60e3);   // computador ficou desligado: o que venceu há +20 min vai para 'Atrasados' (você libera na fila)
       }
       if (wasOn === null) wasOn = cfg.on;
       else if (cfg.on && !wasOn) { wasOn = true; await markStale(now - (cfg.staleMin || 120) * 60e3); }
@@ -944,6 +953,7 @@
       await mutateEnr(l => { l.forEach(e => { if (e.state === 'error' && (e.rounds || 0) < 3 && now - (e.errAt || 0) > 60 * 60e3) { e.state = 'waiting'; e.fails = 0; e.rounds = (e.rounds || 0) + 1; e.dueAt = now; } }); });
       await trackAndEnroll();
       await replyScan();
+      if (!force && ((root.__wcrmSettle || 0) > Date.now() || navigator.onLine === false)) { await mutateRt(r => { r.state = navigator.onLine === false ? 'sem internet — aguardando' : 'computador acabou de ligar — aguardando o WhatsApp reconectar (sem envios por 2-3 min)'; r.stateAt = Date.now(); }); return; }
       const enrs = await getEnrs(), rt = await getRt();
       const d = force ? { act: 'send', enr: enrs.find(e => e.id === force && ['waiting', 'stale'].includes(e.state)) } : decide(cfg, enrs, rt, Date.now());
       await mutateRt(r => { r.state = d.act === 'send' ? 'enviando' : d.why; r.stateAt = Date.now(); });

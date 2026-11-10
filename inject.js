@@ -57,7 +57,8 @@
     arr(s.C).forEach(function (c) {
       if (c.isGroup || (c.id && c.id.server === 'g.us') || (c.id && c.id.server === 'broadcast') || (c.id && c.id._serialized === 'status@broadcast')) return;
       var nm = chatName(c); if (!nm) return;
-      all.push({ n: nm, id: c.id && c.id._serialized, t: (c.t || 0) * 1000 });
+      var ph = ''; try { if (c.id && c.id.server === 'c.us') ph = String(c.id.user || ''); else { var ct0 = c.contact || {}; var pn0 = ct0.phoneNumber; if (pn0) ph = String(pn0.user || String(pn0._serialized || pn0).split('@')[0] || ''); } } catch (e) { }
+      all.push({ n: nm, id: c.id && c.id._serialized, t: (c.t || 0) * 1000, ph: ph });
     });
     return {
       ok: true, act: act, all: all,
