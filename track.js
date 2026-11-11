@@ -202,12 +202,12 @@
         <div class="mut" style="margin-top:6px">Não usa o Track? Clique em Ocultar. Pra mostrar de novo: clique no painel e aperte Ctrl+Shift+T.</div>`;
       return;
     }
-    if (!chat.phone) { box.innerHTML = `<div class="th">📍 Track<span class="sp"></span><a data-act="cfg">⚙</a></div><div class="mut">${chat.group ? 'Grupos não são rastreados.' : 'Abra uma conversa pra ver os dados do Track.'}</div>`; return; }
+    if (!chat.phone) { box.innerHTML = `<div class="th">📍 Track<span class="sp"></span><a data-act="sales" title="Mandar pro Track as vendas já marcadas nas etiquetas VENDA">⇪ Vendas</a> <a data-act="cfg">⚙</a></div><div class="mut">${chat.group ? 'Grupos não são rastreados.' : 'Abra uma conversa pra ver os dados do Track.'}</div>`; return; }
     if (busy && !lead) { box.innerHTML = `<div class="th">📍 Track<span class="sp"></span></div><div class="mut">Carregando…</div>`; return; }
     const l = lead || { phone: chat.phone, push_name: chat.push, origin: 'nao_rastreada', stage: 'contato' };
     const s = score(l);
     const stg = l.stage || 'contato';
-    let h = `<div class="th">📍 Track <span class="pill ${esc(l.origin)}">${esc(ORIG[l.origin] || l.origin)}</span><span class="pill ${esc(stg)}">${esc(STAGES[stg] || stg)}</span><span class="sp"></span><a data-act="refresh" title="Atualizar">↻</a> <a data-act="cfg" title="Configurar">⚙</a></div>`;
+    let h = `<div class="th">📍 Track <span class="pill ${esc(l.origin)}">${esc(ORIG[l.origin] || l.origin)}</span><span class="pill ${esc(stg)}">${esc(STAGES[stg] || stg)}</span><span class="sp"></span><a data-act="sales" title="Mandar pro Track as vendas já marcadas nas etiquetas VENDA">⇪ Vendas</a> <a data-act="refresh" title="Atualizar">↻</a> <a data-act="cfg" title="Configurar">⚙</a></div>`;
     if (!lead) h += `<div class="mut" style="margin-top:4px">Conversa anterior ao Track (${esc(fone(chat.phone))}). Se marcar venda, ela é registrada e enviada pra Meta mesmo assim.</div>`;
     if (l.ad_title || l.ad_id) h += `<div class="ad" title="${esc(l.ad_title || '')}">📢 ${esc(l.ad_title || 'Anúncio')}${l.ad_url ? ` · <a href="${esc(l.ad_url)}" target="_blank">ver</a>` : ''}</div>`;
     if (lead && lead.stage === 'comprou') h += `<div class="mut" style="margin-top:4px">💰 Venda: <b style="color:#25d366">${brl(lead.sale_value)}</b>${lead.product ? ' · ' + esc(lead.product) : ''}</div>`;
@@ -305,6 +305,7 @@
     }
     if (a === 'cfg') { if (confirm('Desconectar o Zambonini Track desta extensão?')) { cfg = null; chrome.storage.local.remove('wcrm_track'); render(); } }
     if (a === 'refresh') load();
+    if (a === 'sales') salesOpen();
     if (a === 'sale') { ask = null; showSale = false; render(); openWin(true); }
     if (a === 'ficha') openWin(false);
     if (a === 'lost') { ask = { lost: true, to: 'perdido' }; render(); }
@@ -331,6 +332,76 @@
     if (v === 'comprou' && (!lead || lead.stage !== 'comprou')) { openWin(true); note('💰 Preencha a venda na janela do Track pra enviar pra Meta'); }
     if (v === 'inativo' && lead && lead.stage !== 'perdido' && lead.stage !== 'comprou') { ask = { lost: true, to: 'perdido' }; render(); }
     if (v === 'negociando' && (!lead || ORDER[lead.stage] < 1)) { ask = { back: false, to: 'qualificado' }; showSale = false; render(); }
+  });
+
+  // ---------- vendas já marcadas nas etiquetas "VENDA dd/mm/aa" -> Track ----------
+  let sales = null, salesMsg = '';
+  const salesStyle = document.createElement('style');
+  salesStyle.textContent = `#trk-sales{position:fixed;inset:0;background:#0b141a;z-index:9999;overflow:auto;padding:12px;font-family:inherit;color:#e9edef;font-size:12px}
+  #trk-sales h3{margin:0 0 4px;font-size:14px}#trk-sales .mut{color:#8696a0;font-size:11px}
+  #trk-sales .row{display:grid;grid-template-columns:20px 1fr 92px;gap:6px;align-items:center;padding:8px 0;border-bottom:1px solid #2a3942}
+  #trk-sales input[type=number]{width:100%;box-sizing:border-box;background:#202c33;border:1px solid #2a3942;border-radius:7px;padding:5px 6px;color:#e9edef;font-size:12px}
+  #trk-sales input[type=checkbox]{width:16px;height:16px;accent-color:#00a884}
+  #trk-sales .st{font-size:10px;margin-top:2px}#trk-sales .ok{color:#25d366}#trk-sales .wr{color:#f5b84b}#trk-sales .no{color:#f15c6d}
+  #trk-sales .bar{position:sticky;bottom:0;background:#0b141a;padding:10px 0 2px;display:flex;gap:6px}
+  #trk-sales button{flex:1;padding:9px;border-radius:8px;border:1px solid #2a3942;background:#202c33;color:#e9edef;font-weight:600;font-size:12px;cursor:pointer}
+  #trk-sales button.pri{background:#00a884;border-color:#00a884;color:#fff}#trk-sales button:disabled{opacity:.5}`;
+  document.head.appendChild(salesStyle);
+  const DAY7 = 7 * 86400e3 - 3600e3;
+  function salesOpen() {
+    if (!cfg) return note('Conecte o Track primeiro', '#e74c3c');
+    sales = null; salesMsg = 'Lendo as etiquetas VENDA do WhatsApp…'; salesRender();
+    try { window.parent.postMessage({ type: 'TRACK_SALES_SCAN', days: 60 }, '*'); } catch (e) { }
+  }
+  function salesClose() { const el = document.getElementById('trk-sales'); if (el) el.remove(); sales = null; }
+  function salesRender() {
+    let el = document.getElementById('trk-sales');
+    if (!el) { el = document.createElement('div'); el.id = 'trk-sales'; document.body.appendChild(el); el.addEventListener('click', salesClick); }
+    let h = `<h3>⇪ Vendas das etiquetas → Track</h3><div class="mut">Conversas com etiqueta "VENDA" dos últimos 60 dias. Confira o valor (achei na sua mensagem de fechamento quando deu) e envie. Vendas de até 7 dias vão pra Meta como Purchase; as mais antigas só ficam registradas no Track (a Meta não aceita).</div>`;
+    if (!sales) { el.innerHTML = h + `<p class="mut" style="margin-top:14px">${esc(salesMsg)}</p><div class="bar"><button data-s="close">Fechar</button></div>`; return; }
+    if (!sales.length) { el.innerHTML = h + `<p class="mut" style="margin-top:14px">Nenhuma conversa com etiqueta VENDA encontrada.</p><div class="bar"><button data-s="close">Fechar</button></div>`; return; }
+    h += sales.map((r, i) => {
+      const dt = r.sale_at ? new Date(r.sale_at) : null, old = dt && Date.now() - dt > DAY7;
+      const ja = r.stage === 'comprou';
+      const stx = ja ? `<span class="ok">✓ já está no Track como venda (${brl(r.sale_value)})</span>` : (r.guess ? `<span class="mut">valor achado: ${esc(r.src)}</span>` : `<span class="wr">valor não encontrado: preencha</span>`);
+      return `<div class="row"><input type="checkbox" data-i="${i}" ${r.sel ? 'checked' : ''}>
+        <div><b>${esc(r.name || fone(r.phone) || 'Contato')}</b> <span class="mut">${esc(r.label)}</span><div class="st">${stx}${old ? ' · <span class="wr">+7 dias: só Track</span>' : ''}${r.res ? ' · ' + r.res : ''}</div></div>
+        <input type="number" step="0.01" data-v="${i}" value="${r.val || ''}" placeholder="R$"></div>`;
+    }).join('');
+    const sel = sales.filter(r => r.sel && Number(r.val) > 0);
+    h += `<div class="bar"><button data-s="close">Fechar</button><button class="pri" data-s="send" ${sel.length ? '' : 'disabled'}>Enviar ${sel.length} venda(s) · ${brl(sel.reduce((t, r) => t + Number(r.val), 0))}</button></div>`;
+    el.innerHTML = h;
+  }
+  function salesClick(e) {
+    const t = e.target;
+    if (t.dataset.i != null) { sales[t.dataset.i].sel = t.checked; salesRender(); return; }
+    if (t.dataset.s === 'close') return salesClose();
+    if (t.dataset.s === 'send') return salesSend();
+  }
+  document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.v != null && sales) { sales[e.target.dataset.v].val = e.target.value; if (Number(e.target.value) > 0 && sales[e.target.dataset.v].stage !== 'comprou') sales[e.target.dataset.v].sel = true; salesRender(); } });
+  async function salesSend() {
+    const list = sales.filter(r => r.sel && Number(r.val) > 0);
+    const meta = list.filter(r => !(r.sale_at && Date.now() - new Date(r.sale_at) > DAY7) && r.stage !== 'comprou').length;
+    if (!confirm(`Enviar ${list.length} venda(s) pro Track?\n\n${meta} vão pra Meta como Purchase (até 7 dias). As outras só ficam registradas no Track.\nDepois de enviado, não dá pra apagar na Meta.`)) return;
+    for (const r of list) {
+      const old = r.sale_at && Date.now() - new Date(r.sale_at) > DAY7;
+      const x = await api('stage', { phone: r.phone, lid: r.lid, push_name: r.name, stage: 'comprou', sale_value: Number(r.val), sale_at: r.sale_at || new Date().toISOString(), no_capi: !!old });
+      r.res = x.error ? `<span class="no">✗ ${esc(x.error)}</span>` : (x.capi && x.capi.ok ? '<span class="ok">✓ enviado pra Meta</span>' : `<span class="ok">✓ salvo</span> <span class="mut">${esc((x.capi && x.capi.skipped) || '')}</span>`);
+      if (!x.error) { r.stage = 'comprou'; r.sale_value = Number(r.val); r.sel = false; }
+      salesRender();
+    }
+    note('✅ Vendas enviadas pro Track'); load();
+  }
+  window.addEventListener('message', async e => {
+    if (e.data?.type !== 'TRACK_SALES' || !document.getElementById('trk-sales')) return;
+    const r = e.data.r;
+    if (!r || !r.ok) { salesMsg = 'Não consegui ler as etiquetas: ' + ((r && r.reason) || 'sem resposta'); return salesRender(); }
+    if (!r.chats.length) { sales = []; return salesRender(); }
+    salesMsg = `Achei ${r.chats.length} conversa(s). Conferindo no Track…`; salesRender();
+    const x = await api('config', { r: 'sales_scan', chats: r.chats });
+    if (x.error) { salesMsg = 'Erro no Track: ' + x.error; return salesRender(); }
+    sales = x.rows.map(o => ({ ...o, val: o.stage === 'comprou' ? (o.sale_value || '') : (o.guess || ''), sel: o.stage !== 'comprou' && !!o.guess }));
+    salesRender();
   });
 
   chrome.storage.local.get(['wcrm_track', 'wcrm_track_hidden'], o => { cfg = o.wcrm_track || null; hidden = !!o.wcrm_track_hidden && !cfg; render(); requestChat(); });

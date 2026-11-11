@@ -568,6 +568,7 @@
         sendTrackChat(getContact());
         break;
       case 'TRACK_GET_CHAT': sendTrackChat(getContact()); break;
+      case 'TRACK_SALES_SCAN': bridgeCall('SALESLABELS', { days: e.data.days || 60 }, 15000).then(r => document.getElementById('wcrm-iframe')?.contentWindow?.postMessage({ type: 'TRACK_SALES', r }, '*')); break;
       case 'SYNC_LABELS':
         bridgeSend({ kind: 'SYNC' });
         setTimeout(() => iframe?.contentWindow?.postMessage({ type: 'CONVERSATIONS', conversations: getConversations(), allLabels: getAllWALabels(), bridge: bridge ? { ok: !!bridge.ok, reason: bridge.reason || '', labels: bridge.labels || [], total: (bridge.chats || []).length } : { ok: false, reason: 'ponte não respondeu (recarregue o WhatsApp Web com F5)' } }, '*'), 900);

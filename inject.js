@@ -230,6 +230,36 @@
     out.sort(function (a, b) { return a.t - b.t; });
     return { ok: true, messages: out.slice(0, 150), more: out.length > 150 };
   }
+  // Zambonini Track: conversas com etiqueta "VENDA dd/mm/aa" + valor achado na sua mensagem de fechamento
+  function brl(t) {
+    t = String(t || ''); var m = t.match(/R\$\s*([\d.]+(?:,\d{1,2})?|\d+(?:\.\d{1,2})?)/i) || t.match(/(?:valor|total)[^\d]{0,20}([\d.]+,\d{2})/i);
+    if (!m) return null; var v = m[1];
+    if (v.indexOf(',') >= 0) v = v.replace(/\./g, '').replace(',', '.'); else if (/^\d{1,3}(\.\d{3})+$/.test(v)) v = v.replace(/\./g, '');
+    var n = Number(v); return n > 0 ? n : null;
+  }
+  function salesLabels(d) {
+    var s = stores(); if (s.err) return { ok: false, reason: s.err };
+    var req = getReq(), byId = {}, out = [], lim = Date.now() - (Number(d.days) || 60) * 86400e3;
+    arr(s.L).forEach(function (l) { if (l && l.name) byId[String(l.id)] = l.name; });
+    arr(s.C).forEach(function (c) {
+      try {
+        if (!c || !c.id || c.isGroup || c.id.server === 'g.us') return;
+        var names = (c.labels || []).map(function (i) { return byId[String(i)]; }).filter(Boolean);
+        var lab = names.filter(function (n) { return /venda/i.test(n); })[0]; if (!lab) return;
+        var dm = lab.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/), date = 0;
+        if (dm) { var y = dm[3] ? Number(dm[3]) : new Date().getFullYear(); if (y < 100) y += 2000; date = new Date(y, Number(dm[2]) - 1, Number(dm[1]), 12, 0, 0).getTime(); }
+        if (date && date < lim) return;
+        var ids = idsOf(c, req); if (!ids.phone && !ids.lid) return;
+        var value = null, vts = null, ms = [];
+        try { ms = c.msgs ? (c.msgs.getModelsArray ? c.msgs.getModelsArray() : (c.msgs.models || [])) : []; } catch (e) { }
+        for (var i = ms.length - 1; i >= 0; i--) { var m = ms[i]; if (!m || !m.id || !m.id.fromMe || m.type !== 'chat') continue;
+          var b = String(m.body || ''); if (/total|parab[eé]ns|aquisi|valor/i.test(b)) { var v = brl(b); if (v) { value = v; vts = new Date((m.t || 0) * 1000).toISOString(); break; } } }
+        out.push({ name: chatName(c), label: lab, date: date, phone: ids.phone, lid: ids.lid, value: value, value_ts: vts });
+      } catch (e) { }
+    });
+    out.sort(function (a, b) { return (b.date || 0) - (a.date || 0); });
+    return { ok: true, chats: out.slice(0, 200) };
+  }
   function activeChat() {
     var s = stores(); if (s.err) return { ok: false, reason: s.err };
     var c = arr(s.C).find(function (x) { return x.active; });
@@ -434,8 +464,8 @@ function oggSalt(u8) {
     if (e.source !== window || !e.data || e.data.tag !== 'WCRM_CONTENT') return;
     var d = e.data;
     if (d.kind === 'SYNC') push(true);
-    if (d.kind === 'OPEN' || d.kind === 'OPEN_NUMBER' || d.kind === 'READ' || d.kind === 'LISTINFO' || d.kind === 'FILTER' || d.kind === 'ACTIVE' || d.kind === 'ACT' || d.kind === 'SENDMEDIA' || d.kind === 'SENDTEXT' || d.kind === 'PROBE' || d.kind === 'LIDMAP' || d.kind === 'RECENT') {
-      var rr; try { rr = d.kind === 'OPEN' ? await openChat(d) : d.kind === 'OPEN_NUMBER' ? await openNumber(d) : d.kind === 'READ' ? readChat(d) : d.kind === 'LISTINFO' ? listInfo(d) : d.kind === 'FILTER' ? await filterList(d) : d.kind === 'ACT' ? await actChat(d) : d.kind === 'SENDMEDIA' ? await sendMediaDirect(d) : d.kind === 'SENDTEXT' ? await sendTextDirect(d) : d.kind === 'PROBE' ? probeMedia() : d.kind === 'LIDMAP' ? lidMap() : d.kind === 'RECENT' ? recentMsgs(d) : activeChat(); } catch (err) { rr = { ok: false, reason: String(err && err.message || err) }; }
+    if (d.kind === 'OPEN' || d.kind === 'OPEN_NUMBER' || d.kind === 'READ' || d.kind === 'LISTINFO' || d.kind === 'FILTER' || d.kind === 'ACTIVE' || d.kind === 'ACT' || d.kind === 'SENDMEDIA' || d.kind === 'SENDTEXT' || d.kind === 'PROBE' || d.kind === 'LIDMAP' || d.kind === 'RECENT' || d.kind === 'SALESLABELS') {
+      var rr; try { rr = d.kind === 'OPEN' ? await openChat(d) : d.kind === 'OPEN_NUMBER' ? await openNumber(d) : d.kind === 'READ' ? readChat(d) : d.kind === 'LISTINFO' ? listInfo(d) : d.kind === 'FILTER' ? await filterList(d) : d.kind === 'ACT' ? await actChat(d) : d.kind === 'SENDMEDIA' ? await sendMediaDirect(d) : d.kind === 'SENDTEXT' ? await sendTextDirect(d) : d.kind === 'PROBE' ? probeMedia() : d.kind === 'LIDMAP' ? lidMap() : d.kind === 'RECENT' ? recentMsgs(d) : d.kind === 'SALESLABELS' ? salesLabels(d) : activeChat(); } catch (err) { rr = { ok: false, reason: String(err && err.message || err) }; }
       send({ kind: 'RESULT', reqId: d.reqId, result: rr });
     }
     if (d.kind === 'APPLY') { var r = await apply(d); r = r || {}; send({ kind: 'APPLY_RESULT', reqId: d.reqId, result: r }); setTimeout(function () { push(false); }, 600); }
