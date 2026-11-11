@@ -38,6 +38,10 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const brl = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const fone = p => { const d = String(p || '').replace(/^55/, ''); return d.length >= 10 ? `(${d.slice(0, 2)}) ${d.slice(2, -4)}-${d.slice(-4)}` : p; };
+  const fmtMoney = v => (v === '' || v == null || isNaN(Number(v))) ? '' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const parseMoney = v => { const t = String(v || '').trim(); if (!t) return 0; return Number(t.replace(/\./g, '').replace(',', '.')) || 0; };
+  // digita só números: 32700 -> 327,00
+  document.addEventListener('input', e => { const el = e.target; if (!el.classList || !el.classList.contains('money')) return; const d = el.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 9); el.value = d ? fmtMoney(Number(d) / 100) : ''; }, true);
   const toLocal = s => { const d = s ? new Date(s) : new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
   const note = (m, col) => { try { if (typeof toast === 'function') return toast(m, col); } catch (e) { } console.log('[Track]', m); };
 
@@ -229,7 +233,7 @@
     if (showSale) {
       const f = k => esc(l[k] == null ? '' : l[k]);
       h += `<div class="g">
-        <label>Valor (R$) *<input data-f="sale_value" type="number" step="0.01" inputmode="decimal" value="${f('sale_value')}" placeholder="0,00"></label>
+        <label>Valor (R$) *<input data-f="sale_value" class="money" inputmode="numeric" value="${fmtMoney(l.sale_value)}" placeholder="0,00"></label>
         <label>Data da venda<input data-f="sale_at" type="datetime-local" value="${toLocal(l.sale_at)}"></label>
         <label class="full">Produto<input data-f="product" value="${f('product')}" placeholder="Ex: X11 Pro 47mm"></label>
         <label class="full">Nome completo<input data-f="full_name" value="${esc(l.full_name || l.push_name || chat.push || '')}"></label>
@@ -269,7 +273,8 @@
     try { if (typeof saveC === 'function') saveC(); } catch (e) { }
   }
   async function saveSale() {
-    const v = formVals(); const val = Number(String(v.sale_value || '').replace(',', '.'));
+    const v = formVals(); const val = parseMoney(v.sale_value);
+    if (val > 3000 && !confirm('Valor de ' + brl(val) + '. Está certo?\n\nDica: digite só os números (32700 = R$ 327,00).')) return;
     if (!(val > 0)) { note('Informe o valor da venda', '#e74c3c'); document.querySelector('#trk [data-f=sale_value]')?.focus(); return; }
     const body = { sale_value: val };
     if (v.sale_at) body.sale_at = new Date(v.sale_at).toISOString();
@@ -340,7 +345,7 @@
   salesStyle.textContent = `#trk-sales{position:fixed;inset:0;background:#0b141a;z-index:9999;overflow:auto;padding:12px;font-family:inherit;color:#e9edef;font-size:12px}
   #trk-sales h3{margin:0 0 4px;font-size:14px}#trk-sales .mut{color:#8696a0;font-size:11px}
   #trk-sales .row{display:grid;grid-template-columns:20px 1fr 92px;gap:6px;align-items:center;padding:8px 0;border-bottom:1px solid #2a3942}
-  #trk-sales input[type=number]{width:100%;box-sizing:border-box;background:#202c33;border:1px solid #2a3942;border-radius:7px;padding:5px 6px;color:#e9edef;font-size:12px}
+  #trk-sales input.money{width:100%;box-sizing:border-box;background:#202c33;border:1px solid #2a3942;border-radius:7px;padding:5px 6px;color:#e9edef;font-size:12px}
   #trk-sales input[type=checkbox]{width:16px;height:16px;accent-color:#00a884}
   #trk-sales .st{font-size:10px;margin-top:2px}#trk-sales .ok{color:#25d366}#trk-sales .wr{color:#f5b84b}#trk-sales .no{color:#f15c6d}
   #trk-sales .bar{position:sticky;bottom:0;background:#0b141a;padding:10px 0 2px;display:flex;gap:6px}
@@ -363,13 +368,14 @@
     h += sales.map((r, i) => {
       const dt = r.sale_at ? new Date(r.sale_at) : null, old = dt && Date.now() - dt > DAY7;
       const ja = r.stage === 'comprou';
-      const stx = ja ? `<span class="ok">✓ já está no Track como venda (${brl(r.sale_value)})</span>` : (r.guess ? `<span class="mut">valor achado: ${esc(r.src)}</span>` : `<span class="wr">valor não encontrado: preencha</span>`);
+      const corr = ja && Number(r.val) > 0 && Number(r.val) !== Number(r.sale_value);
+      const stx = corr ? `<span class="wr">✏️ corrigir de ${brl(r.sale_value)} para ${brl(r.val)}</span>` : ja ? `<span class="ok">✓ já está no Track como venda (${brl(r.sale_value)})</span>` : (r.guess ? `<span class="mut">valor achado: ${esc(r.src)}</span>` : `<span class="wr">valor não encontrado: preencha</span>`);
       return `<div class="row"><input type="checkbox" data-i="${i}" ${r.sel ? 'checked' : ''}>
         <div><b>${esc(r.name || fone(r.phone) || 'Contato')}</b> <span class="mut">${esc(r.label)}</span><div class="st">${stx}${old ? ' · <span class="wr">+7 dias: só Track</span>' : ''}${r.res ? ' · ' + r.res : ''}</div></div>
-        <input type="number" step="0.01" data-v="${i}" value="${r.val || ''}" placeholder="R$"></div>`;
+        <input class="money" inputmode="numeric" data-v="${i}" value="${fmtMoney(r.val)}" placeholder="R$"></div>`;
     }).join('');
-    const sel = sales.filter(r => r.sel && Number(r.val) > 0);
-    h += `<div class="bar"><button data-s="close">Fechar</button><button class="pri" data-s="send" ${sel.length ? '' : 'disabled'}>Enviar ${sel.length} venda(s) · ${brl(sel.reduce((t, r) => t + Number(r.val), 0))}</button></div>`;
+    const sel = sales.filter(r => r.sel && parseMoney(fmtMoney(r.val)) > 0);
+    h += `<div class="bar"><button data-s="close">Fechar</button><button class="pri" data-s="send" ${sel.length ? '' : 'disabled'}>Enviar ${sel.length} venda(s) · ${brl(sel.reduce((t, r) => t + Number(r.val || 0), 0))}</button></div>`;
     el.innerHTML = h;
   }
   function salesClick(e) {
@@ -378,11 +384,13 @@
     if (t.dataset.s === 'close') return salesClose();
     if (t.dataset.s === 'send') return salesSend();
   }
-  document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.v != null && sales) { sales[e.target.dataset.v].val = e.target.value; if (Number(e.target.value) > 0 && sales[e.target.dataset.v].stage !== 'comprou') sales[e.target.dataset.v].sel = true; salesRender(); } });
+  document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.v != null && sales) { const r = sales[e.target.dataset.v], nv = parseMoney(e.target.value); r.val = nv || ''; if (nv > 0 && (r.stage !== 'comprou' || nv !== Number(r.sale_value))) r.sel = true; salesRender(); } });
   async function salesSend() {
     const list = sales.filter(r => r.sel && Number(r.val) > 0);
+    if (list.some(r => Number(r.val) > 3000) && !confirm('Tem venda acima de R$ 3.000. Os valores estão certos?')) return;
     const meta = list.filter(r => !(r.sale_at && Date.now() - new Date(r.sale_at) > DAY7) && r.stage !== 'comprou').length;
-    if (!confirm(`Enviar ${list.length} venda(s) pro Track?\n\n${meta} vão pra Meta como Purchase (até 7 dias). As outras só ficam registradas no Track.\nDepois de enviado, não dá pra apagar na Meta.`)) return;
+    const corr = list.filter(r => r.stage === 'comprou').length;
+    if (!confirm(`Enviar ${list.length} venda(s) pro Track?\n\n${meta} vão pra Meta como Purchase (até 7 dias). As outras só ficam registradas no Track.${corr ? `\n${corr} são correções de valor: corrigem no Track (a Meta não deixa alterar evento já enviado).` : ''}\nDepois de enviado, não dá pra apagar na Meta.`)) return;
     for (const r of list) {
       const old = r.sale_at && Date.now() - new Date(r.sale_at) > DAY7;
       const x = await api('stage', { phone: r.phone, lid: r.lid, push_name: r.name, stage: 'comprou', sale_value: Number(r.val), sale_at: r.sale_at || new Date().toISOString(), no_capi: !!old });
