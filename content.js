@@ -613,7 +613,7 @@
       const cfg = o && o.wcrm_track; if (!cfg || !cfg.a || !cfg.k) return;
       const m = await bridgeCall('LIDMAP', {}, 8000); if (!m || !m.ok) return;
       const r = await fetch((cfg.url || 'https://zambonini-track.vercel.app') + '/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-key': cfg.k },
-        body: JSON.stringify({ a: cfg.a, r: 'sync', pairs: m.pairs || [], latest_in: m.latest_in || 0 }) });
+        body: JSON.stringify({ a: cfg.a, r: 'sync', pairs: m.pairs || [], names: m.names || [], latest_in: m.latest_in || 0 }) });
       const j = await r.json().catch(() => ({}));
       if (j.restarted) console.log('[Track] conexão da Evolution reiniciada (atraso de ' + j.lag_min + ' min)');
       // segunda fonte: manda as mensagens recentes do WhatsApp Web (o Track ignora as que já tem)

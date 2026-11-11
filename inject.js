@@ -190,15 +190,19 @@
   // pares @lid↔telefone das conversas recentes + hora da última mensagem recebida (vigia do Track)
   function lidMap() {
     var s = stores(); if (s.err) return { ok: false, reason: s.err };
-    var req = getReq(), pairs = [], latest = 0, lim = Date.now() / 1000 - 4 * 86400;
+    var req = getReq(), pairs = [], names = [], latest = 0, lim = Date.now() / 1000 - 4 * 86400, limN = Date.now() / 1000 - 30 * 86400;
     arr(s.C).forEach(function (c) {
       if (!c || !c.id || c.isGroup || c.id.server === 'g.us' || c.id.server === 'broadcast' || c.id.server === 'newsletter') return;
+      if ((c.t || 0) < limN) return;
+      var ids = idsOf(c, req), ct = c.contact || {};
+      var nm = String(ct.pushname || ct.verifiedName || ct.notifyName || '').trim();
+      if (nm && (ids.phone || ids.lid)) names.push({ phone: ids.phone, lid: ids.lid, name: nm });
       if ((c.t || 0) < lim) return;
-      var ids = idsOf(c, req); if (ids.phone && ids.lid) pairs.push(ids);
+      if (ids.phone && ids.lid) pairs.push(ids);
       try { var ms = c.msgs ? (c.msgs.getModelsArray ? c.msgs.getModelsArray() : (c.msgs.models || [])) : [];
         for (var i = ms.length - 1; i >= 0; i--) { var m = ms[i]; if (!m || !m.id || m.id.fromMe || m.isNotification || SKIP_TYPES.test(m.type || '')) continue; var t = (m.t || 0) * 1000; if (t > latest) latest = t; break; } } catch (e) { }
     });
-    return { ok: true, pairs: pairs.slice(0, 400), latest_in: latest };
+    return { ok: true, pairs: pairs.slice(0, 400), names: names.slice(0, 500), latest_in: latest };
   }
   // Zambonini Track: mensagens recentes (segunda fonte, caso a Evolution trave). Só texto, sem mídia.
   function adOf(m) {
