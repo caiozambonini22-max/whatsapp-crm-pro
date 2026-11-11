@@ -148,6 +148,9 @@ window.addEventListener('message', e => {
     if (e.data.op === 'rename' && nm && to) {
       crmTabs = crmTabs.map(t => t === nm ? to : t).filter((t, i, a) => a.indexOf(t) === i);
       Object.values(contacts).forEach(c => { const tl = tabsOf(c); if (tl.includes(nm)) { c.tabs = tl.map(t => t === nm ? to : t); c.tab = c.tabs[0] || ''; } });
+    } else if (e.data.op === 'move' && nm && crmTabs.includes(nm)) {
+      const rest = crmTabs.filter(t => t !== nm); const bi = e.data.before ? rest.indexOf(e.data.before) : -1;
+      if (bi >= 0) rest.splice(bi, 0, nm); else rest.push(nm); crmTabs = rest;
     } else if (e.data.op === 'delete' && nm) {
       crmTabs = crmTabs.filter(t => t !== nm);
       Object.values(contacts).forEach(c => { const tl = tabsOf(c); if (tl.includes(nm)) { c.tabs = tl.filter(t => t !== nm); c.tab = c.tabs[0] || ''; } });

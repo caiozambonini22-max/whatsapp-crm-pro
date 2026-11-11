@@ -49,7 +49,7 @@
     #wcrm-topbar .tb-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 12px;border-radius:999px;border:1px solid #3a434a;background:#181d21;color:#e9edef;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;}
     #wcrm-topbar .tb-chip:hover{border-color:#d4af37;}
     #wcrm-topbar .tb-chip.on{background:#d4af37;border-color:#d4af37;color:#111;}
-    #wcrm-topbar .tb-chip.drop{background:#2d3a1e;border-color:#84cc16;box-shadow:0 0 0 2px #84cc16;}
+    #wcrm-topbar .tb-chip.dropl{box-shadow:inset 3px 0 0 #d4af37}#wcrm-topbar .tb-chip.dropr{box-shadow:inset -3px 0 0 #d4af37}#wcrm-topbar .tb-chip.drop{background:#2d3a1e;border-color:#84cc16;box-shadow:0 0 0 2px #84cc16;}
     #wcrm-topbar .tb-chip b{background:#d4af37;color:#111;border-radius:999px;min-width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;padding:0 5px;}
     #wcrm-topbar .tb-chip.on b{background:#111;color:#d4af37;}
     #wcrm-topbar .tb-mode{flex:0 0 auto;font-size:10px;font-weight:800;letter-spacing:.5px;color:#d4af37;border:1px solid #5b4b17;border-radius:6px;padding:3px 6px;text-transform:uppercase;}
@@ -201,7 +201,7 @@
     }
     return (barData.tabs || []).map(t => ({ name: t.name, count: t.count }));
   }
-  function chipHtml(c) { return `<button class="tb-chip${activeChip && activeChip.mode === mode && activeChip.name === c.name ? ' on' : ''}" data-n="${esc(c.name)}">${esc(c.name)}<b>${c.count || 0}</b></button>`; }
+  function chipHtml(c) { return `<button${mode === 'tabs' ? ' draggable="true" title="Arraste para mudar a ordem"' : ''} class="tb-chip${activeChip && activeChip.mode === mode && activeChip.name === c.name ? ' on' : ''}" data-n="${esc(c.name)}">${esc(c.name)}<b>${c.count || 0}</b></button>`; }
   function renderChips() {
     const el = document.getElementById('wcrm-chips'); if (!el) return;
     document.getElementById('wcrm-mode').textContent = mode === 'labels' ? 'Etiquetas' : 'Abas';
@@ -342,6 +342,23 @@
   } catch (e) {}
   // arrastar conversa para uma aba
   const chipsEl = document.getElementById('wcrm-chips');
+  // reorganizar as abas arrastando (ordem salva no CRM)
+  const isTabDrag = e => { try { return Array.from(e.dataTransfer.types || []).includes('text/wcrm-tab'); } catch (x) { return false; } };
+  const clearMarks = () => document.querySelectorAll('.tb-chip.dropl,.tb-chip.dropr').forEach(x => x.classList.remove('dropl', 'dropr'));
+  on2('dragstart', e => { const b = e.target.closest && e.target.closest('.tb-chip[data-n]'); if (mode !== 'tabs' || !b) return; e.dataTransfer.setData('text/wcrm-tab', b.dataset.n); e.dataTransfer.effectAllowed = 'move'; b.style.opacity = '.45'; });
+  on2('dragend', e => { const b = e.target.closest && e.target.closest('.tb-chip'); if (b) b.style.opacity = ''; clearMarks(); });
+  on2('dragover', e => { if (!isTabDrag(e)) return; const b = e.target.closest('.tb-chip'); if (!b || b.dataset.all) return; e.preventDefault(); e.stopPropagation(); clearMarks(); const r = b.getBoundingClientRect(); b.classList.add(e.clientX < r.left + r.width / 2 ? 'dropl' : 'dropr'); });
+  on2('drop', e => {
+    if (!isTabDrag(e)) return; const b = e.target.closest('.tb-chip'); if (!b || b.dataset.all) return; e.preventDefault(); e.stopPropagation();
+    const name = e.dataTransfer.getData('text/wcrm-tab'); const r = b.getBoundingClientRect(); const after = e.clientX >= r.left + r.width / 2; clearMarks();
+    if (!name || name === b.dataset.n) return;
+    const names = (barData.tabs || []).map(t => t.name).filter(n => n !== name); let bi = names.indexOf(b.dataset.n); if (after) bi++;
+    const before = names[bi] || null;
+    const tabs = barData.tabs.slice(); const mv = tabs.find(t => t.name === name); const rest = tabs.filter(t => t.name !== name); rest.splice(bi, 0, mv); barData.tabs = rest;
+    renderChips(); try { chrome.storage.local.get('wcrm_labelbar', o => { const v = o.wcrm_labelbar || {}; chrome.storage.local.set({ wcrm_labelbar: Object.assign({}, v, { tabs: rest, at: Date.now() }) }); }); } catch (x) {}
+    post({ type: 'KANBAN_TAB_OP', op: 'move', name, before });
+    toast('↔️ Aba "' + name + '" movida');
+  }, true);
   on2('dragover', e => { const b = e.target.closest('.tb-chip'); if (mode === 'tabs' && b && !b.dataset.all) { e.preventDefault(); document.querySelectorAll('.tb-chip.drop').forEach(x => x.classList.remove('drop')); b.classList.add('drop'); } });
   on2('dragleave', e => { const b = e.target.closest('.tb-chip'); b && b.classList.remove('drop'); });
   on2('drop', e => {
