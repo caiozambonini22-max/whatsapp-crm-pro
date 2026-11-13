@@ -172,14 +172,14 @@
   }
 
   // ── Aplica #primeiroNome (ao vivo, sem cache) ─────────────
-  async function applyNomeLive(text) {
+  async function applyNomeLive(text, chat, hint) {
     if (!text) return text;
     if (!/#primeiroNome/i.test(text)) return text;
     let r = null, first = '';
     // 1º: nome direto da memória do WhatsApp (contato salvo → nome de perfil). Não depende do visual.
     if (bridge && bridge.ok) {
       try {
-        const a = await bridgeCall('ACTIVE', {}, 4000);
+        const a = await bridgeCall('ACTIVE', chat ? { chat } : {}, 4000);
         if (a && a.ok && !a.group) {
           const isNum = s => /^[+\d\s().-]{7,}$/.test((s || '').trim());
           const cand = [a.saved, a.name, a.push].find(x => x && !isNum(x) && getFirstName(x));
@@ -187,6 +187,7 @@
         }
       } catch (e) {}
     }
+    if (!r && chat) { const isNum2 = /^[+\d\s().-]{7,}$/.test((hint || '').trim()); first = isNum2 ? '' : getFirstName(hint || ''); r = { source: 'nome-da-lista', full: hint || '' }; }   // envio silencioso: nunca lê a conversa que está aberta
     if (!r) { r = await resolveStable(); first = getFirstName(r.full); }
     console.log('[WCRM] #primeiroNome →', JSON.stringify({ origem: r.source, completo: r.full, primeiro: first }));
     return text.replace(/#primeiroNome/gi, first);
@@ -315,17 +316,20 @@
   }
 
   // ── Envia mensagem respeitando quebras de linha ────────────
-  async function sendMsg(text) {
+  async function sendMsg(text, chat, hint) {
     // Aplica #primeiroNome com o contato ATUAL do DOM (não depende de mensagem async)
-    const resolvedText = await applyNomeLive(text);
+    // chat = envio silencioso para essa conversa (sem abrir/trocar a tela); nunca cai na caixa de texto
+    const resolvedText = await applyNomeLive(text, chat, hint);
     // 1º: envio direto pelo WhatsApp (nada é digitado na caixa de mensagem)
     if (bridge && bridge.ok) {
       try {
-        const r = await bridgeCall('SENDTEXT', { chat: '__active__', text: resolvedText }, 15000);
+        const r = await bridgeCall('SENDTEXT', { chat: chat || '__active__', text: resolvedText }, 15000);
         if (r && r.ok) { await sleep(500); return true; }
+        if (chat) return false;
         console.warn('[WCRM] envio direto de texto falhou, usando a caixa:', r && r.reason);
-      } catch (e) {}
+      } catch (e) { if (chat) return false; }
     }
+    if (chat) return false;
     const box = getInputBox();
     if (!box) { console.warn('[WCRM] Input não encontrado'); return false; }
 

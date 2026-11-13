@@ -297,8 +297,9 @@
   async function readMsgs(contact, max) {
     const W = root.__wcrm;
     if (W && W.bridgeOk && W.bridgeOk()) {
-      const r = await W.bridgeCall('READ', { chat: contact, max: max || 60 }, 8000);
+      const r = await W.bridgeCall('READ', { chat: curRef || contact, max: max || 60 }, 8000);
       if (r && r.ok && r.messages) return r.messages;
+      if (curRef) return [];   // modo silencioso: nunca ler a tela que está aberta (é de outra pessoa)
     }
     return readMessages(max);
   }
@@ -322,6 +323,22 @@
     const sb = searchBox(); if (!sb) return;
     sb.focus(); document.execCommand('selectAll'); document.execCommand('delete');
     sb.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+  }
+  // ── envio silencioso: acha o id interno da conversa para falar com ela SEM abrir/trocar a tela ──
+  let curRef = null;
+  async function resolveRef(contact) {
+    try {
+      const W = root.__wcrm; if (!(W && W.bridgeOk && W.bridgeOk())) return null;
+      const br = W.getBridge && W.getBridge(); const nn = norm(contact); const dg = String(contact || '').replace(/\D/g, '');
+      const all = (br && br.all) || [];
+      let c = all.find(x => norm(x.n) === nn && x.id);
+      if (!c && dg.length >= 8) c = all.find(x => x.id && ((x.ph && String(x.ph).slice(-9) === dg.slice(-9)) || (String(x.n || '').replace(/\D/g, '').length >= 8 && String(x.n).replace(/\D/g, '').slice(-9) === dg.slice(-9))));
+      let id = c && c.id;
+      if (!id) { const map = (await sget('wcrm_idmap')) || {}; id = Object.keys(map).find(k => norm(map[k]) === nn); }
+      if (!id || /@g\.us$/.test(id)) return null;   // grupos continuam pelo jeito antigo
+      const r = await W.bridgeCall('READ', { chat: id, max: 5 }, 6000);
+      return r && r.ok ? id : null;
+    } catch (x) { return null; }
   }
   async function openChat(name) {
     const W = root.__wcrm;
@@ -383,14 +400,15 @@
     if (!Object.keys(want).length) return { ok: true };
     // 1º: ponte direta com o WhatsApp (sincroniza com o celular, sem clicar em menus)
     if (window.__wcrm && window.__wcrm.bridgeOk && window.__wcrm.bridgeOk()) {
-      const me = window.__wcrm.getDisplayName();
+      const me = curRef || window.__wcrm.getDisplayName();
       let allOk = true, why = '';
       for (const w of Object.values(want)) {
         const r = await window.__wcrm.applyLabel(me, w.name, w.on ? 'add' : 'remove', w.on);
         if (!r.ok) { allOk = false; why = r.reason || 'falhou'; break; }
       }
       if (allOk) return { ok: true };
-      // se a ponte recusou, tenta o jeito antigo (menu)
+      // se a ponte recusou, tenta o jeito antigo (menu) — menos no modo silencioso (o menu mexeria na conversa aberta)
+      if (curRef) return { ok: false, why: 'ponte recusou: ' + (why || '') };
     }
     const header = document.querySelector('#main header') || document.getElementById('main');
     const menuBtn = header && (header.querySelector('[data-icon="menu"], [data-icon="more-refreshed"], [aria-label="Menu"], [aria-label="Mais opções"], [aria-label="More options"]'));
@@ -731,14 +749,14 @@
       text = st.type === 'text' ? pickVariation(st.variations, rot) : templateText(st);
       if (!text) return { ok: true, sent: false, text: '' };
       if (await dupSent(enr, text)) return { ok: true, sent: false, text: '' };
-      ok = await W.sendMsg(text);
+      ok = await W.sendMsg(text, curRef || undefined, enr.contact);
     } else {
       if (!st.dataUrl) return { ok: false, sent: false, why: 'passo de ' + st.type + ' sem arquivo anexado' };
       if (await dupSent(enr, '[' + st.type + '] ' + (st.name || '') + '|' + String(st.dataUrl).length)) return { ok: true, sent: false, text: '' };
-      if (st.type === 'audio') { await actBridge('recording', enr.contact); await sleep(rndMs(3000, 6500)); await actBridge('paused', enr.contact); }   // “gravando áudio…” antes de mandar
+      if (st.type === 'audio') { await actBridge('recording', curRef || enr.contact); await sleep(rndMs(3000, 6500)); await actBridge('paused', curRef || enr.contact); }   // “gravando áudio…” antes de mandar
       let m2 = st;
-      if (st.caption && /#primeiroNome/i.test(st.caption) && W.applyNomeLive) { try { m2 = Object.assign({}, st, { caption: String((await W.applyNomeLive(st.caption)) || '').replace(/#primeiroNome/gi, '') }); } catch (x) {} }
-      ok = await sendMedia(W, m2); text = '[' + st.type + '] ' + (st.name || '');
+      if (st.caption && /#primeiroNome/i.test(st.caption) && W.applyNomeLive) { try { m2 = Object.assign({}, st, { caption: String((await W.applyNomeLive(st.caption, curRef || undefined, enr.contact)) || '').replace(/#primeiroNome/gi, '') }); } catch (x) {} }
+      ok = await sendMedia(W, m2, curRef || undefined); text = '[' + st.type + '] ' + (st.name || '');
     }
     if (ok) { await noteSent(enr, st.type === 'text' || ['pix', 'invite', 'contact', 'banner', 'list'].includes(st.type) ? text : '[' + st.type + '] ' + (st.name || '') + '|' + String(st.dataUrl || '').length); if (await gotNew(2)) { delete enr.attempt; if (enr.id) await mutateEnr(l => { const x = l.find(e => e.id === enr.id); if (x) delete x.attempt; }); } else await addLog('⚠️ Envio para "' + enr.contact + '" aceito pelo WhatsApp, mas não vi a mensagem na conversa — NÃO reenviei (confira)'); return { ok: true, sent: true, text }; }
     // o envio disse que falhou: só confirma que realmente NÃO saiu antes de permitir nova tentativa
@@ -764,7 +782,7 @@
     if (t === 'label_add' || t === 'label_rm') { const r = await applyLabelsUI(t === 'label_add' ? [st.name] : [], t === 'label_rm' ? [st.name] : []); if (!r.ok) await addLog('Etiqueta não aplicada em "' + contact + '": ' + r.why); return; }
     if (t === 'label_rmall') { const br = W.getBridge && W.getBridge(); const c = ((br && br.chats) || []).find(x => norm(x.name) === norm(contact)); const ls = c ? c.labels : []; if (ls.length) await applyLabelsUI([], ls); return; }
     if (t === 'tab_add' || t === 'tab_rm' || t === 'tab_rmall') { await setTabSafe(contact, t === 'tab_add' ? 'add' : t === 'tab_rm' ? 'remove' : 'clear', st.name); return; }
-    if (['archive', 'unarchive', 'pin', 'unpin', 'unread'].includes(t)) { const r = await actBridge(t, '__active__'); if (!r.ok) await addLog('Ação "' + t + '" falhou em "' + contact + '": ' + r.reason); }
+    if (['archive', 'unarchive', 'pin', 'unpin', 'unread'].includes(t)) { const r = await actBridge(t, curRef || '__active__'); if (!r.ok) await addLog('Ação "' + t + '" falhou em "' + contact + '": ' + r.reason); }
   }
   async function runSteps(W, rule, enr, steps, rot, before, fail) {
     let firstText = '', sentCount = 0;
@@ -779,7 +797,7 @@
         for (const q of qs) {
           qj++; if (qj < qskip) continue;
           if (q.type === 'wait') { await sleep(Math.min(120, +q.seconds || 0) * 1000); continue; }
-          if (q.type === 'typing' || q.type === 'recording') { await actBridge(q.type, enr.contact); await sleep((+q.seconds || 3) * 1000); await actBridge('paused', enr.contact); continue; }
+          if (q.type === 'typing' || q.type === 'recording') { await actBridge(q.type, curRef || enr.contact); await sleep((+q.seconds || 3) * 1000); await actBridge('paused', enr.contact); continue; }
           if (AUX.has(q.type)) { await execAux(W, q, enr.contact); continue; }
           const r = await sendOne(W, enr, q, rot);
           if (!r.ok) { await fail(r.why + ' — NÃO avancei', 'Falha no envio do follow-up "' + rule.name + '": ' + r.why); return { ok: false }; }
@@ -793,7 +811,7 @@
         if (r.sent) { sentCount++; firstText = firstText || r.text; await mark(); await sleep(rndMs(1200, 2500)); }
       } else if (t === 'wait') { await sleep(Math.min(3600, Math.max(0, +st.seconds || 0)) * 1000); }
       else if (t === 'typing' || t === 'recording') {
-        const r = await actBridge(t, enr.contact); if (!r.ok) await addLog('Presença "' + t + '" não aplicada (' + r.reason + ') — só esperei');
+        const r = await actBridge(t, curRef || enr.contact); if (!r.ok) await addLog('Presença "' + t + '" não aplicada (' + r.reason + ') — só esperei');
         await sleep(Math.min(120, Math.max(1, +st.seconds || 3)) * 1000); await actBridge('paused', enr.contact);
       }
       else if (t === 'label_add' || t === 'label_rm') {
@@ -815,7 +833,7 @@
         else { await addLog('⚠️ Aba NÃO mudou (' + lbl + ' "' + (st.name || '') + '") em "' + enr.contact + '"'); await addAlert('label', enr.contact, 'Mensagem enviada, mas a aba não mudou (' + lbl + ' "' + (st.name || '') + '"). Mude na mão ou use ▶ nos Avisos.'); }
       }
       else if (['archive', 'unarchive', 'pin', 'unpin', 'unread'].includes(t)) {
-        const r = await actBridge(t, enr.contact); if (!r.ok) { await addLog('Ação "' + t + '" falhou em "' + enr.contact + '": ' + r.reason); await addAlert('label', enr.contact, 'Ação “' + t + '” não aplicada: ' + r.reason); }
+        const r = await actBridge(t, curRef || enr.contact); if (!r.ok) { await addLog('Ação "' + t + '" falhou em "' + enr.contact + '": ' + r.reason); await addAlert('label', enr.contact, 'Ação “' + t + '” não aplicada: ' + r.reason); }
       }
       await mark();
     }
@@ -852,7 +870,7 @@
     const chk = (await getEnrs()).find(e => e.id === enrId);
     if (!chk || chk.claim !== myId || chk.state !== 'sending') return;   // outra cópia reservou primeiro
     try { await processEnrollmentInner(enrId); }
-    finally { await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x && x.claim === myId) { if (x.state === 'sending') x.state = 'waiting'; delete x.claim; } }); }
+    finally { curRef = null; await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x && x.claim === myId) { if (x.state === 'sending') x.state = 'waiting'; delete x.claim; } }); }
   }
   async function processEnrollmentInner(enrId) {
     const W = root.__wcrm; if (!W) return;
@@ -870,7 +888,8 @@
 
     { const idn = identOf(enr.contact); if (!enr.force && idn[0] !== 'n') { const rt1 = await getRt(); const la = ((rt1.lastAny || {})[idn]); if (la && Date.now() - la.at < 3 * 3600e3 && la.rule !== rule.id) { const nd = la.at + 3 * 3600e3 + rndMs(60000, 240000); await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x && x.state === 'sending') { x.state = 'waiting'; delete x.claim; x.dueAt = nd; } }); await addLog('⏳ "' + enr.contact + '" já recebeu outro follow-up há menos de 3h — adiei este para evitar mensagens coladas'); return; } } }
     if (await dupRule(enr, rule)) { await mutateEnr(l => { const x = l.find(e => e.id === enrId); if (x) { x.state = 'cancelled'; x.reason = 'duplicado: essa conversa já recebeu este follow-up'; x.endedAt = Date.now(); } }); await addLog('🛑 Duplicada evitada: "' + enr.contact + '" (mesma conversa) já recebeu o follow-up "' + rule.name + '" — cancelei esta inscrição'); return; }
-    const ok = await openChat(enr.contact);
+    curRef = enr.silent === false ? null : await resolveRef(enr.contact);
+    const ok = curRef ? true : await openChat(enr.contact);
     if (!ok && await isJunkName(enr.contact)) { await dropJunk(enr, 'não é uma conversa (texto da tela virou "contato")'); return; }
     if (!ok) return fail('Não achei/abri a conversa', 'Não consegui abrir a conversa 3 vezes. Follow-up parado para esse contato.');
     const before = await readMsgs(enr.contact, 60);
@@ -923,6 +942,96 @@
     await addLog('Follow-up "' + rule.name + '" enviado para "' + enr.contact + '"');
   }
 
+
+  // ═══════════ AGENDAR MENSAGEM (executor) ═══════════
+  // itens em wcrm_sched: {id, contact, cid, title, kind:'text'|'media'|'audio'|'quick', text, media:{dataUrl,name,mime,type}, msgId, at, rec:{t,every,unit,days,until}, state:'pending'|'sending'|'sent'|'error'|'missed', ...}
+  const K_SCHED = 'wcrm_sched';
+  const getSched = async () => { const v = await sget(K_SCHED); return Array.isArray(v) ? v : []; };
+  let schedQ = Promise.resolve();
+  function mutateSched(fn) { const p = schedQ.then(async () => { const l = await getSched(); const r = fn(l) || l; await sset(K_SCHED, r); return r; }); schedQ = p.catch(() => {}); return p; }
+  function schedNext(it, from) {
+    const rec = it.rec || { t: 'none' }; if (!rec.t || rec.t === 'none') return null;
+    const base = new Date(it.at); const now = from || Date.now(); let d = new Date(base.getTime());
+    const addDay = n => { d.setDate(d.getDate() + n); };
+    const until = rec.until ? new Date(rec.until + 'T23:59:59').getTime() : 0;
+    const ok = () => d.getTime() > now;
+    let guard = 0;
+    if ((rec.t === 'weekly' || rec.t === 'custom' && rec.unit === 'week') && Array.isArray(rec.days) && rec.days.length) {
+      do { addDay(1); guard++; } while ((!rec.days.includes(d.getDay()) || !ok()) && guard < 800);
+    } else do {
+      const n = Math.max(1, +rec.every || 1);
+      if (rec.t === 'daily') addDay(1);
+      else if (rec.t === 'weekly') addDay(7);
+      else if (rec.t === 'monthly') { const dd = base.getDate(); d.setDate(1); d.setMonth(d.getMonth() + 1); d.setDate(Math.min(dd, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())); }
+      else if (rec.t === 'yearly') d.setFullYear(d.getFullYear() + 1);
+      else if (rec.t === 'custom') { if (rec.unit === 'month') { const dd = base.getDate(); d.setDate(1); d.setMonth(d.getMonth() + n); d.setDate(Math.min(dd, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())); } else if (rec.unit === 'week') addDay(7 * n); else addDay(n); }
+      else return null;
+      guard++;
+    } while (!ok() && guard < 800);
+    if (!ok()) return null;
+    if (until && d.getTime() > until) return null;
+    return d.getTime();
+  }
+  root.__wcrmSchedNext = schedNext; root.__wcrmMutateSched = mutateSched;
+  async function schedSteps(it) {
+    if (it.kind === 'quick') return await quickSteps(it.msgId);
+    if (it.kind === 'text') return it.text ? [{ type: 'text', variations: [it.text] }] : [];
+    const m = it.media || {}; if (!m.dataUrl) return [];
+    const ty = it.kind === 'audio' ? 'audio' : (m.type || (/^video/.test(m.mime || '') ? 'video' : /^image/.test(m.mime || '') ? 'image' : 'document'));
+    const out = []; if (ty === 'audio') out.push({ type: 'recording', seconds: 3 });
+    out.push({ type: ty, dataUrl: m.dataUrl, name: m.name, mime: m.mime, caption: it.text || '' }); return out;
+  }
+  async function runSched(force) {
+    const W = root.__wcrm; if (!W || !(W.bridgeOk && W.bridgeOk())) return;
+    const now = Date.now(); const list = await getSched(); if (!list.length) return;
+    if (list.some(x => x.state === 'sending' && now - (x.claimAt || 0) > 10 * 60e3)) await mutateSched(l => { l.forEach(x => { if (x.state === 'sending' && now - (x.claimAt || 0) > 10 * 60e3) { x.state = 'pending'; delete x.claim; } }); });
+    const due = (force ? list.filter(x => x.id === force && ['pending', 'missed', 'error'].includes(x.state)) : list.filter(x => x.state === 'pending' && x.at <= now && now >= (x.retryAt || 0))).sort((a, b) => a.at - b.at);
+    if (!due.length) return;
+    const it = due[0];
+    // computador ficou desligado/dormindo por muito tempo: não manda mensagem "velha" sozinho — avisa e deixa você decidir
+    if (!force && now - it.at > 6 * 3600e3) {
+      const nx = schedNext(it, now);
+      await mutateSched(l => { const x = l.find(y => y.id === it.id); if (x) { if (nx) { x.at = nx; x.missedAt = now; } else { x.state = 'missed'; x.missedAt = now; } } });
+      await addLog('🕐 Agendamento perdido (computador desligado): "' + it.contact + '"' + (it.title ? ' — ' + it.title : ''));
+      await addAlert('info', it.contact, '🕐 O agendamento' + (it.title ? ' "' + it.title + '"' : '') + ' passou do horário com o computador desligado e NÃO foi enviado. Abra Agendar mensagem na conversa para enviar agora.');
+      return;
+    }
+    const myId = INST + '-' + now; let claimed = false;
+    await mutateSched(l => { const x = l.find(y => y.id === it.id); if (x && (force ? ['pending', 'missed', 'error'] : ['pending']).includes(x.state)) { x.state = 'sending'; x.claim = myId; x.claimAt = now; claimed = true; } });
+    if (!claimed) return;
+    await sleep(400 + Math.random() * 300);
+    const chk = (await getSched()).find(y => y.id === it.id); if (!chk || chk.claim !== myId) return;
+    const fail = async why => {
+      const fails = (it.fails || 0) + 1;
+      await mutateSched(l => { const x = l.find(y => y.id === it.id); if (x) { x.fails = fails; x.lastErr = why; delete x.claim; if (fails >= 3) { x.state = 'error'; x.errAt = Date.now(); } else { x.state = 'pending'; x.retryAt = Date.now() + 2 * 60e3; } } });
+      await addLog('🕐 Agendamento falhou ("' + it.contact + '", tentativa ' + fails + '): ' + why);
+      if (fails >= 3) await addAlert('error', it.contact, '🕐 Mensagem agendada não foi enviada: ' + why);
+    };
+    try {
+      const steps = await schedSteps(it);
+      if (!steps || !steps.length) return await fail(it.kind === 'quick' ? 'resposta rápida não encontrada' : 'mensagem vazia / sem arquivo');
+      curRef = await resolveRef(it.contact) || (it.cid && /@(c|lid)\.us|@lid$/.test(it.cid) ? it.cid : null);
+      if (curRef) { const r = await W.bridgeCall('READ', { chat: curRef, max: 3 }, 6000); if (!(r && r.ok)) curRef = null; }
+      if (!curRef && !(await openChat(it.contact))) return await fail('não achei/abri a conversa');
+      // envio anterior sem confirmação que pode ter saído atrasado: confere antes de mandar de novo
+      if (it.attempt && Date.now() - it.attempt.at < 8 * 3600e3 && !force) {
+        const ms = (await readMsgs(it.contact, 40)).filter(m => m.from === 'out' && (m.ts || 0) >= it.attempt.at - 120000);
+        if (ms.length) { await addLog('🔎 Agendamento para "' + it.contact + '" já tinha saído — NÃO reenviei'); return await schedDone(it, now); }
+      }
+      await mutateSched(l => { const x = l.find(y => y.id === it.id); if (x) x.attempt = { at: Date.now() }; });
+      const fakeEnr = { id: 'sched-' + it.id, contact: it.contact, nk: norm(it.contact), stepIdx: 0, force: true };
+      const before = await readMsgs(it.contact, 60);
+      const res = await runSteps(W, { name: 'Agendamento' }, fakeEnr, steps, 0, before, async why => { await fail(why); });
+      if (!res.ok) return;
+      await schedDone(it, now);
+      await addLog('🕐 Agendamento enviado para "' + it.contact + '"' + (it.title ? ' (' + it.title + ')' : ''));
+    } finally { curRef = null; await mutateSched(l => { const x = l.find(y => y.id === it.id); if (x && x.claim === myId && x.state === 'sending') { x.state = 'pending'; delete x.claim; } }); }
+  }
+  async function schedDone(it, now) {
+    const nx = schedNext(it, Date.now());
+    await mutateSched(l => { const x = l.find(y => y.id === it.id); if (!x) return; delete x.claim; delete x.attempt; x.fails = 0; delete x.lastErr; delete x.retryAt; x.lastSentAt = Date.now(); x.sentCount = (x.sentCount || 0) + 1; if (nx) { x.at = nx; x.state = 'pending'; } else { x.state = 'sent'; } });
+  }
+
   // ── ciclo principal ──
   let bootPrevAlive = null, wasOn = null;
   async function tick(force) {
@@ -954,6 +1063,7 @@
       await trackAndEnroll();
       await replyScan();
       if (!force && ((root.__wcrmSettle || 0) > Date.now() || navigator.onLine === false)) { await mutateRt(r => { r.state = navigator.onLine === false ? 'sem internet — aguardando' : 'computador acabou de ligar — aguardando o WhatsApp reconectar (sem envios por 2-3 min)'; r.stateAt = Date.now(); }); return; }
+      try { await runSched(); } catch (e) { console.error('[WCRM][agenda] erro', e); try { await addLog('Erro no agendamento: ' + (e && e.message)); } catch (x) {} }
       const enrs = await getEnrs(), rt = await getRt();
       const d = force ? { act: 'send', enr: enrs.find(e => e.id === force && ['waiting', 'stale'].includes(e.state)) } : decide(cfg, enrs, rt, Date.now());
       await mutateRt(r => { r.state = d.act === 'send' ? 'enviando' : d.why; r.stateAt = Date.now(); });
@@ -971,6 +1081,7 @@
       const W = root.__wcrm; const r = W ? await W.resolveStable() : { full: '' };
       const nm = (r && (r.full || r.phone)) || ''; reply({ type: 'CHAT_MESSAGES', name: nm, messages: await readMsgs(nm || (W && W.getDisplayName()) || '', 60) });
     }
+    if (t === 'SCHED_SEND_NOW') { if (busy) { reply({ type: 'SCHED_RESULT', ok: false, why: 'robô ocupado, tente em instantes' }); return; } busy = true; try { await runSched(e.data.id); reply({ type: 'SCHED_RESULT', ok: true }); try { const it2 = (await getSched()).find(y => y.id === e.data.id); root.__wcrm && root.__wcrm.toast(it2 && it2.state === 'error' ? '⚠️ Não consegui enviar: ' + (it2.lastErr || '') : it2 && it2.lastSentAt && Date.now() - it2.lastSentAt < 120000 ? '✅ Enviado' : '⏳ Tentando de novo em instantes'); } catch (x2) {} } catch (x) { reply({ type: 'SCHED_RESULT', ok: false, why: String(x && x.message) }); } finally { busy = false; } }
     if (t === 'ENGINE_DIAG') {
       const W = root.__wcrm; const L = [];
       const ok = (b, s) => L.push((b ? '✅ ' : '❌ ') + s);

@@ -551,7 +551,7 @@
     ['⚡', 'Respostas rápidas', () => { showPanel(); post({ type: 'GOTO_TAB', tab: 'msgs' }); }],
     ['👤', 'Perfil do contato', () => { showPanel(); post({ type: 'GOTO_TAB', tab: 'contact' }); }],
     ['|'],
-    ['🕐', 'Agendar mensagem', () => { showPanel(); post({ type: 'OPEN_SCHED' }); }],
+    ['🕐', 'Agendar mensagem', () => window.postMessage({ type: 'OPEN_SCHED_NEW' }, '*')],
     ['🔔', 'Lembrete', () => { showPanel(); post({ type: 'OPEN_REMINDER' }); }],
     ['📝', 'Anotação', () => { showPanel(); post({ type: 'OPEN_NOTE' }); }],
     ['|'],
@@ -581,7 +581,7 @@
    ['💬', 'Iniciar conversa (por número)', () => openStart()],
    ['📢', 'Disparo em massa', () => window.postMessage({ type: 'OPEN_BULK' }, '*')],
    ['🗂️', 'CRM Kanban', () => window.postMessage({ type: 'OPEN_KANBAN' }, '*')],
-   ['🕐', 'Agendamentos', () => { showPanel(); post({ type: 'GOTO_TAB', tab: 'sched' }); }],
+   ['🕐', 'Agendamentos (todos)', () => window.postMessage({ type: 'OPEN_SCHED_NEW', all: true }, '*')],
    ['🔔', 'Lembretes', () => { showPanel(); post({ type: 'GOTO_TAB', tab: 'followup' }); }]
   ].forEach(it => { const b = document.createElement('button'); b.textContent = it[0]; b.title = it[1]; b.addEventListener('click', it[2]); left.appendChild(b); });
   document.body.appendChild(left);

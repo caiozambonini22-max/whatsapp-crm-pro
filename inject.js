@@ -264,10 +264,10 @@
     out.sort(function (a, b) { return (b.date || 0) - (a.date || 0); });
     return { ok: true, chats: out.slice(0, 200) };
   }
-  function activeChat() {
+  function activeChat(d) {
     var s = stores(); if (s.err) return { ok: false, reason: s.err };
-    var c = arr(s.C).find(function (x) { return x.active; });
-    if (!c) return { ok: false, reason: 'nenhuma conversa aberta' };
+    var c = (d && d.chat && d.chat !== '__active__') ? findChat(s, d.chat) : arr(s.C).find(function (x) { return x.active; });
+    if (!c) return { ok: false, reason: (d && d.chat && d.chat !== '__active__') ? 'conversa não encontrada' : 'nenhuma conversa aberta' };
     var ct = c.contact || {}; var isG = !!(c.isGroup || (c.id && c.id.server === 'g.us'));
     var phone = ''; // Zambonini Track: telefone da conversa (funciona também em conversas @lid)
     try { if (c.id && c.id.server === 'c.us') phone = String(c.id.user || ''); else { var pn = ct.phoneNumber || (ct.id && ct.id.server === 'c.us' ? ct.id : null); if (pn) phone = String(pn.user || String(pn._serialized || pn).split('@')[0]); } } catch (e) { }
@@ -469,7 +469,7 @@ function oggSalt(u8) {
     var d = e.data;
     if (d.kind === 'SYNC') push(true);
     if (d.kind === 'OPEN' || d.kind === 'OPEN_NUMBER' || d.kind === 'READ' || d.kind === 'LISTINFO' || d.kind === 'FILTER' || d.kind === 'ACTIVE' || d.kind === 'ACT' || d.kind === 'SENDMEDIA' || d.kind === 'SENDTEXT' || d.kind === 'PROBE' || d.kind === 'LIDMAP' || d.kind === 'RECENT' || d.kind === 'SALESLABELS') {
-      var rr; try { rr = d.kind === 'OPEN' ? await openChat(d) : d.kind === 'OPEN_NUMBER' ? await openNumber(d) : d.kind === 'READ' ? readChat(d) : d.kind === 'LISTINFO' ? listInfo(d) : d.kind === 'FILTER' ? await filterList(d) : d.kind === 'ACT' ? await actChat(d) : d.kind === 'SENDMEDIA' ? await sendMediaDirect(d) : d.kind === 'SENDTEXT' ? await sendTextDirect(d) : d.kind === 'PROBE' ? probeMedia() : d.kind === 'LIDMAP' ? lidMap() : d.kind === 'RECENT' ? recentMsgs(d) : d.kind === 'SALESLABELS' ? salesLabels(d) : activeChat(); } catch (err) { rr = { ok: false, reason: String(err && err.message || err) }; }
+      var rr; try { rr = d.kind === 'OPEN' ? await openChat(d) : d.kind === 'OPEN_NUMBER' ? await openNumber(d) : d.kind === 'READ' ? readChat(d) : d.kind === 'LISTINFO' ? listInfo(d) : d.kind === 'FILTER' ? await filterList(d) : d.kind === 'ACT' ? await actChat(d) : d.kind === 'SENDMEDIA' ? await sendMediaDirect(d) : d.kind === 'SENDTEXT' ? await sendTextDirect(d) : d.kind === 'PROBE' ? probeMedia() : d.kind === 'LIDMAP' ? lidMap() : d.kind === 'RECENT' ? recentMsgs(d) : d.kind === 'SALESLABELS' ? salesLabels(d) : activeChat(d); } catch (err) { rr = { ok: false, reason: String(err && err.message || err) }; }
       send({ kind: 'RESULT', reqId: d.reqId, result: rr });
     }
     if (d.kind === 'APPLY') { var r = await apply(d); r = r || {}; send({ kind: 'APPLY_RESULT', reqId: d.reqId, result: r }); setTimeout(function () { push(false); }, 600); }
