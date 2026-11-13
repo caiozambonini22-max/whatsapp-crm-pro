@@ -97,7 +97,9 @@
     }
     items.sort((a, b) => a.top - b.top || a.left - b.left);
     const texts = [];
-    items.forEach(it => { if (!texts.includes(it.t)) texts.push(it.t); });
+    // botões do cabeçalho ("Adicionar à lista", etiquetas…) nunca são o nome da conversa
+    const BTN = /^(adicionar\b.*|add to\b.*|etiquetas?|labels?|pesquisar.*|search.*|mais|follow\b.*hoje)$/i;
+    items.forEach(it => { if (!texts.includes(it.t) && !BTN.test(it.t)) texts.push(it.t); });
     if (!texts.length) return { title: '', subtitle: '', profile: '', group: false };
 
     const profileRaw = texts.find(t => /^~\s*\S/.test(t));

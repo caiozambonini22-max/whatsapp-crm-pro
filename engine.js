@@ -830,7 +830,7 @@
         const r = await setTabSafe(enr.contact, t === 'tab_add' ? 'add' : t === 'tab_rm' ? 'remove' : 'clear', st.name);
         const lbl = t === 'tab_add' ? 'adicionar em' : t === 'tab_rm' ? 'tirar de' : 'limpar abas';
         if (r.ok) await addLog('Aba: ' + lbl + ' "' + (st.name || '') + '" ✓ ' + enr.contact);
-        else { await addLog('⚠️ Aba NÃO mudou (' + lbl + ' "' + (st.name || '') + '") em "' + enr.contact + '"'); await addAlert('label', enr.contact, 'Mensagem enviada, mas a aba não mudou (' + lbl + ' "' + (st.name || '') + '"). Mude na mão ou use ▶ nos Avisos.'); }
+        else { await mutateRt(x => { x.pendTabs = (x.pendTabs || []).filter(p => !(p.contact === enr.contact && p.tab === st.name && p.t === t)).concat([{ contact: enr.contact, t, tab: st.name, at: Date.now() }]).slice(-40); }); await addLog('⚠️ Aba NÃO mudou (' + lbl + ' "' + (st.name || '') + '") em "' + enr.contact + '" — vou tentar de novo sozinho'); await addAlert('label', enr.contact, 'Mensagem enviada, mas a aba não mudou (' + lbl + ' "' + (st.name || '') + '"). Mude na mão ou use ▶ nos Avisos.'); }
       }
       else if (['archive', 'unarchive', 'pin', 'unpin', 'unread'].includes(t)) {
         const r = await actBridge(t, curRef || enr.contact); if (!r.ok) { await addLog('Ação "' + t + '" falhou em "' + enr.contact + '": ' + r.reason); await addAlert('label', enr.contact, 'Ação “' + t + '” não aplicada: ' + r.reason); }
@@ -1063,6 +1063,14 @@
       await trackAndEnroll();
       await replyScan();
       if (!force && ((root.__wcrmSettle || 0) > Date.now() || navigator.onLine === false)) { await mutateRt(r => { r.state = navigator.onLine === false ? 'sem internet — aguardando' : 'computador acabou de ligar — aguardando o WhatsApp reconectar (sem envios por 2-3 min)'; r.stateAt = Date.now(); }); return; }
+      try {   // trocas de aba que falharam: tenta de novo a cada ciclo até conseguir (até 24h)
+        const pt = (rt0.pendTabs || []).filter(p => now - p.at < 24 * 3600e3);
+        if (pt.length !== (rt0.pendTabs || []).length) await mutateRt(x => { x.pendTabs = (x.pendTabs || []).filter(p => Date.now() - p.at < 24 * 3600e3); });
+        if (pt.length && document.getElementById('wcrm-iframe')) {
+          const p = pt[0]; const r = await setTabSafe(p.contact, p.t === 'tab_add' ? 'add' : p.t === 'tab_rm' ? 'remove' : 'clear', p.tab);
+          if (r.ok) { await mutateRt(x => { x.pendTabs = (x.pendTabs || []).filter(q => !(q.contact === p.contact && q.tab === p.tab && q.t === p.t)); }); await addLog('Aba aplicada na nova tentativa: "' + (p.tab || '') + '" ✓ ' + p.contact); }
+        }
+      } catch (e) {}
       try { await runSched(); } catch (e) { console.error('[WCRM][agenda] erro', e); try { await addLog('Erro no agendamento: ' + (e && e.message)); } catch (x) {} }
       const enrs = await getEnrs(), rt = await getRt();
       const d = force ? { act: 'send', enr: enrs.find(e => e.id === force && ['waiting', 'stale'].includes(e.state)) } : decide(cfg, enrs, rt, Date.now());
