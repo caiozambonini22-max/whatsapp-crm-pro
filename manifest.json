@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "WhatsApp CRM Pro",
-  "version": "5.5",
+  "version": "5.6",
   "description": "CRM completo para WhatsApp Web",
   "permissions": [
     "storage",
@@ -33,6 +33,7 @@
         "https://web.whatsapp.com/*"
       ],
       "js": [
+        "clientdata.js",
         "content.js",
         "engine.js",
         "layout.js",
@@ -52,6 +53,15 @@
       ],
       "run_at": "document_idle",
       "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://gestao-zambonini.vercel.app/*"
+      ],
+      "js": [
+        "erp.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
@@ -62,6 +72,14 @@
       ],
       "matches": [
         "https://web.whatsapp.com/*"
+      ]
+    },
+    {
+      "resources": [
+        "erp-inject.js"
+      ],
+      "matches": [
+        "https://gestao-zambonini.vercel.app/*"
       ]
     }
   ],

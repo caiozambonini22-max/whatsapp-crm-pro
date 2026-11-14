@@ -574,6 +574,10 @@
         sendTrackChat(getContact());
         break;
       case 'TRACK_GET_CHAT': sendTrackChat(getContact()); break;
+      case 'TRACK_READ_CLIENT': bridgeCall('READ', { chat: '__active__', max: 400 }, 12000).then(r => {
+        let data = null; try { data = window.__wcrmClient ? window.__wcrmClient.extractClient((r && r.messages) || []) : null; } catch (x) { console.warn('[WCRM] extrair cliente', x); }
+        document.getElementById('wcrm-iframe')?.contentWindow?.postMessage({ type: 'TRACK_CLIENT', data, ok: !!(r && r.ok), reason: r && r.reason }, '*');
+      }); break;
       case 'TRACK_SALES_SCAN': bridgeCall('SALESLABELS', { days: e.data.days || 60 }, 15000).then(r => document.getElementById('wcrm-iframe')?.contentWindow?.postMessage({ type: 'TRACK_SALES', r }, '*')); break;
       case 'SYNC_LABELS':
         bridgeSend({ kind: 'SYNC' });
