@@ -206,11 +206,29 @@
   }
   // Zambonini Track: mensagens recentes (segunda fonte, caso a Evolution trave). Só texto, sem mídia.
   function adOf(m) {
-    var c = null;
-    try { c = m.ctwaContext || (m.contextInfo && m.contextInfo.externalAdReply) || null; } catch (e) { }
-    if (!c) { try { if (m.conversionSource && /ad|fb|ig/i.test(String(m.conversionSource))) c = {}; } catch (e) { } }
-    if (!c) return null;
-    return { clid: String(c.ctwaClid || c.clid || ''), id: String(c.sourceId || ''), title: String(c.title || ''), url: String(c.sourceUrl || '') };
+    // procura sinais de anúncio em qualquer campo da mensagem (ctwaContext, contextInfo, conversionSource, entryPoint...)
+    var hit = {}, seen = 0;
+    function scan(o, d) {
+      if (!o || typeof o !== 'object' || d > 3 || seen > 400) return;
+      var ks; try { ks = Object.keys(o); } catch (e) { return; }
+      for (var i = 0; i < ks.length; i++) {
+        var k = ks[i], v; seen++; try { v = o[k]; } catch (e) { continue; }
+        if (v == null) continue;
+        var kk = k.replace(/^__x_/, '');
+        if (/^(ctwaClid|ctwa_clid|clid)$/i.test(kk) && typeof v === 'string') hit.clid = hit.clid || v;
+        else if (/^conversionSource$/i.test(kk)) hit.cs = String(v);
+        else if (/^entryPointConversionSource$/i.test(kk)) hit.ep = String(v);
+        else if (/^sourceId$/i.test(kk)) hit.id = String(v);
+        else if (/^sourceUrl$/i.test(kk)) hit.url = String(v);
+        else if (/^sourceType$/i.test(kk)) hit.st = String(v);
+        else if (/^title$/i.test(kk) && d > 0 && typeof v === 'string') hit.title = hit.title || v;
+        else if (typeof v === 'object' && d < 3 && (d > 0 || /ctwa|conversion|externalAd|entryPoint|context|referral/i.test(kk))) scan(v, d + 1);
+      }
+    }
+    scan(m, 0);
+    try { if (m.attributes) scan(m.attributes, 0); } catch (e) { }
+    var isAd = hit.clid || /ad/i.test(hit.st || '') || /fb_ads|ig_ads|ads?$/i.test(hit.cs || '') || /ctwa_ad/i.test(hit.ep || '');
+    return isAd ? { clid: hit.clid || '', id: hit.id || '', title: hit.title || '', url: hit.url || '' } : null;
   }
   function recentMsgs(d) {
     var s = stores(); if (s.err) return { ok: false, reason: s.err };
@@ -227,7 +245,7 @@
           var t = (m.t || 0) * 1000; if (t < since) return;
           var txt = m.type === 'chat' ? String(m.body || '') : String(m.caption || '');
           out.push({ id: String(m.id.id || ''), fromMe: !!m.id.fromMe, t: m.t, type: m.type === 'chat' ? 'conversation' : String(m.type || ''), text: txt.slice(0, 2000),
-            phone: ids.phone, lid: ids.lid, push: String(m.notifyName || ct.pushname || ''), ad: m.id.fromMe ? null : adOf(m) });
+            phone: ids.phone, lid: ids.lid, push: String(m.notifyName || ct.pushname || ''), ad: adOf(m) });
         } catch (e) { }
       });
     });
