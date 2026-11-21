@@ -18,9 +18,9 @@
   const PREV = { qualificado: 'contato', checkout: 'qualificado', comprou: 'checkout' };
   let winId = null, ai = null, aiInfo = '', aiBusy = false, aiSeq = 0, sug = null, sugBusy = false;
   // abre a ficha completa do Track numa janela grande (valor, data/hora, produto, dados, conversa)
-  function openWin(venda) {
-    if (!chat.phone) return;
-    const u = (cfg && cfg.url || DEF_URL) + '/?phone=' + encodeURIComponent(chat.phone) + (chat.lid ? '&lid=' + encodeURIComponent(chat.lid) : '') + '&push=' + encodeURIComponent(chat.push || chat.name || '') + (venda ? '&venda=1' : '');
+  function openWin(venda, hist) {
+    if (!chat.phone && !chat.lid) return;
+    const u = (cfg && cfg.url || DEF_URL) + '/?phone=' + encodeURIComponent(chat.phone || '') + (chat.lid ? '&lid=' + encodeURIComponent(chat.lid) : '') + '&push=' + encodeURIComponent(chat.push || chat.name || '') + (venda ? '&venda=1' : '') + (hist ? '&hist=1' : '');
     const w = 860, h = 920, left = Math.max(0, Math.round((screen.availWidth - w) / 2)), top = Math.max(0, Math.round((screen.availHeight - h) / 2));
     try {
       if (winId != null) chrome.windows.remove(winId, () => void chrome.runtime.lastError);
@@ -222,7 +222,7 @@
       <button data-st="qualificado" class="${ORDER[stg] >= 1 ? 'on' : ''}">Qualificado</button>
       <button data-st="checkout" class="${ORDER[stg] >= 2 ? 'on' : ''}">Quase fechando</button>
       <button data-act="sale" class="sale">💰 ${stg === 'comprou' ? 'Editar venda' : 'Venda'}</button></div>
-      <div style="display:flex;justify-content:space-between;margin-top:6px">${stg === 'perdido' ? '<span class="mut">✗ Marcado como perdido</span>' : (stg !== 'comprou' ? '<a data-act="lost" style="color:#f15c6d">✗ Perdido</a>' : '<span></span>')}<a data-act="ficha">📋 Abrir ficha completa</a></div>`;
+      <div style="display:flex;justify-content:space-between;margin-top:6px">${stg === 'perdido' ? '<span class="mut">✗ Marcado como perdido</span>' : (stg !== 'comprou' ? '<a data-act="lost" style="color:#f15c6d">✗ Perdido</a>' : '<span></span>')}<span><a data-act="hist" title="Conversa inteira salva no Track (sem precisar do celular)">📜 Histórico</a> · <a data-act="ficha">📋 Ficha</a></span></div>`;
     if (ask) {
       h += ask.lost
         ? `<div class="ask back">✗ Marcar este lead como <b>Perdido</b>?<br>Não envia nada pra Meta — serve pros seus relatórios. Se ele voltar a comprar, é só marcar a venda normalmente.<div class="acts"><button data-act="no">Cancelar</button><button data-act="yes" style="background:#e74c3c;border-color:#e74c3c;color:#fff">Marcar perdido</button></div></div>`
@@ -313,6 +313,7 @@
     if (a === 'sales') salesOpen();
     if (a === 'sale') { ask = null; showSale = false; render(); openWin(true); }
     if (a === 'ficha') openWin(false);
+    if (a === 'hist') openWin(false, true);
     if (a === 'lost') { ask = { lost: true, to: 'perdido' }; render(); }
     if (a === 'cancel') { showSale = false; render(); }
     if (a === 'no') { ask = null; render(); }
