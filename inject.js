@@ -138,7 +138,7 @@
       if (!lab) return { ok: false, reason: 'Etiqueta não existe no WhatsApp: ' + msg.label };
     }
     var has = (chat.labels || []).map(String).indexOf(String(lab.id)) >= 0;
-    if ((msg.mode === 'add' && has) || (msg.mode === 'remove' && !has)) return { ok: true, noop: true };
+    if (msg.mode === 'add' && has) return { ok: true, noop: true };   // (remover sempre executa: o estado local pode estar desatualizado)
     try { await s.L.addOrRemoveLabels([{ id: String(lab.id), type: msg.mode }], [chat]); }
     catch (e) { return { ok: false, reason: 'WhatsApp recusou: ' + (e && e.message || e) }; }
     return { ok: true };
@@ -511,7 +511,7 @@ function oggSalt(u8) {
       if (op === 'archive' || op === 'unarchive') {
         var on = op === 'archive';
         if (Cmd && typeof Cmd.archiveChat === 'function') { await Cmd.archiveChat(chat, on); return { ok: true }; }
-        var fa = scanMods(req, function (m) { return typeof m.setArchive === 'function' && m.setArchive; });
+        var sam = mod(req, 'WAWebSetArchiveChatAction'); var fa = (sam && typeof sam.setArchive === 'function' && sam.setArchive) || scanMods(req, function (m) { return typeof m.setArchive === 'function' && m.setArchive; }, true);
         if (fa) { await fa(chat, on); return { ok: true }; }
         return { ok: false, reason: 'arquivar indisponível nesta versão' };
       }

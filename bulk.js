@@ -432,6 +432,7 @@
       if (q('#bk-send')) {
         const tg = targetsNow(); if (!tg.length) return alert(view === 'camp' ? 'Escolha um agrupamento (ou a seleção do Envio Rápido).' : 'Volte e selecione os contatos.');
         if (!camp.steps.length) return alert('Adicione pelo menos uma ação ao script.');
+        { const bad = camp.steps.findIndex(s => /^(label_add|label_rm|tab_add|tab_rm)$/.test(s.type) && !(s.name || '').trim()); if (bad >= 0) return alert('Na ação ' + (bad + 1) + ' (' + UTIL[camp.steps[bad].type] + ') escolha a ' + (camp.steps[bad].type.startsWith('label') ? 'etiqueta' : 'aba') + ' na lista.'); }
         if (!camp.steps.some(s => s.type === 'quick' || (s.type === 'text' && (s.variations || []).some(v => (v || '').trim())))) return alert('O script precisa ter pelo menos uma mensagem (texto preenchido ou resposta rápida).');
         modal = true; return showModal();
       }
@@ -449,6 +450,7 @@
   });
   root.addEventListener('change', e => {
     const t = e.target;
+    if (t.dataset && t.dataset.sn) { const s = camp.steps[+t.dataset.sn]; if (s) s.name = t.value; return; }
     if (t.id === 'bk-pick') { segPick = t.value; pool = []; render(); }
     if (t.id === 'bk-file') { const f = t.files[0]; if (f) { const r = new FileReader(); r.onload = () => { addSheet(String(r.result)); render(); }; r.readAsText(f); } }
     if (t.id === 'bk-grp') { camp.groupId = t.value; camp.useSel = !t.value; rScriptKeep(); }
@@ -485,6 +487,7 @@
     let targets = targetsNow();
     if (!targets.length) return alert('Escolha os contatos (Envio Rápido) ou um agrupamento.');
     if (!camp.steps.length) return alert('Adicione pelo menos uma ação.');
+    { const bad = camp.steps.findIndex(s => /^(label_add|label_rm|tab_add|tab_rm)$/.test(s.type) && !(s.name || '').trim()); if (bad >= 0) return alert('Na ação ' + (bad + 1) + ' (' + UTIL[camp.steps[bad].type] + ') escolha a ' + (camp.steps[bad].type.startsWith('label') ? 'etiqueta' : 'aba') + ' na lista.'); }
     const o = camp.opts;
     if (o.shuffle) { for (let i = targets.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [targets[i], targets[j]] = [targets[j], targets[i]]; } }
     if (!o.dryRun && !confirm('Vai ENVIAR de verdade para ' + targets.length + ' contato(s), 1 por vez, com intervalo de ' + o.minSec + '–' + o.maxSec + ' s (limite ' + o.perHour + '/hora e ' + o.perDay + '/dia).\n\nMantenha o computador ligado e o WhatsApp Web aberto. Continuar?')) return;
