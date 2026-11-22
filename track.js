@@ -201,6 +201,8 @@
     if (!cfg) {
       box.innerHTML = `<div class="th">📍 Zambonini Track<span class="sp"></span></div>
         <div class="mut" style="margin:4px 0 6px">Conecte pra ver a origem do lead e marcar vendas que vão direto pra Meta.</div>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:10px;color:#8696a0">Código de conexão (cole aqui)<input id="trk-code" placeholder="cole o código que o Caio mandou"></label>
+        <div class="mut" style="margin:6px 0 0;text-align:center">— ou digite —</div>
         <div class="g"><label>Conta<input id="trk-a" placeholder="zambonini"></label><label>Senha<input id="trk-k" type="password"></label></div>
         <div class="acts"><button data-act="hide">Ocultar</button><button class="sale" data-act="connect">Conectar</button></div>
         <div class="mut" style="margin-top:6px">Não usa o Track? Clique em Ocultar. Pra mostrar de novo: clique no painel e aperte Ctrl+Shift+T.</div>`;
@@ -301,12 +303,11 @@
     const a = b.dataset.act;
     if (a === 'hide') { hidden = true; chrome.storage.local.set({ wcrm_track_hidden: true }); render(); note('Track oculto neste computador'); return; }
     if (a === 'connect') {
-      const ac = (document.getElementById('trk-a').value || '').trim().toLowerCase(), k = document.getElementById('trk-k').value;
-      if (!ac || !k) return note('Preencha conta e senha', '#e74c3c');
-      cfg = { url: DEF_URL, a: ac, k };
-      const r = await api('rules?a=' + encodeURIComponent(ac));
-      if (r.error) { cfg = null; note('Track: ' + r.error, '#e74c3c'); return; }
-      chrome.storage.local.set({ wcrm_track: cfg }); note('✅ Track conectado'); requestChat();
+      let ac = (document.getElementById('trk-a').value || '').trim().toLowerCase(), k = document.getElementById('trk-k').value;
+      const code = (document.getElementById('trk-code')?.value || '').trim();
+      if (code) { const p = decodeCode(code); if (!p) return note('Código inválido — copie de novo, inteiro', '#e74c3c'); ac = p.a; k = p.k; }
+      if (!ac || !k) return note('Cole o código ou preencha conta e senha', '#e74c3c');
+      if (!(await tryConnect(ac, k))) return;
     }
     if (a === 'cfg') { if (confirm('Desconectar o Zambonini Track desta extensão?')) { cfg = null; chrome.storage.local.remove('wcrm_track'); render(); } }
     if (a === 'refresh') load();
@@ -413,7 +414,21 @@
     salesRender();
   });
 
-  chrome.storage.local.get(['wcrm_track', 'wcrm_track_hidden'], o => { cfg = o.wcrm_track || null; hidden = !!o.wcrm_track_hidden && !cfg; render(); requestChat(); });
+  // código de conexão = base64("conta:senha"). Dá pra colar no painel OU deixar um arquivo track-preset.json
+  // ({"a":"conta","k":"senha"}) na pasta da extensão: ao abrir pela 1ª vez ela conecta sozinha.
+  function decodeCode(code) {
+    try { const t = decodeURIComponent(escape(atob(code.replace(/\s+/g, '')))); const i = t.indexOf(':'); if (i < 1) return null; return { a: t.slice(0, i).trim().toLowerCase(), k: t.slice(i + 1) }; } catch (e) { return null; }
+  }
+  async function tryConnect(ac, k) {
+    cfg = { url: DEF_URL, a: ac, k };
+    const r = await api('rules?a=' + encodeURIComponent(ac));
+    if (r.error) { cfg = null; note('Track: ' + r.error, '#e74c3c'); return false; }
+    chrome.storage.local.set({ wcrm_track: cfg }); note('✅ Track conectado'); render(); requestChat(); return true;
+  }
+  chrome.storage.local.get(['wcrm_track', 'wcrm_track_hidden'], async o => {
+    cfg = o.wcrm_track || null; hidden = !!o.wcrm_track_hidden && !cfg; render(); requestChat();
+    if (!cfg) { try { const p = await (await fetch(chrome.runtime.getURL('track-preset.json'), { cache: 'no-store' })).json(); if (p && p.a && p.k) { hidden = false; await tryConnect(String(p.a).toLowerCase(), p.k); } } catch (e) { } }
+  });
   // atalho pra reexibir o Track se foi ocultado: Ctrl+Shift+T dentro do painel
   document.addEventListener('keydown', e => { if (e.ctrlKey && e.shiftKey && (e.key === 'T' || e.key === 't')) { hidden = false; chrome.storage.local.remove('wcrm_track_hidden'); render(); } });
 })();
