@@ -326,6 +326,7 @@
     if (bridge && bridge.ok) {
       try {
         const r = await bridgeCall('SENDTEXT', { chat: chat || '__active__', text: resolvedText }, 15000);
+        if (r && r.preview) console.log('[WCRM] card do link:', r.preview);
         if (r && r.ok) { await sleep(500); return true; }
         if (chat) return false;
         console.warn('[WCRM] envio direto de texto falhou, usando a caixa:', r && r.reason);

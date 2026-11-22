@@ -404,7 +404,24 @@
     var req = getReq(); var s = stores(); if (s.err) return { ok: false, reason: s.err };
     var chat = findChat(s, d.chat); if (!chat) return { ok: false, reason: 'conversa não encontrada' };
     var fn = findTextSender(req); if (!fn) return { ok: false, reason: 'módulo de envio de texto não encontrado' };
-    try { await fn(chat, d.text, {}); return { ok: true }; } catch (err) { return { ok: false, reason: String(err && err.message || err) }; }
+    var opts = {}, pv = 'sem link';
+    var um = String(d.text || '').match(/https?:\/\/[^\s]+/);
+    if (um && d.preview !== false) {
+      pv = 'sem módulo';
+      try {
+        var gp = function (m) { return typeof m.getLinkPreview === 'function' && m.getLinkPreview; };
+        var lf = (function () { var m = mod(req, 'WAWebLinkPreviewChatAction'); return (m && gp(m)) || scanMods(req, gp, true); })();
+        if (lf) {
+          var prev = await Promise.race([Promise.resolve(lf(um[0])), new Promise(function (r) { setTimeout(function () { r(null); }, 7000); })]);
+          if (prev) { opts = { linkPreview: prev }; pv = 'ok'; } else pv = 'sem resposta';
+        }
+      } catch (ep) { pv = 'erro: ' + String(ep && ep.message || ep); }
+    }
+    try { await fn(chat, d.text, opts); return { ok: true, preview: pv }; }
+    catch (err) {
+      if (opts.linkPreview) { try { await fn(chat, d.text, {}); return { ok: true, preview: 'falhou no envio: ' + String(err && err.message || err) }; } catch (e2) { } }
+      return { ok: false, reason: String(err && err.message || err) };
+    }
   }
 
   // envio DIRETO de mídia (sem abrir a prévia), pelos módulos internos do WhatsApp
