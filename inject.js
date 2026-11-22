@@ -43,6 +43,30 @@
       if (!names.length) return;
       chats.push({ id: c.id && c.id._serialized, name: chatName(c), labels: names });
     });
+    // ── conversas etiquetadas que o WhatsApp ainda NÃO carregou na lista de conversas (as antigas) ──
+    // A lista interna só tem as conversas já carregadas; as associações etiqueta→conversa existem pra TODAS.
+    var chatIds = {}; arr(s.C).forEach(function (c) { if (c.id && c.id._serialized) chatIds[c.id._serialized] = 1; });
+    var orphan = {}, diag = { src: '', n: 0 };
+    function itemChat(it) {
+      var v = it && (it.parentId || it.chatId || it.chat || it.jid || it.wid); if (!v && it && it.id) { var q = String(it.id._serialized || it.id); var m = q.match(/(\d+(?:-\d+)?@(?:c|lid|g)\.us)/); if (m) v = m[1]; }
+      if (v && typeof v === 'object') v = v._serialized || (v.user ? v.user + '@' + (v.server || 'c.us') : ''); return v ? String(v) : '';
+    }
+    function itemsOf(l) {
+      var out = [];
+      try { var ks = Object.keys(l); for (var i = 0; i < ks.length; i++) { var col = l[ks[i]]; if (!col || typeof col !== 'object') continue; var list = null; try { list = col.getModelsArray ? col.getModelsArray() : (Array.isArray(col.models) ? col.models : null); } catch (e) { } if (list && list.length && itemChat(list[0])) { out = list; diag.src = ks[i]; break; } } } catch (e) { }
+      return out;
+    }
+    labs.forEach(function (l) {
+      itemsOf(l).forEach(function (it) {
+        var cid = itemChat(it); if (!cid || /@g\.us$/.test(cid) || chatIds[cid]) return; diag.n++;
+        (orphan[cid] = orphan[cid] || []).push(l.name);
+      });
+    });
+    Object.keys(orphan).forEach(function (cid) {
+      var u = cid.split('@')[0]; var isPh = /@c\.us$/.test(cid);
+      var ph = isPh ? u : ''; var nm = isPh ? ('+' + u.replace(/^(55)(\d{2})(\d{4,5})(\d{4})$/, '$1 $2 $3-$4')) : u;
+      chats.push({ id: cid, name: nm, labels: orphan[cid].filter(function (v, i, a) { return a.indexOf(v) === i; }), orphan: true, ph: ph });
+    });
     var counts = {}; chats.forEach(function (c) { c.labels.forEach(function (n) { counts[n] = (counts[n] || 0) + 1; }); });
     var act = [];
     arr(s.C).forEach(function (c) {
@@ -63,7 +87,7 @@
     return {
       ok: true, act: act, all: all,
       labels: labs.map(function (l) { return { id: String(l.id), name: l.name, color: l.hexColor || null, count: counts[l.name] || 0 }; }),
-      chats: chats
+      chats: chats, orphans: Object.keys(orphan).length, orphanSrc: diag.src
     };
   }
 
