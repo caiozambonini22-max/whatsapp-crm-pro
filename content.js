@@ -352,7 +352,7 @@
       try {
         const wantCard = !window.__wcrmNoPreview && /https?:\/\/\S+/.test(resolvedText);
         const r = await bridgeCall('SENDTEXT', { chat: chat || '__active__', text: resolvedText, preview: !(window.__wcrmNoPreview), needCard: wantCard }, 20000);
-        if (r && r.cardFail) { console.log('[WCRM] card pela ponte falhou (' + r.preview + ') — enviando pela caixa de texto'); if (await sendViaBoxWithCard(resolvedText, chat)) return true; if (chat) return false; }
+        if (r && r.cardFail) { const r2 = await bridgeCall('SENDTEXT', { chat: chat || '__active__', text: resolvedText, preview: false }, 15000); if (r2 && r2.ok) { await sleep(500); return true; } if (chat) return false; }
         if (r && r.preview) { console.log('[WCRM] card do link:', r.preview); try { let bn = document.getElementById('wcrm-pvbn'); if (!bn) { bn = document.createElement('div'); bn.id = 'wcrm-pvbn'; bn.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:2147483647;background:#111b21;color:#fff;border:1px solid #00a884;border-radius:10px;padding:10px 14px;font:12px/1.4 sans-serif;max-width:80vw;word-break:break-word;cursor:pointer'; bn.onclick = () => bn.remove(); document.body.appendChild(bn); } bn.textContent = '🔗 Card do link: ' + r.preview + '  (clique p/ fechar)'; clearTimeout(bn._t); bn._t = setTimeout(() => bn.remove(), 60000); } catch (e) { } }
         if (r && r.ok) { await sleep(500); return true; }
         if (chat) return false;

@@ -63,8 +63,9 @@
       });
     });
     Object.keys(orphan).forEach(function (cid) {
-      var u = cid.split('@')[0]; var isPh = /@c\.us$/.test(cid);
-      var ph = isPh ? u : ''; var nm = isPh ? ('+' + u.replace(/^(55)(\d{2})(\d{4,5})(\d{4})$/, '$1 $2 $3-$4')) : u;
+      var u = cid.split('@')[0]; var isPh = /@c\.us$/.test(cid); var cn = contactName(cid);
+      var ph = isPh ? u : cn.ph; var base = ph || u;
+      var nm = cn.n || ('+' + base.replace(/^(55)(\d{2})(\d{4,5})(\d{4})$/, '$1 $2 $3-$4'));
       chats.push({ id: cid, name: nm, labels: orphan[cid].filter(function (v, i, a) { return a.indexOf(v) === i; }), orphan: true, ph: ph });
     });
     var counts = {}; chats.forEach(function (c) { c.labels.forEach(function (n) { counts[n] = (counts[n] || 0) + 1; }); });
@@ -91,6 +92,24 @@
     };
   }
 
+  // conversas antigas (só etiquetadas) não estão na lista carregada: cria/obtém o chat internamente, sem abrir a tela
+  async function warmChat(ref) {
+    try {
+      if (!ref || ref === '__active__' || !/@(c|lid)\.us$/.test(String(ref))) return;
+      var s = stores(); if (s.err || findChat(s, ref)) return;
+      var req = getReq(); var F = mod(req, 'WAWebFindChatAction'), W = mod(req, 'WAWebWidFactory');
+      if (F && W && F.findOrCreateLatestChat && W.createWid) await F.findOrCreateLatestChat(W.createWid(String(ref)));
+    } catch (e) { }
+  }
+  function contactName(cid) {
+    try {
+      var req = getReq(); var CM = mod(req, 'WAWebContactCollection'); var coll = CM && (CM.ContactCollection || CM.default); var c = coll && coll.get && coll.get(cid);
+      if (!c) return { n: '', ph: '' };
+      var n = String(c.name || c.shortName || c.pushname || c.verifiedName || c.formattedName || '').trim();
+      var pn = c.phoneNumber && (c.phoneNumber._serialized || c.phoneNumber.user || c.phoneNumber); var ph = pn ? String(pn).split('@')[0].replace(/\D/g, '') : '';
+      return { n: n, ph: ph };
+    } catch (e) { return { n: '', ph: '' }; }
+  }
   function findChat(s, ref) {
     var list = arr(s.C);
     if (ref === '__active__') { for (var a = 0; a < list.length; a++) if (list[a].active) return list[a]; return null; }
@@ -409,17 +428,12 @@
     if (um && d.preview !== false) {
       pv = 'sem módulo';
       try {
-        var names = modNames(req).filter(function (n) { return /LinkPreview|LinkPrev/i.test(n); }), found = null, info = [];
-        for (var ni = 0; ni < names.length && !found; ni++) {
-          var mm = mod(req, names[ni]); if (!mm) continue; var ks2 = Object.keys(mm); info.push(names[ni] + '{' + ks2.slice(0, 8).join(',') + '}');
-          var fk = ['getLinkPreview', 'fetchLinkPreview', 'getSearchedLinkPreview', 'getPreview'];
-          for (var fi = 0; fi < fk.length; fi++) { if (typeof mm[fk[fi]] === 'function') { found = { f: mm[fk[fi]], n: names[ni] + '.' + fk[fi] }; break; } }
-          if (!found && mm.default && typeof mm.default.getLinkPreview === 'function') found = { f: mm.default.getLinkPreview, n: names[ni] + '.default.getLinkPreview' };
+        var lpm = mod(req, 'WAWebLinkPreviewChatAction');
+        if (lpm && typeof lpm.getLinkPreview === 'function') {
+          var host = ''; try { host = new URL(um[0]).hostname; } catch (eu) { }
+          var pr = await Promise.race([Promise.resolve(lpm.getLinkPreview({ url: um[0], domain: host }, chat)), new Promise(function (r) { setTimeout(function () { r('timeout'); }, 8000); })]);
+          if (pr && pr !== 'timeout' && pr.data) { opts = { linkPreview: pr.data }; pv = 'ok'; } else pv = pr === 'timeout' ? 'demorou >8s' : 'sem prévia para este link';
         }
-        if (found) {
-          var prev = await Promise.race([Promise.resolve(found.f(um[0])), new Promise(function (r) { setTimeout(function () { r('timeout'); }, 7000); })]);
-          if (prev && prev !== 'timeout') { opts = { linkPreview: prev }; pv = 'ok via ' + found.n; } else pv = (prev === 'timeout' ? 'demorou >7s' : 'vazio') + ' via ' + found.n;
-        } else pv = 'sem função; módulos: ' + (info.join(' | ') || names.length + ' achados');
       } catch (ep) { pv = 'erro: ' + String(ep && ep.message || ep); }
     }
     if (d.needCard && um && !opts.linkPreview) return { ok: false, cardFail: true, reason: 'card indisponível pela ponte', preview: pv };
@@ -533,6 +547,7 @@ function oggSalt(u8) {
     if (e.source !== window || !e.data || e.data.tag !== 'WCRM_CONTENT') return;
     var d = e.data;
     if (d.kind === 'SYNC') push(true);
+    try { if (d.chat && typeof d.chat === 'string' && d.kind !== 'SYNC') await warmChat(d.chat); } catch (ew) { }
     if (d.kind === 'OPEN' || d.kind === 'OPEN_NUMBER' || d.kind === 'READ' || d.kind === 'LISTINFO' || d.kind === 'FILTER' || d.kind === 'ACTIVE' || d.kind === 'ACT' || d.kind === 'SENDMEDIA' || d.kind === 'SENDTEXT' || d.kind === 'PROBE' || d.kind === 'LIDMAP' || d.kind === 'RECENT' || d.kind === 'SALESLABELS') {
       var rr; try { rr = d.kind === 'OPEN' ? await openChat(d) : d.kind === 'OPEN_NUMBER' ? await openNumber(d) : d.kind === 'READ' ? readChat(d) : d.kind === 'LISTINFO' ? listInfo(d) : d.kind === 'FILTER' ? await filterList(d) : d.kind === 'ACT' ? await actChat(d) : d.kind === 'SENDMEDIA' ? await sendMediaDirect(d) : d.kind === 'SENDTEXT' ? await sendTextDirect(d) : d.kind === 'PROBE' ? probeMedia() : d.kind === 'LIDMAP' ? lidMap() : d.kind === 'RECENT' ? recentMsgs(d) : d.kind === 'SALESLABELS' ? salesLabels(d) : activeChat(d); } catch (err) { rr = { ok: false, reason: String(err && err.message || err) }; }
       send({ kind: 'RESULT', reqId: d.reqId, result: rr });

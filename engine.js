@@ -335,8 +335,9 @@
     try {
       const W = root.__wcrm; if (!(W && W.bridgeOk && W.bridgeOk())) return null;
       const br = W.getBridge && W.getBridge(); const nn = norm(contact); const dg = String(contact || '').replace(/\D/g, '');
-      const all = (br && br.all) || [];
+      const all = ((br && br.all) || []).concat((br && br.chats) || []);
       let c = all.find(x => norm(x.n) === nn && x.id);
+      if (!c && dg.length >= 8) c = all.find(x => x.id && String(x.id).split('@')[0] === dg);   // contato salvo só pelo número interno (lid)
       if (!c && dg.length >= 8) c = all.find(x => x.id && ((x.ph && String(x.ph).slice(-9) === dg.slice(-9)) || (String(x.n || '').replace(/\D/g, '').length >= 8 && String(x.n).replace(/\D/g, '').slice(-9) === dg.slice(-9))));
       let id = c && c.id;
       if (!id) { const map = (await sget('wcrm_idmap')) || {}; id = Object.keys(map).find(k => norm(map[k]) === nn); }
@@ -1191,7 +1192,10 @@
       await addLog('📣 Falha em "' + c.n + '": ' + why);
       if (fails >= o.pauseAfterFails) { await mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (j) j.status = 'paused'; }); await addAlert('error', c.n, 'Disparo "' + job.name + '" PAUSADO após ' + fails + ' falhas seguidas: ' + why); }
     };
-    const opened = await openChat(c.n);
+    // ENVIO SILENCIOSO: não abre a conversa na tela (você continua usando o WhatsApp normalmente)
+    curRef = await resolveRef(c.n) || (c.id && /@(c|lid)\.us$/.test(String(c.id)) ? c.id : null);
+    if (curRef) { try { const rr = await W.bridgeCall('READ', { chat: curRef, max: 3 }, 6000); if (!(rr && rr.ok)) curRef = null; } catch (x) { curRef = null; } }
+    const opened = curRef ? true : await openChat(c.n);
     if (!opened) { await failed('não consegui abrir a conversa'); return; }
     const before = await readMsgs(c.n, 60);
     root.__wcrmNoPreview = o.linkCard === false;
@@ -1225,7 +1229,7 @@
       if (job.waitWhy !== (g.go ? '' : g.why)) await mutateBulk(x => { const j = x.jobs.find(y => y.id === job.id); if (j) j.waitWhy = g.go ? '' : g.why; });
       if (!g.go) return;
       if (busy) return; busy = true; mine = true; await bulkProcess(job.id);
-    } catch (e) { console.error('[WCRM][massa] erro', e); } finally { if (mine) busy = false; }
+    } catch (e) { console.error('[WCRM][massa] erro', e); } finally { if (mine) { busy = false; curRef = null; } }
   }
   // lista de contatos disponíveis para escolher (vem da ponte do WhatsApp)
   async function bulkSources() {
