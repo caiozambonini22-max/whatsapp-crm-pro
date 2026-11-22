@@ -1179,7 +1179,17 @@
     if (!info) { const al = ((br && br.all) || []).find(a => norm(a.n) === norm(c.n)); if (al && al.t) info = { n: al.n, i: al.t, o: 0 }; }
     if (info && info.g) { await setC({ state: 'skipped', why: 'é um grupo' }); return; }
     if (o.onlyKnown && !(info && (info.i || info.o))) { await setC({ state: 'skipped', why: 'nunca conversou com você (proteção)' }); await addLog('📣 "' + c.n + '" pulado: nunca conversou com você'); return; }
-    if (o.skipRecentHours > 0) { const lim = Date.now() - o.skipRecentHours * 3600e3; const rec = b0.jobs.some(j => (j.contacts || []).some(x => norm(x.n) === norm(c.n) && x.state === 'sent' && !x.simulated && (x.at || 0) > lim && !(j.id === jobId && x === c))); if (rec) { await setC({ state: 'skipped', why: 'já recebeu disparo há menos de ' + o.skipRecentHours + ' h' }); await addLog('📣 "' + c.n + '" pulado: recebeu disparo recente'); return; } }
+    let ridPre = ''; try { ridPre = (await resolveRef(c.n)) || ''; } catch (x) { }
+    if (o.skipDup !== false) {   // mesmo texto já enviado a esta pessoa em OUTRO disparo (sem limite de horas)
+      const nzj = x => norm(String(x || '')).replace(/[^a-z0-9]/g, '');
+      const sg = j => { const a = []; (j.steps || []).forEach(s => { if (s.type === 'text') (s.variations || []).forEach(v => { const z = nzj(v); if (z.length >= 25) a.push(z.slice(-40)); }); }); return a; };
+      const mine = sg(job);
+      if (mine.length) {
+        const dupJ = b0.jobs.find(j => j.id !== jobId && sg(j).some(t => mine.includes(t)) && (j.contacts || []).some(x => x.state === 'sent' && !x.simulated && (norm(x.n) === norm(c.n) || (ridPre && x.cid === ridPre))));
+        if (dupJ) { await setC({ state: 'skipped', why: 'já recebeu esta mensagem em outro disparo ("' + (dupJ.name || 'campanha') + '")' }); await addLog('📣 "' + c.n + '" pulado: já recebeu esta mensagem'); return; }
+      }
+    }
+    if (o.skipRecentHours > 0) { const lim = Date.now() - o.skipRecentHours * 3600e3; const rec = b0.jobs.some(j => (j.contacts || []).some(x => (norm(x.n) === norm(c.n) || (ridPre && x.cid === ridPre)) && x.state === 'sent' && !x.simulated && (x.at || 0) > lim && !(j.id === jobId && x === c))); if (rec) { await setC({ state: 'skipped', why: 'já recebeu disparo há menos de ' + o.skipRecentHours + ' h' }); await addLog('📣 "' + c.n + '" pulado: recebeu disparo recente'); return; } }
     if (o.skipActiveMin > 0 && info && info.i && Date.now() - info.i < o.skipActiveMin * 60e3) { await setC({ state: 'skipped', why: 'conversa ativa (cliente escreveu há menos de ' + o.skipActiveMin + ' min)' }); await addLog('📣 "' + c.n + '" pulado: conversa ativa'); return; }
     if ((o.excludeTabs || []).length) { const bar = (await sget(K_BAR)) || {}; const ex = new Set(o.excludeTabs.map(norm)); const hit = (bar.tabs || []).find(t => ex.has(norm(t.name)) && (t.contacts || []).some(n => norm(n) === norm(c.n))); if (hit) { await setC({ state: 'skipped', why: 'está na aba bloqueada “' + hit.name + '”' }); await addLog('📣 "' + c.n + '" pulado: aba ' + hit.name); return; } }
     const steps = bulkStepsOf(job, idx);
@@ -1198,11 +1208,20 @@
     const opened = curRef ? true : await openChat(c.n);
     if (!opened) { await failed('não consegui abrir a conversa'); return; }
     const before = await readMsgs(c.n, 60);
+    // não repete: se essa conversa JÁ recebeu este mesmo texto/link (de qualquer disparo, teste real ou envio manual), pula
+    if (o.skipDup !== false) {
+      const nzs = x => norm(String(x || '')).replace(/[^a-z0-9]/g, '');
+      const sigs = []; (job.steps || []).forEach(s => { if (s.type === 'text') (s.variations || []).forEach(v => { const z = nzs(v); if (z.length >= 25) sigs.push(z.slice(-40)); }); });
+      if (sigs.length) {
+        const hit = (before || []).find(m => m.from === 'out' && sigs.some(sg => nzs(m.text).includes(sg)));
+        if (hit) { await setC({ state: 'skipped', why: 'já recebeu este disparo' + (hit.at ? ' (' + hit.at + ')' : '') }); await addLog('📣 "' + c.n + '" pulado: já recebeu este disparo'); return; }
+      }
+    }
     root.__wcrmNoPreview = o.linkCard === false;
     let res; try { res = await runSteps(W, { name: job.name }, fakeEnr, steps, 0, before, async (why) => { await failed(why); }); } finally { root.__wcrmNoPreview = false; }
     if (!res.ok) return;
     const now = Date.now();
-    await setC({ state: 'sent', text: (res.firstText || '').slice(0, 80) }, { fails: 0, nextAt: gap(true), longPause: !!longP, pauseAt: (longP && vp) ? sentN + drawEvery() : (job.pauseAt || pauseAt) });
+    await setC({ state: 'sent', text: (res.firstText || '').slice(0, 80), cid: curRef || ridPre || undefined }, { fails: 0, nextAt: gap(true), longPause: !!longP, pauseAt: (longP && vp) ? sentN + drawEvery() : (job.pauseAt || pauseAt) });
     await mutateRt(r => { const today = dayKey(new Date(now)); if (r.day !== today) { r.day = today; r.sent = 0; } r.sent = (r.sent || 0) + 1; r.hourly = (r.hourly || []).filter(t => now - t < 3600e3).concat([now]); });
     await addLog('📣 Disparo "' + job.name + '" → "' + c.n + '"');
   }
