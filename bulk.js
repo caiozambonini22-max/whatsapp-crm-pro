@@ -3,6 +3,7 @@
 // O envio em si é feito pelo motor (engine.js): um contato por vez, intervalo aleatório, horário e limites.
 (function () {
   'use strict';
+  const bS = o => ({ min: o.batchMinS != null ? o.batchMinS : Math.round((o.batchMin || 5) * 60), max: o.batchMaxS != null ? o.batchMaxS : Math.round((o.batchMax || 12) * 60) });
   if (window.__wcrmBulk) return; window.__wcrmBulk = true;
   const K_BULK = 'wcrm_bulk', K_ST = 'wcrm_state';
   const sget = k => new Promise(r => { try { chrome.storage.local.get(k, o => r(o[k])); } catch (e) { r(undefined); } });
@@ -99,7 +100,7 @@
   let filterQ = '';
   const sel = new Map();                // nk -> contato selecionado
   const DEF_OPTS = { minSec: 45, maxSec: 150, perHour: 25, perDay: 120, useWindow: true, customWindow: false, winStart: '09:00', winEnd: '19:00', onlyKnown: true, dryRun: true, pauseAfterFails: 3,
-    typingSim: true, batchEvery: 15, batchMin: 5, batchMax: 12, warmN: 10, warmFactor: 2, skipRecentHours: 24, skipActiveMin: 30, excludeTabs: [], shuffle: true, startAt: 0 };
+    typingSim: true, batchEvery: 15, batchMin: 5, batchMax: 12, batchMinS: 285, batchMaxS: 285, warmN: 10, warmFactor: 2, skipRecentHours: 24, skipActiveMin: 30, excludeTabs: [], shuffle: true, startAt: 0 };
   let camp = { groupId: '', useSel: true, steps: [], stepGap: 4, stepGapMax: 10, opts: Object.assign({}, DEF_OPTS), name: '' };
   let bulk = { groups: [], jobs: [] }, rt = {}, cfgW = {}, quickList = [], cats = {};
   let qf = { q: '', type: 'all', cat: 'all', closed: {} };
@@ -239,7 +240,7 @@
     r = Math.max(0, Math.min(100, r)); const lvl = r < 25 ? ['Baixo', '#16a34a'] : r < 50 ? ['Médio', '#d97706'] : ['Alto', '#dc2626'];
     // duração estimada
     let sec = nContacts * avg * (1 + (o.warmN ? Math.min(o.warmN, nContacts) * (o.warmFactor - 1) / Math.max(1, nContacts) : 0));
-    if (o.batchEvery) sec += Math.floor(nContacts / o.batchEvery) * ((o.batchMin + o.batchMax) / 2) * 60;
+    if (o.batchEvery) sec += Math.floor(nContacts / o.batchEvery) * ((bS(o).min + bS(o).max) / 2);
     const days = Math.ceil(nContacts / Math.max(1, o.perDay));
     const hrs = Math.max(sec / 3600, nContacts / Math.max(1, o.perHour));
     return { score: r, lvl, tips, hrs, days };
@@ -260,7 +261,7 @@
       '<div class="card"><h3>📊 Limites</h3><div class="grid2">' + num('bm-ph', o.perHour, 'Por hora', 1) + num('bm-pd', o.perDay, 'Por dia', 1) + '</div>' +
       '<div style="font-size:12px;color:#6b7791;margin-top:6px">Os limites contam junto com o Follow Up (mesma conta, mesmo contador).</div></div>' +
       '<div class="card"><h3>🛌 Pausas e aquecimento</h3>' +
-      '<div class="grid3">' + num('bm-be', o.batchEvery, 'Pausa longa a cada (contatos)') + num('bm-bmin', o.batchMin, 'Pausa mín (min)') + num('bm-bmax', o.batchMax, 'Pausa máx (min)') + '</div><div style="font-size:12px;color:#6b7791;margin:4px 0 8px">0 = sem pausas longas.</div>' +
+      '<div class="grid3">' + num('bm-be', o.batchEvery, 'Pausar a cada (contatos)') + num('bm-bmin', bS(o).min, 'Pausa mín (segundos)') + num('bm-bmax', bS(o).max, 'Pausa máx (segundos)') + '</div><div style="font-size:12px;color:#6b7791;margin:4px 0 8px">0 = sem pausas longas.</div>' +
       '<div class="grid2">' + num('bm-wn', o.warmN, 'Aquecimento: primeiros (contatos)') + num('bm-wf', o.warmFactor, 'Intervalo multiplicado por', 1) + '</div>' +
       num('bm-fl', o.pauseAfterFails, 'Pausar o disparo após (falhas seguidas)', 1) + '</div></div><div>' +
       '<div class="card"><h3>🕒 Horário</h3>' + chk('bm-win', o.useWindow, 'Só enviar dentro do horário') +
@@ -284,7 +285,7 @@
     const o = camp.opts, n = (id, d, mn) => { const v = parseFloat(g(id).value); return Math.max(mn == null ? 0 : mn, isFinite(v) ? v : d); };
     o.minSec = n('bm-min', 45, 10); o.maxSec = Math.max(o.minSec, n('bm-max', 150, 10)); o.perHour = n('bm-ph', 25, 1); o.perDay = n('bm-pd', 120, 1);
     camp.stepGap = n('bm-sg', 0); camp.stepGapMax = Math.max(camp.stepGap, n('bm-sgx', 0));
-    o.typingSim = g('bm-typing').checked; o.batchEvery = Math.round(n('bm-be', 0)); o.batchMin = n('bm-bmin', 5, 1); o.batchMax = Math.max(o.batchMin, n('bm-bmax', 12, 1));
+    o.typingSim = g('bm-typing').checked; o.batchEvery = Math.round(n('bm-be', 0)); o.batchMinS = n('bm-bmin', 285, 1); o.batchMaxS = Math.max(o.batchMinS, n('bm-bmax', 285, 1)); o.batchMin = o.batchMinS / 60; o.batchMax = o.batchMaxS / 60;
     o.warmN = Math.round(n('bm-wn', 0)); o.warmFactor = n('bm-wf', 2, 1); o.pauseAfterFails = Math.round(n('bm-fl', 3, 1));
     o.useWindow = g('bm-win').checked; const ws = g('bm-ws').value, we = g('bm-we').value; o.customWindow = !!(ws && we && (ws !== cfgW.winStart || we !== cfgW.winEnd)); o.winStart = ws || cfgW.winStart; o.winEnd = we || cfgW.winEnd;
     const st = g('bm-start').value; o.startAt = st ? new Date(st).getTime() : 0;

@@ -1163,7 +1163,7 @@
     const sentN = job.contacts.filter(x => x.state === 'sent').length + 1;   // contando este
     const warm = o.warmN && sentN <= o.warmN ? (o.warmFactor || 2) : 1;
     const longP = o.batchEvery && sentN % o.batchEvery === 0 && job.contacts.some(x => x.state === 'pending' && x !== c);
-    const gap = (ok) => Date.now() + ((ok && longP) ? rndMs(o.batchMin * 60e3, Math.max(o.batchMin, o.batchMax) * 60e3) : rndMs(o.minSec * 1000 * warm, Math.max(o.minSec, o.maxSec) * 1000 * warm));
+    const gap = (ok) => Date.now() + ((ok && longP) ? rndMs((o.batchMinS != null ? o.batchMinS : o.batchMin * 60) * 1000, Math.max(o.batchMinS != null ? o.batchMinS : o.batchMin * 60, o.batchMaxS != null ? o.batchMaxS : o.batchMax * 60) * 1000) : rndMs(o.minSec * 1000 * warm, Math.max(o.minSec, o.maxSec) * 1000 * warm));
     const br = W.getBridge && W.getBridge();
     let info = ((br && br.act) || []).find(a => norm(a.n) === norm(c.n));
     if (!info) { const al = ((br && br.all) || []).find(a => norm(a.n) === norm(c.n)); if (al && al.t) info = { n: al.n, i: al.t, o: 0 }; }
