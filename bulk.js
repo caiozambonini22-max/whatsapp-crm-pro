@@ -79,7 +79,7 @@
   #wcrm-bulk .qlist{overflow:auto;flex:1;} #wcrm-bulk .qcat{border-radius:10px;margin-bottom:10px;overflow:hidden;border:1px solid #ecefc8;} #wcrm-bulk .qh{display:flex;gap:8px;align-items:center;padding:9px 12px;cursor:pointer;} #wcrm-bulk .qh b{flex:1;font-size:14px;} #wcrm-bulk .qh small{font-weight:400;color:#6b7791;}
   #wcrm-bulk .qi{display:flex;gap:10px;align-items:center;padding:9px 12px 9px 22px;border-top:1px solid rgba(0,0,0,.05);cursor:pointer;background:rgba(255,255,255,.55);} #wcrm-bulk .qi:hover{background:#fff;} #wcrm-bulk .qn{flex:1;font-size:14px;} #wcrm-bulk .qgo{color:#1d4ed8;font-size:18px;}
   #wcrm-bulk .bk-modal{position:absolute;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:flex-start;justify-content:center;z-index:20;padding:20px;overflow:auto;} #wcrm-bulk .bk-mc{background:#f4f6fb;border-radius:16px;width:min(1080px,96%);padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.4);}
-  #wcrm-bulk .amsep{padding:6px 12px;font-size:11px;font-weight:800;color:#6b7791;text-transform:uppercase;border-top:1px solid #e3e8f2;cursor:default}#wcrm-bulk .riskbar{background:#fff;border:1px solid #e3e8f2;border-radius:12px;padding:12px 14px;font-size:13.5px;} #wcrm-bulk .meter{height:9px;background:#e3e8f2;border-radius:99px;overflow:hidden;margin-top:8px;} #wcrm-bulk .meter i{display:block;height:100%;transition:width .2s;}
+  #wcrm-bulk .amsep{padding:6px 12px;font-size:11px;font-weight:800;color:#6b7791;text-transform:uppercase;border-top:1px solid #e3e8f2;cursor:default}#wcrm-bulk .sl{margin-bottom:14px}#wcrm-bulk .sl .sh{display:flex;justify-content:space-between;align-items:baseline;font-weight:700;font-size:14px;margin-bottom:6px}#wcrm-bulk .sl .sh b{color:#2563eb;font-size:15px}#wcrm-bulk .sl input[type=range]{width:100%}#wcrm-bulk .sl .hn{font-size:12px;color:#6b7791;margin-top:4px}#wcrm-bulk .riskbar{background:#fff;border:1px solid #e3e8f2;border-radius:12px;padding:12px 14px;font-size:13.5px;} #wcrm-bulk .meter{height:9px;background:#e3e8f2;border-radius:99px;overflow:hidden;margin-top:8px;} #wcrm-bulk .meter i{display:block;height:100%;transition:width .2s;}
   #wcrm-bulk .tabsel{display:flex;flex-wrap:wrap;gap:6px;max-height:110px;overflow:auto;} #wcrm-bulk .tchip{background:#eef2ff;border-radius:99px;padding:3px 10px;font-size:12px;display:inline-flex;gap:5px;align-items:center;cursor:pointer;} #wcrm-bulk .tchip input{width:auto;}
 `;
   document.head.appendChild(css);
@@ -234,7 +234,7 @@
   function riskOf(o, nContacts) {
     let r = 0; const tips = []; const avg = (o.minSec + o.maxSec) / 2;
     if (avg < 30) { r += 40; tips.push('Intervalo médio muito curto — suba para 60 s ou mais.'); } else if (avg < 60) { r += 24; tips.push('Intervalo médio curto — o ideal é acima de 60 s.'); } else if (avg < 120) r += 12; else r += 4;
-    if (o.maxSec - o.minSec < avg * 0.5) { r += 8; tips.push('Intervalo quase fixo parece robô — deixe máximo bem maior que o mínimo.'); }
+    if (o.maxSec - o.minSec < avg * 0.3) { r += 8; tips.push('Intervalo quase fixo parece robô — deixe máximo bem maior que o mínimo.'); }
     if (o.perHour > 40) { r += 20; tips.push('Mais de 40 envios por hora é arriscado.'); } else if (o.perHour > 25) r += 10;
     if (o.perDay > 250) { r += 18; tips.push('Mais de 250 por dia é arriscado numa conta sem histórico de volume.'); } else if (o.perDay > 150) r += 8;
     if (!o.onlyKnown) { r += 25; tips.push('Enviar para quem nunca conversou é o maior motivo de banimento.'); }
@@ -266,6 +266,7 @@
       sl('bm-iv', 'Intervalo entre mensagens', iv, 10, 300, 1, 'segundos', 'Sempre varia ±' + vp + '% — nunca é um número exato.') +
       sl('bm-be', 'Pausar a cada X envios', o.batchEvery || 0, 0, 100, 1, 'contatos', '0 = sem pausa. O X também varia a cada ciclo.') +
       sl('bm-pt', 'Tempo da pausa', pv, 10, 900, 5, 'segundos', 'Também varia ±' + vp + '%.') +
+      '<div class="grid2" style="margin-top:6px">' + num('bm-pd', o.perDay, '📅 Limite por dia (máx. de envios)', 1) + num('bm-ph', o.perHour, '⏰ Limite por hora', 1) + '</div>' +
       '</div>' +
       '<div class="card"><h3>🛡️ Proteções</h3>' +
       chk('bm-known', o.onlyKnown, 'Só enviar para quem já conversou comigo') +
@@ -273,7 +274,7 @@
       chk('bm-typing', o.typingSim, 'Simular “digitando…” antes de cada texto') +
       chk('bm-win', o.useWindow, 'Só enviar dentro do horário', '<div style="margin:2px 0 0 26px">' + chk('bm-alld', o.allDays, 'Enviar também aos domingos (todos os dias)') + '</div><div class="grid2" id="bm-winbox" style="margin:2px 0 6px 26px"><div><label class="l">Das</label><input type="time" id="bm-ws" value="' + esc(o.customWindow ? o.winStart : cfgW.winStart) + '"></div><div><label class="l">às</label><input type="time" id="bm-we" value="' + esc(o.customWindow ? o.winEnd : cfgW.winEnd) + '"></div></div>') +
       '<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:#3b4a6b">⚙ Mais opções (opcional)</summary><div style="margin-top:10px">' +
-      '<div class="grid2">' + num('bm-var', vp, 'Variação dos tempos (%)') + num('bm-ph', o.perHour, 'Limite por hora', 1) + num('bm-pd', o.perDay, 'Limite por dia', 1) + num('bm-fl', o.pauseAfterFails, 'Pausar após (falhas seguidas)', 1) + '</div>' +
+      '<div class="grid2">' + num('bm-var', vp, 'Variação dos tempos (%)') + num('bm-fl', o.pauseAfterFails, 'Pausar após (falhas seguidas)', 1) + '</div>' +
       '<div class="grid2" style="margin-top:8px">' + num('bm-rec', o.skipRecentHours, 'Pular quem recebeu disparo há menos de (h)') + num('bm-act', o.skipActiveMin, 'Pular quem escreveu há menos de (min)') + '</div>' +
       '<div class="grid2" style="margin-top:8px">' + num('bm-wn', o.warmN, 'Aquecimento: primeiros (contatos)') + num('bm-wf', o.warmFactor, 'Intervalo multiplicado por', 1) + '</div>' +
       '<div class="grid2" style="margin-top:8px">' + num('bm-sg', camp.stepGap, 'Pausa entre ações — mín (s)') + num('bm-sgx', camp.stepGapMax, 'Pausa entre ações — máx (s)') + '</div>' +
