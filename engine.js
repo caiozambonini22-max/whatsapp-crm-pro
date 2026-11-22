@@ -226,6 +226,7 @@
       }
       else if (s.type === 'wait') out.push({ type: 'wait', seconds: Math.max(0, +s.seconds || 0) });
       else if (s.type === 'typing' || s.type === 'recording') out.push({ type: s.type, seconds: Math.max(1, +s.seconds || 3) });
+      else if (/^(tab_add|tab_rm|tab_rmall|label_add|label_rm|label_rmall|archive|unarchive)$/.test(s.type)) { if (/^(label_add|label_rm|tab_add|tab_rm)$/.test(s.type) && !s.name) return; out.push({ type: s.type, name: s.name || '' }); }
     });
     return out;
   }

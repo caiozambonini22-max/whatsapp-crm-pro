@@ -79,7 +79,7 @@
   #wcrm-bulk .qlist{overflow:auto;flex:1;} #wcrm-bulk .qcat{border-radius:10px;margin-bottom:10px;overflow:hidden;border:1px solid #ecefc8;} #wcrm-bulk .qh{display:flex;gap:8px;align-items:center;padding:9px 12px;cursor:pointer;} #wcrm-bulk .qh b{flex:1;font-size:14px;} #wcrm-bulk .qh small{font-weight:400;color:#6b7791;}
   #wcrm-bulk .qi{display:flex;gap:10px;align-items:center;padding:9px 12px 9px 22px;border-top:1px solid rgba(0,0,0,.05);cursor:pointer;background:rgba(255,255,255,.55);} #wcrm-bulk .qi:hover{background:#fff;} #wcrm-bulk .qn{flex:1;font-size:14px;} #wcrm-bulk .qgo{color:#1d4ed8;font-size:18px;}
   #wcrm-bulk .bk-modal{position:absolute;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:flex-start;justify-content:center;z-index:20;padding:20px;overflow:auto;} #wcrm-bulk .bk-mc{background:#f4f6fb;border-radius:16px;width:min(1080px,96%);padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.4);}
-  #wcrm-bulk .riskbar{background:#fff;border:1px solid #e3e8f2;border-radius:12px;padding:12px 14px;font-size:13.5px;} #wcrm-bulk .meter{height:9px;background:#e3e8f2;border-radius:99px;overflow:hidden;margin-top:8px;} #wcrm-bulk .meter i{display:block;height:100%;transition:width .2s;}
+  #wcrm-bulk .amsep{padding:6px 12px;font-size:11px;font-weight:800;color:#6b7791;text-transform:uppercase;border-top:1px solid #e3e8f2;cursor:default}#wcrm-bulk .riskbar{background:#fff;border:1px solid #e3e8f2;border-radius:12px;padding:12px 14px;font-size:13.5px;} #wcrm-bulk .meter{height:9px;background:#e3e8f2;border-radius:99px;overflow:hidden;margin-top:8px;} #wcrm-bulk .meter i{display:block;height:100%;transition:width .2s;}
   #wcrm-bulk .tabsel{display:flex;flex-wrap:wrap;gap:6px;max-height:110px;overflow:auto;} #wcrm-bulk .tchip{background:#eef2ff;border-radius:99px;padding:3px 10px;font-size:12px;display:inline-flex;gap:5px;align-items:center;cursor:pointer;} #wcrm-bulk .tchip input{width:auto;}
 `;
   document.head.appendChild(css);
@@ -94,6 +94,7 @@
 
   // ── estado da tela ──
   let view = 'quick', step = 1, opened = false, timer = null, modal = false, addMenu = false;
+  const UTIL = { archive: '📦 Arquivar conversa', unarchive: '📤 Desarquivar conversa', label_add: '🏷 Adicionar etiqueta', label_rm: '🏷 Remover etiqueta', label_rmall: '🏷 Remover todas as etiquetas', tab_add: '📑 Adicionar à aba do CRM', tab_rm: '📑 Remover da aba do CRM', tab_rmall: '📑 Remover de todas as abas' };
   let src = null;                       // fontes de contatos (ponte do WhatsApp)
   let seg = 'saved', segPick = '';      // segmento atual
   let pool = [];                        // contatos exibidos [{n, known, phone}]
@@ -203,6 +204,12 @@
         v.map((t, j) => '<div class="var"><span class="vn">V' + (j + 1) + '</span><textarea rows="3" data-sv="' + i + '|' + j + '" placeholder="Escreva a mensagem (use #primeiroNome)">' + esc(t) + '</textarea>' + (v.length > 1 ? '<button class="vx" data-vdel="' + i + '|' + j + '" title="Remover variação">✕</button>' : '') + '</div>').join('') +
         '<button class="btn sm gray" data-vadd="' + i + '">＋ Adicionar variação</button>' + (v.filter(x => (x || '').trim()).length < 3 ? ' <span style="font-size:11.5px;color:#92400e">dica: use 3 ou mais variações — mensagem idêntica para todos é o que mais derruba conta</span>' : '') + '</div>' + ctl + '</div>';
     }
+    if (UTIL[s.type]) {
+      const t = s.type, needs = /^(label_add|label_rm|tab_add|tab_rm)$/.test(t);
+      const names = t.startsWith('label') ? (src ? src.labels.map(l => l.name) : []) : (src ? src.tabs.map(x => x.name) : []);
+      const sel = needs ? ' <select data-sn="' + i + '" style="width:auto;min-width:200px;display:inline-block"><option value="">— escolha ' + (t.startsWith('label') ? 'a etiqueta' : 'a aba') + ' —</option>' + names.map(n => '<option value="' + esc(n) + '"' + (n === s.name ? ' selected' : '') + '>' + esc(n) + '</option>').join('') + (s.name && !names.includes(s.name) ? '<option selected value="' + esc(s.name) + '">' + esc(s.name) + '</option>' : '') + '</select>' : '';
+      return '<div class="step"><b>' + (i + 1) + '</b><div class="g"><span style="font-weight:700">' + UTIL[t] + '</span>' + sel + '</div>' + ctl + '</div>';
+    }
     const lab = { wait: '⏱ Esperar', typing: '⌨ Mostrar digitando…', recording: '🎙 Mostrar gravando áudio…' }[s.type] || s.type;
     return '<div class="step"><b>' + (i + 1) + '</b><div class="g">' + lab + ' <input type="number" min="1" data-ss="' + i + '" value="' + (s.seconds || 3) + '" style="width:80px;display:inline-block"> segundos</div>' + ctl + '</div>';
   }
@@ -211,7 +218,7 @@
     const targets = targetsNow();
     const top = withGroup ? '<div class="card" style="margin-bottom:12px"><label class="l">Para quem enviar</label><select id="bk-grp"><option value="">' + (sel.size ? '— Seleção atual do Envio Rápido (' + sel.size + ') —' : '— escolha um agrupamento —') + '</option>' + bulk.groups.map(x => '<option value="' + esc(x.id) + '"' + (camp.groupId === x.id && !(camp.useSel && sel.size) ? ' selected' : '') + '>' + esc(x.name) + ' (' + x.contacts.length + ')</option>').join('') + '</select></div>' : '';
     const empty = '<div class="sempty"><div class="sic">🧊</div><div class="st1">Nenhuma ação foi atribuída</div><div class="st2">Adicione ações para criar e configurar modelos de envio personalizados para seus clientes</div></div>';
-    const addbtn = '<div style="position:relative;display:inline-block"><button class="btn" id="bk-addact">Adicionar Ação</button>' + (addMenu ? '<div class="amenu"><div data-add="quick">💬 Resposta rápida <small>(escolha na lista ao lado)</small></div><div data-add="text">📝 Texto (com variações)</div><div data-add="wait">⏱ Esperar (segundos)</div><div data-add="typing">⌨ Mostrar digitando…</div><div data-add="recording">🎙 Mostrar gravando áudio…</div></div>' : '') + '</div>';
+    const addbtn = '<div style="position:relative;display:inline-block"><button class="btn" id="bk-addact">Adicionar Ação</button>' + (addMenu ? '<div class="amenu"><div data-add="quick">💬 Resposta rápida <small>(escolha na lista ao lado)</small></div><div data-add="text">📝 Texto (com variações)</div><div data-add="wait">⏱ Esperar (segundos)</div><div data-add="typing">⌨ Mostrar digitando…</div><div data-add="recording">🎙 Mostrar gravando áudio…</div><div class="amsep">Utilitários</div><div data-add="archive">📦 Arquivar conversa</div><div data-add="unarchive">📤 Desarquivar conversa</div><div data-add="label_add">🏷 Adicionar etiqueta</div><div data-add="label_rm">🏷 Remover etiqueta</div><div data-add="label_rmall">🏷 Remover todas as etiquetas</div><div data-add="tab_add">📑 Adicionar à aba do CRM</div><div data-add="tab_rm">📑 Remover da aba do CRM</div><div data-add="tab_rmall">📑 Remover de todas as abas</div></div>' : '') + '</div>';
     $bd.innerHTML = top + '<div class="s2"><button class="bk-arrow" id="bk-back" title="Voltar"' + (withGroup ? ' style="visibility:hidden"' : '') + '>' + ARW(-1) + '</button>' +
       '<div class="scard"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><h3 style="margin:0;font-size:17px">Crie um script de envio</h3><span class="tagchip" id="bk-tags" title="Variáveis">#Tags</span><span style="flex:1"></span><span style="font-size:12.5px;color:#4b5876"><b>' + targets.length + '</b> contato(s)</span></div>' +
       '<div id="bk-tagbox" class="hint" style="display:none;margin-bottom:10px">Use <b>#primeiroNome</b> para colocar o nome do cliente. Áudios vão como voz gravada. Textos e respostas rápidas podem ter várias versões.</div>' +
@@ -392,7 +399,7 @@
       if (q('#bk-back')) { step = 1; return render(); }
       if (q('#bk-tags')) { const b = document.getElementById('bk-tagbox'); b.style.display = b.style.display === 'none' ? 'block' : 'none'; return; }
       if (q('#bk-addact')) { addMenu = !addMenu; return rScriptKeep(); }
-      const ad = q('[data-add]'); if (ad) { addMenu = false; const k = ad.dataset.add; if (k === 'text') camp.steps.push({ type: 'text', variations: ['', '', ''] }); else if (k === 'wait') camp.steps.push({ type: 'wait', seconds: 5 }); else if (k === 'typing') camp.steps.push({ type: 'typing', seconds: 4 }); else if (k === 'recording') camp.steps.push({ type: 'recording', seconds: 5 }); rScriptKeep(); if (k === 'quick') { const i = document.getElementById('bq-q'); i && i.focus(); } return; }
+      const ad = q('[data-add]'); if (ad) { addMenu = false; const k = ad.dataset.add; if (k === 'text') camp.steps.push({ type: 'text', variations: ['', '', ''] }); else if (k === 'wait') camp.steps.push({ type: 'wait', seconds: 5 }); else if (k === 'typing') camp.steps.push({ type: 'typing', seconds: 4 }); else if (k === 'recording') camp.steps.push({ type: 'recording', seconds: 5 }); else if (UTIL[k]) camp.steps.push({ type: k, name: '' }); rScriptKeep(); if (k === 'quick') { const i = document.getElementById('bq-q'); i && i.focus(); } return; }
       const qa = q('[data-qadd]'); if (qa) { camp.steps.push({ type: 'quick', msgId: String(qa.dataset.qadd), alts: [] }); return rScriptKeep(); }
       const qc = q('[data-qcat]'); if (qc) { qf.closed[qc.dataset.qcat] = !qf.closed[qc.dataset.qcat]; document.getElementById('bq-list').innerHTML = qpanelItems(); return; }
       if (q('#bq-all')) { qf.type = 'all'; qf.cat = 'all'; qf.q = ''; return rScriptKeep(); }
@@ -436,6 +443,7 @@
     if (t.id === 'bk-q') { filterQ = t.value; const p = t.selectionStart; rQuick(); const n = document.getElementById('bk-q'); if (n) { n.focus(); n.setSelectionRange(p, p); } return; }
     if (t.id === 'bq-q') { qf.q = t.value; document.getElementById('bq-list').innerHTML = qpanelItems(); return; }
     if (t.dataset && t.dataset.sv) { const [i, j] = t.dataset.sv.split('|').map(Number); if (camp.steps[i]) camp.steps[i].variations[j] = t.value; return; }
+    if (t.dataset && t.dataset.sn) { const s = camp.steps[+t.dataset.sn]; if (s) s.name = t.value; return; }
     if (t.dataset && t.dataset.ss) { const s = camp.steps[+t.dataset.ss]; if (s) s.seconds = Math.max(1, +t.value || 1); return; }
     if (modal && t.closest && t.closest('.bk-modal')) refreshRisk();
   });
