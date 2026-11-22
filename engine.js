@@ -1162,7 +1162,11 @@
     const setC = (patch, jobPatch) => mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (!j) return; Object.assign(j.contacts[idx], patch, { at: Date.now() }); if (jobPatch) Object.assign(j, jobPatch); });
     const sentN = job.contacts.filter(x => x.state === 'sent').length + 1;   // contando este
     const warm = o.warmN && sentN <= o.warmN ? (o.warmFactor || 2) : 1;
-    const longP = o.batchEvery && sentN % o.batchEvery === 0 && job.contacts.some(x => x.state === 'pending' && x !== c);
+    // pausa a cada ~X envios: o X é sorteado a cada ciclo (±variação), então nunca cai sempre no mesmo número
+    const vp = Math.max(0, Math.min(0.9, (o.varPct == null ? 25 : o.varPct) / 100));
+    const drawEvery = () => Math.max(1, Math.round(o.batchEvery * (1 - vp + Math.random() * 2 * vp)));
+    const pauseAt = job.pauseAt || (o.batchEvery ? drawEvery() : 0);
+    const longP = o.batchEvery && (vp ? sentN >= pauseAt : sentN % o.batchEvery === 0) && job.contacts.some(x => x.state === 'pending' && x !== c);
     const gap = (ok) => Date.now() + ((ok && longP) ? rndMs((o.batchMinS != null ? o.batchMinS : o.batchMin * 60) * 1000, Math.max(o.batchMinS != null ? o.batchMinS : o.batchMin * 60, o.batchMaxS != null ? o.batchMaxS : o.batchMax * 60) * 1000) : rndMs(o.minSec * 1000 * warm, Math.max(o.minSec, o.maxSec) * 1000 * warm));
     const br = W.getBridge && W.getBridge();
     let info = ((br && br.act) || []).find(a => norm(a.n) === norm(c.n));
@@ -1188,7 +1192,7 @@
     const res = await runSteps(W, { name: job.name }, fakeEnr, steps, 0, before, async (why) => { await failed(why); });
     if (!res.ok) return;
     const now = Date.now();
-    await setC({ state: 'sent', text: (res.firstText || '').slice(0, 80) }, { fails: 0, nextAt: gap(true), longPause: !!longP });
+    await setC({ state: 'sent', text: (res.firstText || '').slice(0, 80) }, { fails: 0, nextAt: gap(true), longPause: !!longP, pauseAt: (longP && vp) ? sentN + drawEvery() : (job.pauseAt || pauseAt) });
     await mutateRt(r => { const today = dayKey(new Date(now)); if (r.day !== today) { r.day = today; r.sent = 0; } r.sent = (r.sent || 0) + 1; r.hourly = (r.hourly || []).filter(t => now - t < 3600e3).concat([now]); });
     await addLog('📣 Disparo "' + job.name + '" → "' + c.n + '"');
   }

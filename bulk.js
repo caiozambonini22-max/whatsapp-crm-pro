@@ -99,8 +99,8 @@
   let pool = [];                        // contatos exibidos [{n, known, phone}]
   let filterQ = '';
   const sel = new Map();                // nk -> contato selecionado
-  const DEF_OPTS = { minSec: 45, maxSec: 150, perHour: 25, perDay: 120, useWindow: true, customWindow: false, winStart: '09:00', winEnd: '19:00', onlyKnown: true, dryRun: true, pauseAfterFails: 3,
-    typingSim: true, batchEvery: 15, batchMin: 5, batchMax: 12, batchMinS: 285, batchMaxS: 285, warmN: 10, warmFactor: 2, skipRecentHours: 24, skipActiveMin: 30, excludeTabs: [], shuffle: true, startAt: 0 };
+  const DEF_OPTS = { minSec: 58, maxSec: 96, varPct: 25, perHour: 39, perDay: 350, useWindow: true, customWindow: false, winStart: '09:00', winEnd: '19:00', onlyKnown: true, dryRun: true, pauseAfterFails: 3,
+    typingSim: true, batchEvery: 20, batchMin: 3.5, batchMax: 6, batchMinS: 214, batchMaxS: 356, warmN: 10, warmFactor: 2, skipRecentHours: 24, skipActiveMin: 30, excludeTabs: [], shuffle: true, startAt: 0 };
   let camp = { groupId: '', useSel: true, steps: [], stepGap: 4, stepGapMax: 10, opts: Object.assign({}, DEF_OPTS), name: '' };
   let bulk = { groups: [], jobs: [] }, rt = {}, cfgW = {}, quickList = [], cats = {};
   let qf = { q: '', type: 'all', cat: 'all', closed: {} };
@@ -251,41 +251,41 @@
     const tabsAll = (src && src.tabs) || [];
     const chk = (id, on, t, extra) => '<label class="chk"><input type="checkbox" id="' + id + '" ' + (on ? 'checked' : '') + '> ' + t + '</label>' + (extra || '');
     const num = (id, v, lab, min) => '<div><label class="l">' + lab + '</label><input type="number" id="' + id + '" value="' + v + '" min="' + (min == null ? 0 : min) + '"></div>';
-    return '<div class="bk-modal"><div class="bk-mc"><div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><h2 style="margin:0;font-size:20px;flex:1">Configurações do envio <small style="font-weight:400;color:#6b7791">· ' + n + ' contato(s)</small></h2><button class="bk-close" id="bm-x">✕ Fechar</button></div>' +
-      '<div class="riskbar"><div><b>Risco de bloqueio:</b> <span id="bm-risk" style="color:' + rk.lvl[1] + ';font-weight:800">' + rk.lvl[0] + ' (' + rk.score + ')</span> · <b>Duração estimada:</b> <span id="bm-est">' + fmtDur(rk.hrs) + (rk.days > 1 ? ' (≈ ' + rk.days + ' dias pelo limite diário)' : '') + '</span></div><div class="meter"><i id="bm-meter" style="width:' + rk.score + '%;background:' + rk.lvl[1] + '"></i></div><div id="bm-tips" style="font-size:12px;color:#7a5200;margin-top:6px">' + (rk.tips.length ? rk.tips.map(t => '• ' + esc(t)).join('<br>') : '✅ Configuração segura.') + '</div></div>' +
-      '<div class="grid2" style="align-items:start;margin-top:12px"><div>' +
-      '<div class="card"><h3>⏱ Intervalo entre contatos</h3><div class="grid2">' + num('bm-min', o.minSec, 'Mínimo (s)', 10) + num('bm-max', o.maxSec, 'Máximo (s) — sorteado a cada envio', 10) + '</div>' +
-      '<div style="font-size:12px;color:#6b7791;margin-top:6px">Cada espera é sorteada entre o mínimo e o máximo, então nunca sai em ritmo de relógio.</div>' +
-      '<div class="grid2" style="margin-top:10px">' + num('bm-sg', camp.stepGap, 'Pausa entre ações — mín (s)') + num('bm-sgx', camp.stepGapMax, 'Pausa entre ações — máx (s)') + '</div>' +
-      chk('bm-typing', o.typingSim, '⌨ Simular “digitando…” antes de cada texto (tempo conforme o tamanho)') + '</div>' +
-      '<div class="card"><h3>📊 Limites</h3><div class="grid2">' + num('bm-ph', o.perHour, 'Por hora', 1) + num('bm-pd', o.perDay, 'Por dia', 1) + '</div>' +
-      '<div style="font-size:12px;color:#6b7791;margin-top:6px">Os limites contam junto com o Follow Up (mesma conta, mesmo contador).</div></div>' +
-      '<div class="card"><h3>🛌 Pausas e aquecimento</h3>' +
-      '<div class="grid3">' + num('bm-be', o.batchEvery, 'Pausar a cada (contatos)') + num('bm-bmin', bS(o).min, 'Pausa mín (segundos)') + num('bm-bmax', bS(o).max, 'Pausa máx (segundos)') + '</div><div style="font-size:12px;color:#6b7791;margin:4px 0 8px">0 = sem pausas longas.</div>' +
-      '<div class="grid2">' + num('bm-wn', o.warmN, 'Aquecimento: primeiros (contatos)') + num('bm-wf', o.warmFactor, 'Intervalo multiplicado por', 1) + '</div>' +
-      num('bm-fl', o.pauseAfterFails, 'Pausar o disparo após (falhas seguidas)', 1) + '</div></div><div>' +
-      '<div class="card"><h3>🕒 Horário</h3>' + chk('bm-win', o.useWindow, 'Só enviar dentro do horário') +
-      '<div class="grid2" style="margin-top:6px">' + '<div><label class="l">Das</label><input type="time" id="bm-ws" value="' + esc(o.customWindow ? o.winStart : cfgW.winStart) + '"></div><div><label class="l">às</label><input type="time" id="bm-we" value="' + esc(o.customWindow ? o.winEnd : cfgW.winEnd) + '"></div></div>' +
-      '<div style="font-size:12px;color:#6b7791;margin-top:4px">Dias da semana: os mesmos do Follow Up (Ajustes).</div>' +
-      '<label class="l" style="margin-top:10px">Iniciar em (opcional — vazio = agora)</label><input type="datetime-local" id="bm-start" value="' + (o.startAt ? new Date(o.startAt - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '') + '"></div>' +
+    const sl = (id, lab, v, mn, mx, st, unit, hint) => '<div class="sl"><div class="sh"><span>' + lab + '</span><b id="' + id + '-v">' + v + ' ' + unit + '</b></div><input type="range" id="' + id + '" min="' + mn + '" max="' + mx + '" step="' + st + '" value="' + v + '" data-u="' + unit + '">' + (hint ? '<div class="hn">' + hint + '</div>' : '') + '</div>';
+    const iv = Math.round((o.minSec + o.maxSec) / 2), bsx = bS(o); const pv = Math.round((bsx.min + bsx.max) / 2), vp = o.varPct == null ? 25 : o.varPct;
+    return '<div class="bk-modal"><div class="bk-mc" style="max-width:640px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><h2 style="margin:0;font-size:20px;flex:1">Configurações de envio <small style="font-weight:400;color:#6b7791">· ' + n + ' contato(s)</small></h2><button class="bk-close" id="bm-x">✕</button></div>' +
+      '<div class="riskbar"><div><b>Risco de bloqueio:</b> <span id="bm-risk" style="color:' + rk.lvl[1] + ';font-weight:800">' + rk.lvl[0] + ' (' + rk.score + ')</span> · <b>Duração estimada:</b> <span id="bm-est">' + fmtDur(rk.hrs) + (rk.days > 1 ? ' (≈ ' + rk.days + ' dias pelo limite diário)' : '') + '</span></div><div class="meter"><i id="bm-meter" style="width:' + rk.score + '%;background:' + rk.lvl[1] + '"></i></div><div id="bm-tips" class="tips">' + (rk.tips.length ? rk.tips.map(t => '• ' + esc(t)).join('<br>') : '✅ Configuração segura.') + '</div></div>' +
+      '<div class="card" style="margin-top:12px">' +
+      sl('bm-iv', 'Intervalo entre mensagens', iv, 10, 300, 1, 'segundos', 'Sempre varia ±' + vp + '% — nunca é um número exato.') +
+      sl('bm-be', 'Pausar a cada X envios', o.batchEvery || 0, 0, 100, 1, 'contatos', '0 = sem pausa. O X também varia a cada ciclo.') +
+      sl('bm-pt', 'Tempo da pausa', pv, 10, 900, 5, 'segundos', 'Também varia ±' + vp + '%.') +
+      '</div>' +
       '<div class="card"><h3>🛡️ Proteções</h3>' +
-      chk('bm-known', o.onlyKnown, 'Nunca enviar para quem nunca conversou comigo') +
-      chk('bm-shuf', o.shuffle, '🔀 Embaralhar a ordem dos contatos') +
-      '<div class="grid2" style="margin-top:6px">' + num('bm-rec', o.skipRecentHours, 'Pular quem recebeu disparo há menos de (h)') + num('bm-act', o.skipActiveMin, 'Pular quem escreveu há menos de (min)') + '</div>' +
+      chk('bm-known', o.onlyKnown, 'Só enviar para quem já conversou comigo') +
+      chk('bm-shuf', o.shuffle, 'Embaralhar a ordem dos contatos') +
+      chk('bm-typing', o.typingSim, 'Simular “digitando…” antes de cada texto') +
+      chk('bm-win', o.useWindow, 'Só enviar dentro do horário', '<div class="grid2" id="bm-winbox" style="margin:2px 0 6px 26px"><div><label class="l">Das</label><input type="time" id="bm-ws" value="' + esc(o.customWindow ? o.winStart : cfgW.winStart) + '"></div><div><label class="l">às</label><input type="time" id="bm-we" value="' + esc(o.customWindow ? o.winEnd : cfgW.winEnd) + '"></div></div>') +
+      '<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:#3b4a6b">⚙ Mais opções (opcional)</summary><div style="margin-top:10px">' +
+      '<div class="grid2">' + num('bm-var', vp, 'Variação dos tempos (%)') + num('bm-ph', o.perHour, 'Limite por hora', 1) + num('bm-pd', o.perDay, 'Limite por dia', 1) + num('bm-fl', o.pauseAfterFails, 'Pausar após (falhas seguidas)', 1) + '</div>' +
+      '<div class="grid2" style="margin-top:8px">' + num('bm-rec', o.skipRecentHours, 'Pular quem recebeu disparo há menos de (h)') + num('bm-act', o.skipActiveMin, 'Pular quem escreveu há menos de (min)') + '</div>' +
+      '<div class="grid2" style="margin-top:8px">' + num('bm-wn', o.warmN, 'Aquecimento: primeiros (contatos)') + num('bm-wf', o.warmFactor, 'Intervalo multiplicado por', 1) + '</div>' +
+      '<div class="grid2" style="margin-top:8px">' + num('bm-sg', camp.stepGap, 'Pausa entre ações — mín (s)') + num('bm-sgx', camp.stepGapMax, 'Pausa entre ações — máx (s)') + '</div>' +
+      '<label class="l" style="margin-top:10px">Iniciar em (opcional — vazio = agora)</label><input type="datetime-local" id="bm-start" value="' + (o.startAt ? new Date(o.startAt - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '') + '">' +
       '<label class="l" style="margin-top:10px">Pular quem está nestas abas do CRM</label><div class="tabsel">' + (tabsAll.length ? tabsAll.map(t => '<label class="tchip"><input type="checkbox" data-xt="' + esc(t.name) + '" ' + ((o.excludeTabs || []).includes(t.name) ? 'checked' : '') + '> ' + esc(t.name) + '</label>').join('') : '<span style="font-size:12px;color:#6b7791">Sem abas no CRM.</span>') + '</div>' +
-      '<div style="font-size:12px;color:#6b7791;margin-top:6px">Grupos e contatos bloqueados nunca recebem. A cada falha seguida o disparo pausa sozinho.</div></div>' +
+      '<div style="font-size:12px;color:#6b7791;margin-top:6px">Os limites contam junto com o Follow Up. Grupos e contatos bloqueados nunca recebem.</div></div></details></div>' +
       '<div class="card" style="border:2px solid ' + (o.dryRun ? '#f59e0b' : '#16a34a') + '"><h3>' + (o.dryRun ? '🧪 Modo teste LIGADO' : '🚀 Envio REAL') + '</h3>' + chk('bm-dry', o.dryRun, '<b>Modo teste</b> — simula tudo e NÃO envia nada') +
-      '<input type="text" id="bm-name" placeholder="Nome da campanha (ex.: Black November)" value="' + esc(camp.name) + '" style="margin-top:8px"></div></div></div>' +
+      '<input type="text" id="bm-name" placeholder="Nome da campanha (ex.: Black November)" value="' + esc(camp.name) + '" style="margin-top:8px"></div>' +
       '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px;position:sticky;bottom:-20px;background:#f4f6fb;padding:12px 0 4px;border-top:1px solid #e3e8f2"><button class="btn gray" id="bm-cancel">Voltar</button><button class="btn ' + (o.dryRun ? '' : 'green') + '" id="bm-go" style="font-size:15px;padding:12px 28px">' + (o.dryRun ? '🧪 Iniciar TESTE (sem enviar)' : '▶ Iniciar disparo') + '</button></div></div></div>';
   }
   function showModal() { let m = root.querySelector('.bk-modal'); if (m) m.remove(); root.querySelector('.bk-main').insertAdjacentHTML('beforeend', modalHtml()); }
   function hideModal() { modal = false; const m = root.querySelector('.bk-modal'); if (m) m.remove(); }
   function readModal() {
-    const g = id => document.getElementById(id); if (!g('bm-min')) return;
+    const g = id => document.getElementById(id); if (!g('bm-iv')) return;
     const o = camp.opts, n = (id, d, mn) => { const v = parseFloat(g(id).value); return Math.max(mn == null ? 0 : mn, isFinite(v) ? v : d); };
-    o.minSec = n('bm-min', 45, 10); o.maxSec = Math.max(o.minSec, n('bm-max', 150, 10)); o.perHour = n('bm-ph', 25, 1); o.perDay = n('bm-pd', 120, 1);
+    o.varPct = Math.min(90, n('bm-var', 25)); const vf = o.varPct / 100, iv = n('bm-iv', 77, 10);
+    o.minSec = Math.max(10, Math.round(iv * (1 - vf))); o.maxSec = Math.max(o.minSec + (vf ? 1 : 0), Math.round(iv * (1 + vf))); o.perHour = n('bm-ph', 39, 1); o.perDay = n('bm-pd', 350, 1);
     camp.stepGap = n('bm-sg', 0); camp.stepGapMax = Math.max(camp.stepGap, n('bm-sgx', 0));
-    o.typingSim = g('bm-typing').checked; o.batchEvery = Math.round(n('bm-be', 0)); o.batchMinS = n('bm-bmin', 285, 1); o.batchMaxS = Math.max(o.batchMinS, n('bm-bmax', 285, 1)); o.batchMin = o.batchMinS / 60; o.batchMax = o.batchMaxS / 60;
+    o.typingSim = g('bm-typing').checked; o.batchEvery = Math.round(n('bm-be', 0)); { const pt = n('bm-pt', 285, 1); o.batchMinS = Math.max(1, Math.round(pt * (1 - vf))); o.batchMaxS = Math.max(o.batchMinS, Math.round(pt * (1 + vf))); } o.batchMin = o.batchMinS / 60; o.batchMax = o.batchMaxS / 60;
     o.warmN = Math.round(n('bm-wn', 0)); o.warmFactor = n('bm-wf', 2, 1); o.pauseAfterFails = Math.round(n('bm-fl', 3, 1));
     o.useWindow = g('bm-win').checked; const ws = g('bm-ws').value, we = g('bm-we').value; o.customWindow = !!(ws && we && (ws !== cfgW.winStart || we !== cfgW.winEnd)); o.winStart = ws || cfgW.winStart; o.winEnd = we || cfgW.winEnd;
     const st = g('bm-start').value; o.startAt = st ? new Date(st).getTime() : 0;
@@ -295,6 +295,7 @@
   }
   function refreshRisk() {
     readModal(); const rk = riskOf(camp.opts, targetsNow().length); const g = id => document.getElementById(id);
+    root.querySelectorAll('input[type=range][data-u]').forEach(s => { const l = g(s.id + '-v'); if (l) l.textContent = s.value + ' ' + s.dataset.u; });
     g('bm-risk').textContent = rk.lvl[0] + ' (' + rk.score + ')'; g('bm-risk').style.color = rk.lvl[1]; g('bm-meter').style.width = rk.score + '%'; g('bm-meter').style.background = rk.lvl[1];
     g('bm-est').textContent = fmtDur(rk.hrs) + (rk.days > 1 ? ' (≈ ' + rk.days + ' dias pelo limite diário)' : ''); g('bm-tips').innerHTML = rk.tips.length ? rk.tips.map(t => '• ' + esc(t)).join('<br>') : '✅ Configuração segura.';
   }
