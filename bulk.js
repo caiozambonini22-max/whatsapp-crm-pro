@@ -264,7 +264,7 @@
       chk('bm-known', o.onlyKnown, 'Só enviar para quem já conversou comigo') +
       chk('bm-shuf', o.shuffle, 'Embaralhar a ordem dos contatos') +
       chk('bm-typing', o.typingSim, 'Simular “digitando…” antes de cada texto') +
-      chk('bm-win', o.useWindow, 'Só enviar dentro do horário', '<div class="grid2" id="bm-winbox" style="margin:2px 0 6px 26px"><div><label class="l">Das</label><input type="time" id="bm-ws" value="' + esc(o.customWindow ? o.winStart : cfgW.winStart) + '"></div><div><label class="l">às</label><input type="time" id="bm-we" value="' + esc(o.customWindow ? o.winEnd : cfgW.winEnd) + '"></div></div>') +
+      chk('bm-win', o.useWindow, 'Só enviar dentro do horário', '<div style="margin:2px 0 0 26px">' + chk('bm-alld', o.allDays, 'Enviar também aos domingos (todos os dias)') + '</div><div class="grid2" id="bm-winbox" style="margin:2px 0 6px 26px"><div><label class="l">Das</label><input type="time" id="bm-ws" value="' + esc(o.customWindow ? o.winStart : cfgW.winStart) + '"></div><div><label class="l">às</label><input type="time" id="bm-we" value="' + esc(o.customWindow ? o.winEnd : cfgW.winEnd) + '"></div></div>') +
       '<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:#3b4a6b">⚙ Mais opções (opcional)</summary><div style="margin-top:10px">' +
       '<div class="grid2">' + num('bm-var', vp, 'Variação dos tempos (%)') + num('bm-ph', o.perHour, 'Limite por hora', 1) + num('bm-pd', o.perDay, 'Limite por dia', 1) + num('bm-fl', o.pauseAfterFails, 'Pausar após (falhas seguidas)', 1) + '</div>' +
       '<div class="grid2" style="margin-top:8px">' + num('bm-rec', o.skipRecentHours, 'Pular quem recebeu disparo há menos de (h)') + num('bm-act', o.skipActiveMin, 'Pular quem escreveu há menos de (min)') + '</div>' +
@@ -287,7 +287,7 @@
     camp.stepGap = n('bm-sg', 0); camp.stepGapMax = Math.max(camp.stepGap, n('bm-sgx', 0));
     o.typingSim = g('bm-typing').checked; o.batchEvery = Math.round(n('bm-be', 0)); { const pt = n('bm-pt', 285, 1); o.batchMinS = Math.max(1, Math.round(pt * (1 - vf))); o.batchMaxS = Math.max(o.batchMinS, Math.round(pt * (1 + vf))); } o.batchMin = o.batchMinS / 60; o.batchMax = o.batchMaxS / 60;
     o.warmN = Math.round(n('bm-wn', 0)); o.warmFactor = n('bm-wf', 2, 1); o.pauseAfterFails = Math.round(n('bm-fl', 3, 1));
-    o.useWindow = g('bm-win').checked; const ws = g('bm-ws').value, we = g('bm-we').value; o.customWindow = !!(ws && we && (ws !== cfgW.winStart || we !== cfgW.winEnd)); o.winStart = ws || cfgW.winStart; o.winEnd = we || cfgW.winEnd;
+    o.useWindow = g('bm-win').checked; o.allDays = !!(g('bm-alld') && g('bm-alld').checked); const ws = g('bm-ws').value, we = g('bm-we').value; o.customWindow = !!(ws && we && (ws !== cfgW.winStart || we !== cfgW.winEnd)); o.winStart = ws || cfgW.winStart; o.winEnd = we || cfgW.winEnd;
     const st = g('bm-start').value; o.startAt = st ? new Date(st).getTime() : 0;
     o.onlyKnown = g('bm-known').checked; o.shuffle = g('bm-shuf').checked; o.skipRecentHours = n('bm-rec', 0); o.skipActiveMin = n('bm-act', 0);
     o.excludeTabs = [...root.querySelectorAll('[data-xt]')].filter(x => x.checked).map(x => x.dataset.xt);
@@ -309,14 +309,27 @@
     return { total: c.length, sent: n('sent'), err: n('error'), skip: n('skipped'), pend: n('pending') };
   }
   function pillOf(j) { const m = { running: ['p-run', 'Enviando'], paused: ['p-pause', 'Pausado'], done: ['p-done', 'Concluído'], stopped: ['p-stop', 'Parado'] }[j.status] || ['p-done', j.status]; return '<span class="pill ' + m[0] + '">' + m[1] + '</span>'; }
-  function rReport() {
+  const mmss = ms => { const t = Math.max(0, Math.ceil(ms / 1000)), m = Math.floor(t / 60), s = t % 60; return m + ':' + String(s).padStart(2, '0'); };
+  function cdHtml(j, s) {
+    const o = j.opts || {}; const left = o.batchEvery ? Math.max(0, (j.pauseAt || o.batchEvery) - s.sent) : 0;
+    const dry = o.dryRun ? ' <i style="color:#92400e">(teste: tempos 10× mais rápidos)</i>' : '';
+    return '<div id="bk-cd" data-next="' + (j.nextAt || 0) + '" data-long="' + (j.longPause ? 1 : 0) + '" data-why="' + esc(j.waitWhy && !/^(intervalo|pausa longa)/.test(j.waitWhy) ? j.waitWhy : '') + '" style="margin-top:8px;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;font-size:13.5px;line-height:1.6"><div id="bk-cd1"></div>' +
+      (o.batchEvery ? '<div>⏸ Próxima pausa longa: <b>em ' + left + ' envio(s)</b> (a cada ~' + o.batchEvery + ' contatos)</div>' : '') + dry + '</div>';
+  }
+  function cdTick() {
+    const el = document.getElementById('bk-cd'), l1 = document.getElementById('bk-cd1'); if (!el || !l1) return;
+    const nx = +el.dataset.next, why = el.dataset.why, ms = nx - Date.now();
+    l1.innerHTML = why ? '⏳ <b>Aguardando:</b> ' + esc(why) : ms > 0 ? (el.dataset.long === '1' ? '😴 <b>Pausa longa</b> — retoma em <b style="font-size:16px">' + mmss(ms) + '</b>' : '⏱ Próximo envio em <b style="font-size:16px">' + mmss(ms) + '</b>') : '🚀 Enviando o próximo…';
+  }
+  setInterval(cdTick, 1000);
+  function rReport() { setTimeout(cdTick, 0);
     const j0 = jobOpen && bulk.jobs.find(x => x.id === jobOpen);
     const dk = new Date(); const dkey = dk.getFullYear() + '-' + pad(dk.getMonth() + 1) + '-' + pad(dk.getDate()); const today = rt.day === dkey ? (rt.sent || 0) : 0;
     const head = '<div class="hint" style="margin-bottom:12px">Hoje (todo o CRM): <b>' + today + '</b> envio(s) · última hora: <b>' + ((rt.hourly || []).filter(t => Date.now() - t < 3600e3).length) + '</b></div>';
     if (j0) {
       const s = jobStats(j0); const pct = s.total ? Math.round((s.sent + s.err + s.skip) / s.total * 100) : 0;
       $bd.innerHTML = head + '<button class="btn gray sm" id="bk-back">← voltar</button><div class="card" style="margin-top:10px"><h3>' + esc(j0.name || 'Campanha') + ' ' + pillOf(j0) + (j0.opts && j0.opts.dryRun ? ' <span class="pill p-pause">🧪 teste</span>' : '') + '</h3>' +
-        '<div class="bar"><i style="width:' + pct + '%"></i></div><div style="margin:8px 0;font-size:13px">' + pct + '% · ✅ ' + s.sent + ' enviados · ❌ ' + s.err + ' erros · ⏭ ' + s.skip + ' pulados · ⏳ ' + s.pend + ' na fila' + (j0.status === 'running' && j0.waitWhy ? '<br><span style="color:#92400e">Aguardando: ' + esc(j0.waitWhy) + '</span>' : '') + '</div>' +
+        '<div class="bar"><i style="width:' + pct + '%"></i></div><div style="margin:8px 0;font-size:13px">' + pct + '% · ✅ ' + s.sent + ' enviados · ❌ ' + s.err + ' erros · ⏭ ' + s.skip + ' pulados · ⏳ ' + s.pend + ' na fila' + (j0.status === 'running' ? cdHtml(j0, s) : '') + '</div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (j0.status === 'running' ? '<button class="btn" data-ctrl="pause">⏸ Pausar</button>' : (j0.status === 'paused' ? '<button class="btn green" data-ctrl="resume">▶ Retomar</button>' : '')) + (s.err ? '<button class="btn gray" data-ctrl="retry">↻ Tentar de novo os erros</button>' : '') + (['running', 'paused'].includes(j0.status) ? '<button class="btn red" data-ctrl="stop">⏹ Parar</button>' : '') + '<button class="btn gray" id="bk-csv">⬇ Baixar relatório</button></div></div>' +
         '<table class="tbl"><tr><th>Contato</th><th>Situação</th><th>Detalhe</th><th>Horário</th></tr>' + j0.contacts.map(c => '<tr><td style="text-align:left">' + esc(c.n) + '</td><td>' + ({ sent: c.simulated ? '🧪 simulado' : '✅ enviado', error: '❌ erro', skipped: '⏭ pulado', pending: '⏳ fila' }[c.state] || c.state) + '</td><td style="text-align:left;font-size:12px">' + esc(c.why || c.text || '') + '</td><td>' + (c.at ? fmt(c.at) : '') + '</td></tr>').join('') + '</table>';
       return;

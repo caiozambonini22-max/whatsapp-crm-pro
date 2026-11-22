@@ -235,8 +235,12 @@
     if (job.status !== 'running') return { go: false, why: 'parado' };
     if (o.startAt && now < o.startAt) return { go: false, why: 'agendado para ' + new Date(o.startAt).toLocaleString('pt-BR') };
     if (job.nextAt && now < job.nextAt) { const sec = Math.ceil((job.nextAt - now) / 1000); return { go: false, why: (job.longPause ? 'pausa longa entre lotes (' : 'intervalo aleatório (') + (sec >= 120 ? Math.ceil(sec / 60) + ' min' : sec + ' s') + ')' }; }
-    const wcfg = o.customWindow ? Object.assign({}, cfg, { winStart: o.winStart, winEnd: o.winEnd, win24: false }) : cfg;
-    if (o.useWindow && !inWindow(now, wcfg)) return { go: false, why: 'fora do horário permitido (' + wcfg.winStart + '–' + wcfg.winEnd + ')' };
+    let wcfg = o.customWindow ? Object.assign({}, cfg, { winStart: o.winStart, winEnd: o.winEnd, win24: false }) : cfg;
+    if (o.allDays) wcfg = Object.assign({}, wcfg, { days: [0, 1, 2, 3, 4, 5, 6] });
+    if (o.useWindow && !o.dryRun && !inWindow(now, wcfg)) {
+      const DN = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'], dd = new Date(now).getDay();
+      return { go: false, why: (wcfg.days || []).includes(dd) ? 'fora do horário permitido (' + wcfg.winStart + '–' + wcfg.winEnd + ')' : 'hoje (' + DN[dd] + ') não é dia de envio — marque “Enviar também aos domingos/todos os dias” ou desligue o horário' };
+    }
     const hourly = (rt.hourly || []).filter(t => now - t < 3600e3).length;
     if (hourly >= o.perHour) return { go: false, why: 'limite por hora (' + o.perHour + ') atingido' };
     const today = dayKey(new Date(now)); const sentToday = rt.day === today ? (rt.sent || 0) : 0;
@@ -1178,7 +1182,7 @@
     if ((o.excludeTabs || []).length) { const bar = (await sget(K_BAR)) || {}; const ex = new Set(o.excludeTabs.map(norm)); const hit = (bar.tabs || []).find(t => ex.has(norm(t.name)) && (t.contacts || []).some(n => norm(n) === norm(c.n))); if (hit) { await setC({ state: 'skipped', why: 'está na aba bloqueada “' + hit.name + '”' }); await addLog('📣 "' + c.n + '" pulado: aba ' + hit.name); return; } }
     const steps = bulkStepsOf(job, idx);
     if (!steps.length) { await mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (j) j.status = 'paused'; }); await addLog('📣 Disparo "' + job.name + '" sem ações — pausado'); return; }
-    if (o.dryRun) { await setC({ state: 'sent', simulated: true }, { nextAt: Date.now() + 1500, longPause: false }); await addLog('🧪 SIMULAÇÃO disparo "' + job.name + '" → "' + c.n + '" (nada enviado)'); return; }
+    if (o.dryRun) { const dn = Date.now(), dg = gap(true); await setC({ state: 'sent', simulated: true }, { nextAt: dn + Math.max(3000, Math.round((dg - dn) / 10)), longPause: !!longP, pauseAt: (longP && vp) ? sentN + drawEvery() : (job.pauseAt || pauseAt) }); await addLog('🧪 SIMULAÇÃO disparo "' + job.name + '" → "' + c.n + '" (nada enviado)'); return; }
     const fakeEnr = { id: 'bulk-' + jobId + '-' + idx, contact: c.n, nk: norm(c.n), stepIdx: 0, force: true };
     const failed = async why => {
       const fails = (job.fails || 0) + 1;
