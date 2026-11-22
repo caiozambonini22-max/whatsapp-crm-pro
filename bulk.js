@@ -288,6 +288,7 @@
       '<div class="card"><h3>🛡️ Proteções</h3>' +
       chk('bm-known', o.onlyKnown, 'Só enviar para quem já conversou comigo') +
       chk('bm-shuf', o.shuffle, 'Embaralhar a ordem dos contatos') +
+      chk('bm-card', o.linkCard !== false, '🔗 Mostrar o card do link (prévia do grupo/site) quando a mensagem tiver link') +
       chk('bm-typing', o.typingSim, 'Simular “digitando…” antes de cada texto') +
       chk('bm-win', o.useWindow, 'Só enviar dentro do horário', '<div style="margin:2px 0 0 26px">' + chk('bm-alld', o.allDays, 'Enviar também aos domingos (todos os dias)') + '</div><div class="grid2" id="bm-winbox" style="margin:2px 0 6px 26px"><div><label class="l">Das</label><input type="time" id="bm-ws" value="' + esc(o.customWindow ? o.winStart : cfgW.winStart) + '"></div><div><label class="l">às</label><input type="time" id="bm-we" value="' + esc(o.customWindow ? o.winEnd : cfgW.winEnd) + '"></div></div>') +
       '<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:#3b4a6b">⚙ Mais opções (opcional)</summary><div style="margin-top:10px">' +
@@ -312,7 +313,7 @@
     camp.stepGap = n('bm-sg', 0); camp.stepGapMax = Math.max(camp.stepGap, n('bm-sgx', 0));
     o.typingSim = g('bm-typing').checked; o.batchEvery = Math.round(n('bm-be', 0)); { const pt = n('bm-pt', 285, 1); o.batchMinS = Math.max(1, Math.round(pt * (1 - vf))); o.batchMaxS = Math.max(o.batchMinS, Math.round(pt * (1 + vf))); } o.batchMin = o.batchMinS / 60; o.batchMax = o.batchMaxS / 60;
     o.warmN = Math.round(n('bm-wn', 0)); o.warmFactor = n('bm-wf', 2, 1); o.pauseAfterFails = Math.round(n('bm-fl', 3, 1));
-    o.useWindow = g('bm-win').checked; o.allDays = !!(g('bm-alld') && g('bm-alld').checked); o.autoResume = !!(g('bm-auto') && g('bm-auto').checked); const ws = g('bm-ws').value, we = g('bm-we').value; o.customWindow = !!(ws && we && (ws !== cfgW.winStart || we !== cfgW.winEnd)); o.winStart = ws || cfgW.winStart; o.winEnd = we || cfgW.winEnd;
+    o.useWindow = g('bm-win').checked; o.allDays = !!(g('bm-alld') && g('bm-alld').checked); o.autoResume = !!(g('bm-auto') && g('bm-auto').checked); o.linkCard = !(g('bm-card') && !g('bm-card').checked); const ws = g('bm-ws').value, we = g('bm-we').value; o.customWindow = !!(ws && we && (ws !== cfgW.winStart || we !== cfgW.winEnd)); o.winStart = ws || cfgW.winStart; o.winEnd = we || cfgW.winEnd;
     const st = g('bm-start').value; o.startAt = st ? new Date(st).getTime() : 0;
     o.onlyKnown = g('bm-known').checked; o.shuffle = g('bm-shuf').checked; o.skipRecentHours = n('bm-rec', 0); o.skipActiveMin = n('bm-act', 0);
     o.excludeTabs = [...root.querySelectorAll('[data-xt]')].filter(x => x.checked).map(x => x.dataset.xt);

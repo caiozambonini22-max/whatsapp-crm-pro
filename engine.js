@@ -1194,7 +1194,8 @@
     const opened = await openChat(c.n);
     if (!opened) { await failed('não consegui abrir a conversa'); return; }
     const before = await readMsgs(c.n, 60);
-    const res = await runSteps(W, { name: job.name }, fakeEnr, steps, 0, before, async (why) => { await failed(why); });
+    root.__wcrmNoPreview = o.linkCard === false;
+    let res; try { res = await runSteps(W, { name: job.name }, fakeEnr, steps, 0, before, async (why) => { await failed(why); }); } finally { root.__wcrmNoPreview = false; }
     if (!res.ok) return;
     const now = Date.now();
     await setC({ state: 'sent', text: (res.firstText || '').slice(0, 80) }, { fails: 0, nextAt: gap(true), longPause: !!longP, pauseAt: (longP && vp) ? sentN + drawEvery() : (job.pauseAt || pauseAt) });
