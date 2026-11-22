@@ -337,7 +337,7 @@
       // espera o card do link aparecer acima da caixa (até 10 s)
       const ft = () => (document.querySelector('#main footer') || document.body).innerText || '';
       const t0 = Date.now(); const base = ft().length; await sleep(1500);
-      while (Date.now() - t0 < 10000) { const t = ft(); if (/Group Invite|Convite para (o )?grupo|Convite do WhatsApp/i.test(t) || t.length > base + 40) break; await sleep(400); }
+      while (Date.now() - t0 < 10000) { const t = ft(); if (/Group Invite|Convite para (o )?grupo|Convite para conversa em grupo|Convite do WhatsApp/i.test(t) || t.length > base + 40) break; await sleep(400); }
       await sleep(600 + Math.random() * 400);
       for (const s of ['button[data-testid="send"]', 'span[data-icon="send"]', 'button[aria-label="Enviar"]', 'button[aria-label="Send"]']) { const btn = document.querySelector(s); if (btn) { (btn.closest('button') || btn).click(); await sleep(800); return true; } }
       box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true })); await sleep(800); return true;
