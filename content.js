@@ -318,6 +318,31 @@
   }
 
   // ── Envia mensagem respeitando quebras de linha ────────────
+
+  // Envio pela caixa de texto COM card: abre a conversa, cola o texto, espera o card do link carregar e envia
+  async function sendViaBoxWithCard(text, chat) {
+    try {
+      if (chat && chat !== '__active__') {
+        const o = await bridgeCall('OPEN', { chat }, 10000); if (!o || !o.ok) return false;
+        for (let i = 0; i < 15; i++) { await sleep(400); if (getInputBox()) break; }
+        await sleep(700);
+      }
+      const box = getInputBox(); if (!box) return false;
+      box.focus(); await sleep(200); box.innerHTML = '';
+      const lines = text.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i]) document.execCommand('insertText', false, lines[i]);
+        if (i < lines.length - 1) { box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, shiftKey: true, bubbles: true, cancelable: true })); await sleep(30); }
+      }
+      // espera o card do link aparecer acima da caixa (até 10 s)
+      const ft = () => (document.querySelector('#main footer') || document.body).innerText || '';
+      const t0 = Date.now(); const base = ft().length; await sleep(1500);
+      while (Date.now() - t0 < 10000) { const t = ft(); if (/Group Invite|Convite para (o )?grupo|Convite do WhatsApp/i.test(t) || t.length > base + 40) break; await sleep(400); }
+      await sleep(600 + Math.random() * 400);
+      for (const s of ['button[data-testid="send"]', 'span[data-icon="send"]', 'button[aria-label="Enviar"]', 'button[aria-label="Send"]']) { const btn = document.querySelector(s); if (btn) { (btn.closest('button') || btn).click(); await sleep(800); return true; } }
+      box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true })); await sleep(800); return true;
+    } catch (e) { console.warn('[WCRM] envio com card falhou', e); return false; }
+  }
   async function sendMsg(text, chat, hint) {
     // Aplica #primeiroNome com o contato ATUAL do DOM (não depende de mensagem async)
     // chat = envio silencioso para essa conversa (sem abrir/trocar a tela); nunca cai na caixa de texto
@@ -325,7 +350,9 @@
     // 1º: envio direto pelo WhatsApp (nada é digitado na caixa de mensagem)
     if (bridge && bridge.ok) {
       try {
-        const r = await bridgeCall('SENDTEXT', { chat: chat || '__active__', text: resolvedText, preview: !(window.__wcrmNoPreview) }, 15000);
+        const wantCard = !window.__wcrmNoPreview && /https?:\/\/\S+/.test(resolvedText);
+        const r = await bridgeCall('SENDTEXT', { chat: chat || '__active__', text: resolvedText, preview: !(window.__wcrmNoPreview), needCard: wantCard }, 20000);
+        if (r && r.cardFail) { console.log('[WCRM] card pela ponte falhou (' + r.preview + ') — enviando pela caixa de texto'); if (await sendViaBoxWithCard(resolvedText, chat)) return true; if (chat) return false; }
         if (r && r.preview) { console.log('[WCRM] card do link:', r.preview); try { let bn = document.getElementById('wcrm-pvbn'); if (!bn) { bn = document.createElement('div'); bn.id = 'wcrm-pvbn'; bn.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:2147483647;background:#111b21;color:#fff;border:1px solid #00a884;border-radius:10px;padding:10px 14px;font:12px/1.4 sans-serif;max-width:80vw;word-break:break-word;cursor:pointer'; bn.onclick = () => bn.remove(); document.body.appendChild(bn); } bn.textContent = '🔗 Card do link: ' + r.preview + '  (clique p/ fechar)'; clearTimeout(bn._t); bn._t = setTimeout(() => bn.remove(), 60000); } catch (e) { } }
         if (r && r.ok) { await sleep(500); return true; }
         if (chat) return false;

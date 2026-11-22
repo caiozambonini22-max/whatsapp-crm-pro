@@ -422,6 +422,7 @@
         } else pv = 'sem função; módulos: ' + (info.join(' | ') || names.length + ' achados');
       } catch (ep) { pv = 'erro: ' + String(ep && ep.message || ep); }
     }
+    if (d.needCard && um && !opts.linkPreview) return { ok: false, cardFail: true, reason: 'card indisponível pela ponte', preview: pv };
     try { await fn(chat, d.text, opts); return { ok: true, preview: pv }; }
     catch (err) {
       if (opts.linkPreview) { try { await fn(chat, d.text, {}); return { ok: true, preview: 'falhou no envio: ' + String(err && err.message || err) }; } catch (e2) { } }
