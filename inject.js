@@ -409,12 +409,17 @@
     if (um && d.preview !== false) {
       pv = 'sem módulo';
       try {
-        var gp = function (m) { return typeof m.getLinkPreview === 'function' && m.getLinkPreview; };
-        var lf = (function () { var m = mod(req, 'WAWebLinkPreviewChatAction'); return (m && gp(m)) || scanMods(req, gp, true); })();
-        if (lf) {
-          var prev = await Promise.race([Promise.resolve(lf(um[0])), new Promise(function (r) { setTimeout(function () { r(null); }, 7000); })]);
-          if (prev) { opts = { linkPreview: prev }; pv = 'ok'; } else pv = 'sem resposta';
+        var names = modNames(req).filter(function (n) { return /LinkPreview|LinkPrev/i.test(n); }), found = null, info = [];
+        for (var ni = 0; ni < names.length && !found; ni++) {
+          var mm = mod(req, names[ni]); if (!mm) continue; var ks2 = Object.keys(mm); info.push(names[ni] + '{' + ks2.slice(0, 8).join(',') + '}');
+          var fk = ['getLinkPreview', 'fetchLinkPreview', 'getSearchedLinkPreview', 'getPreview'];
+          for (var fi = 0; fi < fk.length; fi++) { if (typeof mm[fk[fi]] === 'function') { found = { f: mm[fk[fi]], n: names[ni] + '.' + fk[fi] }; break; } }
+          if (!found && mm.default && typeof mm.default.getLinkPreview === 'function') found = { f: mm.default.getLinkPreview, n: names[ni] + '.default.getLinkPreview' };
         }
+        if (found) {
+          var prev = await Promise.race([Promise.resolve(found.f(um[0])), new Promise(function (r) { setTimeout(function () { r('timeout'); }, 7000); })]);
+          if (prev && prev !== 'timeout') { opts = { linkPreview: prev }; pv = 'ok via ' + found.n; } else pv = (prev === 'timeout' ? 'demorou >7s' : 'vazio') + ' via ' + found.n;
+        } else pv = 'sem função; módulos: ' + (info.join(' | ') || names.length + ' achados');
       } catch (ep) { pv = 'erro: ' + String(ep && ep.message || ep); }
     }
     try { await fn(chat, d.text, opts); return { ok: true, preview: pv }; }

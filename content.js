@@ -326,7 +326,7 @@
     if (bridge && bridge.ok) {
       try {
         const r = await bridgeCall('SENDTEXT', { chat: chat || '__active__', text: resolvedText }, 15000);
-        if (r && r.preview) console.log('[WCRM] card do link:', r.preview);
+        if (r && r.preview) { console.log('[WCRM] card do link:', r.preview); try { let bn = document.getElementById('wcrm-pvbn'); if (!bn) { bn = document.createElement('div'); bn.id = 'wcrm-pvbn'; bn.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:2147483647;background:#111b21;color:#fff;border:1px solid #00a884;border-radius:10px;padding:10px 14px;font:12px/1.4 sans-serif;max-width:80vw;word-break:break-word;cursor:pointer'; bn.onclick = () => bn.remove(); document.body.appendChild(bn); } bn.textContent = '🔗 Card do link: ' + r.preview + '  (clique p/ fechar)'; clearTimeout(bn._t); bn._t = setTimeout(() => bn.remove(), 60000); } catch (e) { } }
         if (r && r.ok) { await sleep(500); return true; }
         if (chat) return false;
         console.warn('[WCRM] envio direto de texto falhou, usando a caixa:', r && r.reason);
