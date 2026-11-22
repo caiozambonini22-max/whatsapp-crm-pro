@@ -1201,6 +1201,7 @@
     await mutateRt(r => { const today = dayKey(new Date(now)); if (r.day !== today) { r.day = today; r.sent = 0; } r.sent = (r.sent || 0) + 1; r.hourly = (r.hourly || []).filter(t => now - t < 3600e3).concat([now]); });
     await addLog('📣 Disparo "' + job.name + '" → "' + c.n + '"');
   }
+  let bulkBooted = false;
   async function bulkTick() {
     if (busy) return;
     let mine = false;
@@ -1209,6 +1210,16 @@
       const b = await getBulk(); const job = b.jobs.find(j => j.status === 'running'); if (!job) return;
       const cfg = await getCfg(); const rt = await getRt();
       if (rt.leader && rt.leader.id !== INST && Date.now() - rt.leader.at < 30000) return;   // outra aba comanda
+      // ❤ batimento: se ficou parado (PC desligou / internet caiu / WhatsApp fechado), pausa e pergunta se quer retomar
+      const nowHb = Date.now();
+      if (!bulkBooted) {
+        bulkBooted = true;
+        if (job.hb && nowHb - job.hb > 120000) {
+          if ((job.opts || {}).autoResume) { await mutateBulk(x => { const j = x.jobs.find(y => y.id === job.id); if (j) { j.hb = nowHb; j.nextAt = nowHb + 20000 + Math.random() * 40000; j.longPause = false; } }); await addLog('📣 Disparo "' + job.name + '" retomado sozinho após interrupção'); return; }
+          await mutateBulk(x => { const j = x.jobs.find(y => y.id === job.id); if (j) { j.status = 'paused'; j.interrupted = true; j.waitWhy = ''; } }); await addLog('📣 Disparo "' + job.name + '" estava rodando e foi interrompido — aguardando você retomar'); return;
+        }
+      }
+      if (!job.hb || nowHb - job.hb > 25000) await mutateBulk(x => { const j = x.jobs.find(y => y.id === job.id); if (j) j.hb = nowHb; });
       const g = bulkGate(job, rt, cfg, Date.now());
       if (job.waitWhy !== (g.go ? '' : g.why)) await mutateBulk(x => { const j = x.jobs.find(y => y.id === job.id); if (j) j.waitWhy = g.go ? '' : g.why; });
       if (!g.go) return;
@@ -1332,7 +1343,7 @@
     if (t === 'BULK_SAVE_GROUP') await mutateBulk(b => { const g = e.data.group; const i = b.groups.findIndex(x => x.id === g.id); if (i >= 0) b.groups[i] = g; else b.groups.push(g); });
     if (t === 'BULK_DEL_GROUP') await mutateBulk(b => { b.groups = b.groups.filter(x => x.id !== e.data.id); });
     if (t === 'BULK_START') await mutateBulk(b => { b.jobs.forEach(j => { if (j.status === 'running') j.status = 'paused'; }); const j = e.data.job; j.status = 'running'; j.created = Date.now(); j.nextAt = 0; j.fails = 0; b.jobs.unshift(j); b.jobs = b.jobs.slice(0, 30); });
-    if (t === 'BULK_CTRL') await mutateBulk(b => { const j = b.jobs.find(x => x.id === e.data.id); if (!j) return; if (e.data.op === 'pause') j.status = 'paused'; if (e.data.op === 'resume') { b.jobs.forEach(x => { if (x.status === 'running') x.status = 'paused'; }); j.status = 'running'; j.nextAt = 0; } if (e.data.op === 'stop') { j.status = 'stopped'; j.endedAt = Date.now(); } if (e.data.op === 'retry') { j.contacts.forEach(c => { if (c.state === 'error') { c.state = 'pending'; c.why = ''; } }); j.fails = 0; } });
+    if (t === 'BULK_CTRL') await mutateBulk(b => { const j = b.jobs.find(x => x.id === e.data.id); if (!j) return; if (e.data.op === 'pause') j.status = 'paused'; if (e.data.op === 'ack') j.interrupted = false; if (e.data.op === 'resume') { b.jobs.forEach(x => { if (x.status === 'running') x.status = 'paused'; }); j.status = 'running'; j.nextAt = 0; j.interrupted = false; j.hb = Date.now(); } if (e.data.op === 'stop') { j.status = 'stopped'; j.endedAt = Date.now(); } if (e.data.op === 'retry') { j.contacts.forEach(c => { if (c.state === 'error') { c.state = 'pending'; c.why = ''; } }); j.fails = 0; } });
   });
   setInterval(() => bulkTick(), 4000);
 

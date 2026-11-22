@@ -117,9 +117,26 @@
     cats = {}; Object.entries(st.cats || {}).forEach(([k, v]) => { if (k !== 'all') cats[k] = (v && v.l) || k; }); Object.keys(DEF_CATS).forEach(k => { if (!cats[k] && (st.msgs || []).some(m => m.cat === k)) cats[k] = DEF_CATS[k]; });
     quickList = (st.msgs || []).map(m => ({ id: m.id, label: m.label || ('#' + m.id), cat: m.cat || '', type: m.type || 'msg', kinds: [...new Set((m.actions || []).map(a => a.k))], n: (m.actions || []).length }));
     const rtv = (await sget('wcrm_rt')) || {}; rt = rtv; const c = (await sget('wcrm_cfg')) || {}; cfgW = { winStart: c.winStart || '09:00', winEnd: c.winEnd || '19:00' };
-    const ui = await sget('wcrm_bulk_ui'); if (ui && ui.opts && !loadAll.done) { camp.opts = Object.assign({}, DEF_OPTS, ui.opts, { dryRun: true, startAt: 0 }); if (ui.stepGap != null) camp.stepGap = ui.stepGap; if (ui.stepGapMax != null) camp.stepGapMax = ui.stepGapMax; } loadAll.done = true;
+    const ui = await sget('wcrm_bulk_ui'); if (ui && ui.opts && !loadAll.done) { camp.opts = Object.assign({}, DEF_OPTS, ui.opts, { dryRun: true, startAt: 0 }); if (ui.stepGap != null) camp.stepGap = ui.stepGap; if (ui.stepGapMax != null) camp.stepGapMax = ui.stepGapMax; if (Array.isArray(ui.steps) && ui.steps.length && !camp.steps.length) camp.steps = ui.steps; if (ui.name && !camp.name) camp.name = ui.name; if (ui.groupId && !camp.groupId) camp.groupId = ui.groupId; } loadAll.done = true;
   }
-  const saveUi = () => { try { chrome.storage.local.set({ wcrm_bulk_ui: { opts: camp.opts, stepGap: camp.stepGap, stepGapMax: camp.stepGapMax } }); } catch (e) {} };
+  const saveUi = () => { try { chrome.storage.local.set({ wcrm_bulk_ui: { opts: camp.opts, stepGap: camp.stepGap, stepGapMax: camp.stepGapMax, steps: camp.steps, name: camp.name, groupId: camp.groupId } }); } catch (e) {} };
+
+  // salva o rascunho do script sozinho (não perde se fechar o PC/aba)
+  let _lastUi = ''; setInterval(() => { try { if (!loadAll.done) return; const k = JSON.stringify([camp.steps, camp.name, camp.groupId]); if (k !== _lastUi) { _lastUi = k; saveUi(); } } catch (e) { } }, 3000);
+  // aviso quando um disparo foi interrompido (PC desligou / internet caiu / fechou o WhatsApp)
+  setInterval(async () => {
+    try {
+      const b = (await sget(K_BULK)) || {}; const j = (b.jobs || []).find(x => x.status === 'paused' && x.interrupted);
+      let bn = document.getElementById('wcrm-resume-bn');
+      if (!j) { if (bn) bn.remove(); return; }
+      const sent = (j.contacts || []).filter(c => c.state === 'sent').length, tot = (j.contacts || []).length;
+      if (!bn) { bn = document.createElement('div'); bn.id = 'wcrm-resume-bn'; bn.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#111b21;color:#fff;border:2px solid #f59e0b;border-radius:12px;padding:12px 16px;font:14px/1.5 sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.5);display:flex;gap:12px;align-items:center;max-width:92vw'; document.body.appendChild(bn); }
+      const html = '<div>📣 <b>Disparo “' + esc(j.name || 'Campanha') + '” foi interrompido</b><br><span style="font-size:12.5px;color:#cbd5e1">' + sent + ' de ' + tot + ' enviados · Deseja retomar de onde parou?</span></div><button id="wcrm-rs-ok" style="background:#16a34a;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-weight:700;cursor:pointer">▶ Retomar</button><button id="wcrm-rs-no" style="background:#374151;color:#fff;border:0;border-radius:8px;padding:9px 12px;cursor:pointer">Deixar pausado</button>';
+      if (bn.dataset.h !== html) { bn.dataset.h = html; bn.innerHTML = html; }
+      bn.querySelector('#wcrm-rs-ok').onclick = () => { post({ type: 'BULK_CTRL', id: j.id, op: 'resume' }); bn.remove(); };
+      bn.querySelector('#wcrm-rs-no').onclick = () => { post({ type: 'BULK_CTRL', id: j.id, op: 'ack' }); bn.remove(); };
+    } catch (e) { }
+  }, 5000);
   function askSources() {
     return new Promise(res => {
       const req = Date.now() + Math.random(); let done = false;
@@ -274,7 +291,7 @@
       chk('bm-typing', o.typingSim, 'Simular “digitando…” antes de cada texto') +
       chk('bm-win', o.useWindow, 'Só enviar dentro do horário', '<div style="margin:2px 0 0 26px">' + chk('bm-alld', o.allDays, 'Enviar também aos domingos (todos os dias)') + '</div><div class="grid2" id="bm-winbox" style="margin:2px 0 6px 26px"><div><label class="l">Das</label><input type="time" id="bm-ws" value="' + esc(o.customWindow ? o.winStart : cfgW.winStart) + '"></div><div><label class="l">às</label><input type="time" id="bm-we" value="' + esc(o.customWindow ? o.winEnd : cfgW.winEnd) + '"></div></div>') +
       '<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:#3b4a6b">⚙ Mais opções (opcional)</summary><div style="margin-top:10px">' +
-      '<div class="grid2">' + num('bm-var', vp, 'Variação dos tempos (%)') + num('bm-fl', o.pauseAfterFails, 'Pausar após (falhas seguidas)', 1) + '</div>' +
+      chk('bm-auto', o.autoResume, 'Retomar sozinho se o PC/internet cair (sem perguntar)') + '<div class="grid2" style="margin-top:8px">' + num('bm-var', vp, 'Variação dos tempos (%)') + num('bm-fl', o.pauseAfterFails, 'Pausar após (falhas seguidas)', 1) + '</div>' +
       '<div class="grid2" style="margin-top:8px">' + num('bm-rec', o.skipRecentHours, 'Pular quem recebeu disparo há menos de (h)') + num('bm-act', o.skipActiveMin, 'Pular quem escreveu há menos de (min)') + '</div>' +
       '<div class="grid2" style="margin-top:8px">' + num('bm-wn', o.warmN, 'Aquecimento: primeiros (contatos)') + num('bm-wf', o.warmFactor, 'Intervalo multiplicado por', 1) + '</div>' +
       '<div class="grid2" style="margin-top:8px">' + num('bm-sg', camp.stepGap, 'Pausa entre ações — mín (s)') + num('bm-sgx', camp.stepGapMax, 'Pausa entre ações — máx (s)') + '</div>' +
@@ -295,7 +312,7 @@
     camp.stepGap = n('bm-sg', 0); camp.stepGapMax = Math.max(camp.stepGap, n('bm-sgx', 0));
     o.typingSim = g('bm-typing').checked; o.batchEvery = Math.round(n('bm-be', 0)); { const pt = n('bm-pt', 285, 1); o.batchMinS = Math.max(1, Math.round(pt * (1 - vf))); o.batchMaxS = Math.max(o.batchMinS, Math.round(pt * (1 + vf))); } o.batchMin = o.batchMinS / 60; o.batchMax = o.batchMaxS / 60;
     o.warmN = Math.round(n('bm-wn', 0)); o.warmFactor = n('bm-wf', 2, 1); o.pauseAfterFails = Math.round(n('bm-fl', 3, 1));
-    o.useWindow = g('bm-win').checked; o.allDays = !!(g('bm-alld') && g('bm-alld').checked); const ws = g('bm-ws').value, we = g('bm-we').value; o.customWindow = !!(ws && we && (ws !== cfgW.winStart || we !== cfgW.winEnd)); o.winStart = ws || cfgW.winStart; o.winEnd = we || cfgW.winEnd;
+    o.useWindow = g('bm-win').checked; o.allDays = !!(g('bm-alld') && g('bm-alld').checked); o.autoResume = !!(g('bm-auto') && g('bm-auto').checked); const ws = g('bm-ws').value, we = g('bm-we').value; o.customWindow = !!(ws && we && (ws !== cfgW.winStart || we !== cfgW.winEnd)); o.winStart = ws || cfgW.winStart; o.winEnd = we || cfgW.winEnd;
     const st = g('bm-start').value; o.startAt = st ? new Date(st).getTime() : 0;
     o.onlyKnown = g('bm-known').checked; o.shuffle = g('bm-shuf').checked; o.skipRecentHours = n('bm-rec', 0); o.skipActiveMin = n('bm-act', 0);
     o.excludeTabs = [...root.querySelectorAll('[data-xt]')].filter(x => x.checked).map(x => x.dataset.xt);
