@@ -1196,11 +1196,22 @@
     if (!steps.length) { await mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (j) j.status = 'paused'; }); await addLog('📣 Disparo "' + job.name + '" sem ações — pausado'); return; }
     if (o.dryRun) { const dn = Date.now(), dg = gap(true); await setC({ state: 'sent', simulated: true }, { nextAt: dn + Math.max(3000, Math.round((dg - dn) / 10)), longPause: !!longP, pauseAt: (longP && vp) ? sentN + drawEvery() : (job.pauseAt || pauseAt) }); await addLog('🧪 SIMULAÇÃO disparo "' + job.name + '" → "' + c.n + '" (nada enviado)'); return; }
     const fakeEnr = { id: 'bulk-' + jobId + '-' + idx, contact: c.n, nk: norm(c.n), stepIdx: 0, force: true };
+    // falha de UM contato (não achou/abrir a conversa) NÃO para o disparo: pula, avisa e segue.
+    // falha de RISCO (WhatsApp recusou o envio, ponte caiu...) conta e pausa depois de N seguidas, com notificação.
     const failed = async why => {
+      const soft = /abrir a conversa|não achei|nao achei|não encontrada|conversa não|sem conversa|não é uma conversa/i.test(why || '');
+      if (soft) {
+        const cf = (job.cfails || 0) + 1, skipped = (job.softSkips || 0) + 1;
+        const mass = cf >= 20;   // 20 seguidos sem nenhum sucesso: provável problema geral → pausa e avisa
+        await setC({ state: 'error', why }, { cfails: cf, softSkips: skipped, nextAt: Date.now() + rndMs(4000, 9000), longPause: false, notice: cf >= 3 && !mass ? { text: cf + ' contatos seguidos não puderam ser abertos (pulados). Último: "' + c.n + '"', at: Date.now() } : job.notice });
+        await addLog('📣 Pulado "' + c.n + '": ' + why);
+        if (mass) { await mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (j) j.status = 'paused'; }); await addAlert('error', c.n, 'Disparo "' + job.name + '" PAUSADO: ' + cf + ' contatos seguidos não abriram — pode ser problema do WhatsApp/conexão. Confira e retome.'); }
+        return;
+      }
       const fails = (job.fails || 0) + 1;
-      await setC({ state: 'error', why }, { fails, nextAt: gap(false), longPause: false });
+      await setC({ state: 'error', why }, { fails, nextAt: gap(false), longPause: false, notice: { text: 'Falha de envio em "' + c.n + '": ' + why + ' (' + fails + '/' + o.pauseAfterFails + ')', at: Date.now() } });
       await addLog('📣 Falha em "' + c.n + '": ' + why);
-      if (fails >= o.pauseAfterFails) { await mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (j) j.status = 'paused'; }); await addAlert('error', c.n, 'Disparo "' + job.name + '" PAUSADO após ' + fails + ' falhas seguidas: ' + why); }
+      if (fails >= o.pauseAfterFails) { await mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (j) { j.status = 'paused'; if (j.notice) j.notice.ack = true; } }); await addAlert('error', c.n, 'Disparo "' + job.name + '" PAUSADO após ' + fails + ' falhas de envio seguidas (risco): ' + why); }
     };
     // ENVIO SILENCIOSO: não abre a conversa na tela (você continua usando o WhatsApp normalmente)
     curRef = await resolveRef(c.n) || (c.id && /@(c|lid)\.us$/.test(String(c.id)) ? c.id : null);
@@ -1221,7 +1232,7 @@
     let res; try { res = await runSteps(W, { name: job.name }, fakeEnr, steps, 0, before, async (why) => { await failed(why); }); } finally { root.__wcrmNoPreview = false; }
     if (!res.ok) return;
     const now = Date.now();
-    await setC({ state: 'sent', text: (res.firstText || '').slice(0, 80), cid: curRef || ridPre || undefined }, { fails: 0, nextAt: gap(true), longPause: !!longP, pauseAt: (longP && vp) ? sentN + drawEvery() : (job.pauseAt || pauseAt) });
+    await setC({ state: 'sent', text: (res.firstText || '').slice(0, 80), cid: curRef || ridPre || undefined }, { fails: 0, cfails: 0, notice: null, nextAt: gap(true), longPause: !!longP, pauseAt: (longP && vp) ? sentN + drawEvery() : (job.pauseAt || pauseAt) });
     await mutateRt(r => { const today = dayKey(new Date(now)); if (r.day !== today) { r.day = today; r.sent = 0; } r.sent = (r.sent || 0) + 1; r.hourly = (r.hourly || []).filter(t => now - t < 3600e3).concat([now]); });
     await addLog('📣 Disparo "' + job.name + '" → "' + c.n + '"');
   }
@@ -1367,7 +1378,7 @@
     if (t === 'BULK_SAVE_GROUP') await mutateBulk(b => { const g = e.data.group; const i = b.groups.findIndex(x => x.id === g.id); if (i >= 0) b.groups[i] = g; else b.groups.push(g); });
     if (t === 'BULK_DEL_GROUP') await mutateBulk(b => { b.groups = b.groups.filter(x => x.id !== e.data.id); });
     if (t === 'BULK_START') await mutateBulk(b => { b.jobs.forEach(j => { if (j.status === 'running') j.status = 'paused'; }); const j = e.data.job; j.status = 'running'; j.created = Date.now(); j.nextAt = 0; j.fails = 0; b.jobs.unshift(j); b.jobs = b.jobs.slice(0, 30); });
-    if (t === 'BULK_CTRL') await mutateBulk(b => { const j = b.jobs.find(x => x.id === e.data.id); if (!j) return; if (e.data.op === 'pause') j.status = 'paused'; if (e.data.op === 'ack') j.interrupted = false; if (e.data.op === 'resume') { b.jobs.forEach(x => { if (x.status === 'running') x.status = 'paused'; }); j.status = 'running'; j.nextAt = 0; j.interrupted = false; j.hb = Date.now(); } if (e.data.op === 'stop') { j.status = 'stopped'; j.endedAt = Date.now(); } if (e.data.op === 'retry') { j.contacts.forEach(c => { if (c.state === 'error') { c.state = 'pending'; c.why = ''; } }); j.fails = 0; } });
+    if (t === 'BULK_CTRL') await mutateBulk(b => { const j = b.jobs.find(x => x.id === e.data.id); if (!j) return; if (e.data.op === 'pause') j.status = 'paused'; if (e.data.op === 'ack') j.interrupted = false; if (e.data.op === 'noticeack') { if (j.notice) j.notice.ack = true; } if (e.data.op === 'resume') { b.jobs.forEach(x => { if (x.status === 'running') x.status = 'paused'; }); j.status = 'running'; j.nextAt = 0; j.interrupted = false; j.hb = Date.now(); } if (e.data.op === 'stop') { j.status = 'stopped'; j.endedAt = Date.now(); } if (e.data.op === 'retry') { j.contacts.forEach(c => { if (c.state === 'error') { c.state = 'pending'; c.why = ''; } }); j.fails = 0; } });
   });
   setInterval(() => bulkTick(), 4000);
 

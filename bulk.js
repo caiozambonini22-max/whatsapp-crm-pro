@@ -123,6 +123,19 @@
 
   // salva o rascunho do script sozinho (não perde se fechar o PC/aba)
   let _lastUi = ''; setInterval(() => { try { if (!loadAll.done) return; const k = JSON.stringify([camp.steps, camp.name, camp.groupId]); if (k !== _lastUi) { _lastUi = k; saveUi(); } } catch (e) { } }, 3000);
+  // aviso NÃO bloqueante: o disparo continua; você decide se quer pausar
+  setInterval(async () => {
+    try {
+      const b = (await sget(K_BULK)) || {}; const j = (b.jobs || []).find(x => x.status === 'running' && x.notice && !x.notice.ack);
+      let bn = document.getElementById('wcrm-notice-bn');
+      if (!j) { if (bn) bn.remove(); return; }
+      if (!bn) { bn = document.createElement('div'); bn.id = 'wcrm-notice-bn'; bn.style.cssText = 'position:fixed;top:12px;right:16px;z-index:2147483646;background:#111b21;color:#fff;border:2px solid #f59e0b;border-radius:12px;padding:12px 14px;font:13.5px/1.5 sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.5);display:flex;gap:10px;align-items:center;max-width:460px'; document.body.appendChild(bn); }
+      const html = '<div>⚠️ <b>' + esc(j.notice.text) + '</b><br><span style="font-size:12px;color:#cbd5e1">O disparo continua rodando. Quer pausar?</span></div><button id="wcrm-nt-p" style="background:#dc2626;color:#fff;border:0;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">⏸ Pausar</button><button id="wcrm-nt-k" style="background:#374151;color:#fff;border:0;border-radius:8px;padding:8px 10px;cursor:pointer">OK</button>';
+      if (bn.dataset.h !== html) { bn.dataset.h = html; bn.innerHTML = html; }
+      bn.querySelector('#wcrm-nt-p').onclick = () => { post({ type: 'BULK_CTRL', id: j.id, op: 'pause' }); post({ type: 'BULK_CTRL', id: j.id, op: 'noticeack' }); bn.remove(); };
+      bn.querySelector('#wcrm-nt-k').onclick = () => { post({ type: 'BULK_CTRL', id: j.id, op: 'noticeack' }); bn.remove(); };
+    } catch (e) { }
+  }, 5000);
   // aviso quando um disparo foi interrompido (PC desligou / internet caiu / fechou o WhatsApp)
   setInterval(async () => {
     try {
@@ -150,7 +163,8 @@
     if (!src) { pool = []; return; }
     const known = new Map(src.act.filter(a => a.i || a.o || a.t).map(a => [norm(a.n), a]));
     const ph = new Map(src.act.map(a => [norm(a.n), phoneOf(a.id)]));
-    const mk = (n, extra) => Object.assign({ n, known: known.has(norm(n)), phone: ph.get(norm(n)) || '' }, extra || {});
+    const idm = new Map(); (src.chats || []).forEach(c => { if (c.id) idm.set(norm(c.n), c.id); }); src.act.forEach(a => { if (a.id && !idm.has(norm(a.n))) idm.set(norm(a.n), a.id); });
+    const mk = (n, extra) => Object.assign({ n, known: known.has(norm(n)), phone: ph.get(norm(n)) || '', id: idm.get(norm(n)) || '' }, extra || {});
     const uniq = arr => { const seen = new Set(); return arr.filter(n => { const k = norm(n); if (seen.has(k)) return false; seen.add(k); return true; }); };
     if (seg === 'saved') pool = src.act.filter(a => !a.g).map(a => mk(a.n));
     else if (seg === 'inbox') pool = src.act.filter(a => a.i && !a.t && !a.g).sort((a, b) => b.i - a.i).map(a => mk(a.n));
