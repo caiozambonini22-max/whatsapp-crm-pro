@@ -93,13 +93,38 @@
   }
 
   // conversas antigas (só etiquetadas) não estão na lista carregada: cria/obtém o chat internamente, sem abrir a tela
+  // acha (ou cria na memória, sem abrir tela) a conversa de um contato salvo — por id (lid/c.us) OU por nome.
+  // Retorna o id interno da conversa. O telefone (c.us) é o caminho que sempre funciona, mesmo p/ conversas antigas fora da lista.
+  function contactPhoneByName(name) {
+    try {
+      var req = getReq(); var CM = mod(req, 'WAWebContactCollection'); var coll = CM && (CM.ContactCollection || CM.default); if (!coll) return '';
+      var low = String(name || '').trim().toLowerCase(); if (!low) return '';
+      var list = coll.getModelsArray ? coll.getModelsArray() : (coll.models || []); var best = '';
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i]; if (String(c.name || c.shortName || '').trim().toLowerCase() !== low) continue;
+        var id = c.id && c.id._serialized || ''; if (/@c\.us$/.test(id)) return id;
+        var pn = c.phoneNumber && (c.phoneNumber._serialized || c.phoneNumber.user || c.phoneNumber); if (pn) best = String(pn).split('@')[0].replace(/\D/g, '') + '@c.us';
+      }
+      return best;
+    } catch (e) { return ''; }
+  }
   async function warmChat(ref) {
     try {
-      if (!ref || ref === '__active__' || !/@(c|lid)\.us$/.test(String(ref))) return;
-      var s = stores(); if (s.err || findChat(s, ref)) return;
+      if (!ref || ref === '__active__') return null;
+      var s = stores(); if (s.err) return null;
+      var f0 = findChat(s, ref); if (f0 && f0.id) return f0.id._serialized;
+      var cand = '';
+      if (/@lid\.us$|@lid$/.test(String(ref))) {
+        var ph = contactName(ref).ph;
+        if (!ph) { try { var req0 = getReq(); var A = mod(req0, 'WAWebApiContact'), Wf = mod(req0, 'WAWebWidFactory'); if (A && A.getPhoneNumber && Wf) { var v = await A.getPhoneNumber(Wf.createWid(String(ref))); ph = v ? String(v._serialized || v).split('@')[0].replace(/\D/g, '') : ''; } } catch (e1) { } }
+        cand = ph ? ph + '@c.us' : String(ref);
+      } else if (/@c\.us$/.test(String(ref))) cand = String(ref);
+      else cand = contactPhoneByName(ref);
+      if (!cand) return null;
       var req = getReq(); var F = mod(req, 'WAWebFindChatAction'), W = mod(req, 'WAWebWidFactory');
-      if (F && W && F.findOrCreateLatestChat && W.createWid) await F.findOrCreateLatestChat(W.createWid(String(ref)));
+      if (F && W && F.findOrCreateLatestChat && W.createWid) { var r = await F.findOrCreateLatestChat(W.createWid(cand)); var ch = r && r.chat; if (ch && ch.id) return ch.id._serialized; }
     } catch (e) { }
+    return null;
   }
   function contactName(cid) {
     try {
@@ -547,7 +572,7 @@ function oggSalt(u8) {
     if (e.source !== window || !e.data || e.data.tag !== 'WCRM_CONTENT') return;
     var d = e.data;
     if (d.kind === 'SYNC') push(true);
-    try { if (d.chat && typeof d.chat === 'string' && d.kind !== 'SYNC') await warmChat(d.chat); } catch (ew) { }
+    try { if (d.chat && typeof d.chat === 'string' && d.kind !== 'SYNC' && d.kind !== 'LISTINFO') { var wid = await warmChat(d.chat); if (wid) d.chat = wid; } } catch (ew) { }
     if (d.kind === 'OPEN' || d.kind === 'OPEN_NUMBER' || d.kind === 'READ' || d.kind === 'LISTINFO' || d.kind === 'FILTER' || d.kind === 'ACTIVE' || d.kind === 'ACT' || d.kind === 'SENDMEDIA' || d.kind === 'SENDTEXT' || d.kind === 'PROBE' || d.kind === 'LIDMAP' || d.kind === 'RECENT' || d.kind === 'SALESLABELS') {
       var rr; try { rr = d.kind === 'OPEN' ? await openChat(d) : d.kind === 'OPEN_NUMBER' ? await openNumber(d) : d.kind === 'READ' ? readChat(d) : d.kind === 'LISTINFO' ? listInfo(d) : d.kind === 'FILTER' ? await filterList(d) : d.kind === 'ACT' ? await actChat(d) : d.kind === 'SENDMEDIA' ? await sendMediaDirect(d) : d.kind === 'SENDTEXT' ? await sendTextDirect(d) : d.kind === 'PROBE' ? probeMedia() : d.kind === 'LIDMAP' ? lidMap() : d.kind === 'RECENT' ? recentMsgs(d) : d.kind === 'SALESLABELS' ? salesLabels(d) : activeChat(d); } catch (err) { rr = { ok: false, reason: String(err && err.message || err) }; }
       send({ kind: 'RESULT', reqId: d.reqId, result: rr });

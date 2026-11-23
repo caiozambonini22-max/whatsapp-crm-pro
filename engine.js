@@ -341,9 +341,11 @@
       if (!c && dg.length >= 8) c = all.find(x => x.id && ((x.ph && String(x.ph).slice(-9) === dg.slice(-9)) || (String(x.n || '').replace(/\D/g, '').length >= 8 && String(x.n).replace(/\D/g, '').slice(-9) === dg.slice(-9))));
       let id = c && c.id;
       if (!id) { const map = (await sget('wcrm_idmap')) || {}; id = Object.keys(map).find(k => norm(map[k]) === nn); }
-      if (!id || /@g\.us$/.test(id)) return null;   // grupos continuam pelo jeito antigo
-      const r = await W.bridgeCall('READ', { chat: id, max: 5 }, 6000);
-      return r && r.ok ? id : null;
+      if (/@g\.us$/.test(id || '')) return null;   // grupos continuam pelo jeito antigo
+      // a ponte acha/cria a conversa por id OU por nome do contato salvo (sem abrir a tela)
+      let r = await W.bridgeCall('READ', { chat: id || contact, max: 5 }, 9000);
+      if (!(r && r.ok) && id) r = await W.bridgeCall('READ', { chat: contact, max: 5 }, 9000);
+      return r && r.ok ? (r.id || id) : null;
     } catch (x) { return null; }
   }
   async function openChat(name) {
@@ -1016,7 +1018,7 @@
     try {
       const steps = await schedSteps(it);
       if (!steps || !steps.length) return await fail(it.kind === 'quick' ? 'resposta rápida não encontrada' : 'mensagem vazia / sem arquivo');
-      curRef = await resolveRef(it.contact) || (it.cid && /@(c|lid)\.us|@lid$/.test(it.cid) ? it.cid : null);
+      curRef = await resolveRef(it.contact) || (it.cid && /@(c\.us|lid)|@lid$/.test(it.cid) ? it.cid : null);
       if (curRef) { const r = await W.bridgeCall('READ', { chat: curRef, max: 3 }, 6000); if (!(r && r.ok)) curRef = null; }
       if (!curRef && !(await openChat(it.contact))) return await fail('não achei/abri a conversa');
       // envio anterior sem confirmação que pode ter saído atrasado: confere antes de mandar de novo
@@ -1214,7 +1216,7 @@
       if (fails >= o.pauseAfterFails) { await mutateBulk(b => { const j = b.jobs.find(x => x.id === jobId); if (j) { j.status = 'paused'; if (j.notice) j.notice.ack = true; } }); await addAlert('error', c.n, 'Disparo "' + job.name + '" PAUSADO após ' + fails + ' falhas de envio seguidas (risco): ' + why); }
     };
     // ENVIO SILENCIOSO: não abre a conversa na tela (você continua usando o WhatsApp normalmente)
-    curRef = await resolveRef(c.n) || (c.id && /@(c|lid)\.us$/.test(String(c.id)) ? c.id : null);
+    curRef = await resolveRef(c.n) || (c.id && /@(c\.us|lid)$/.test(String(c.id)) ? c.id : null);
     if (curRef) { try { const rr = await W.bridgeCall('READ', { chat: curRef, max: 3 }, 6000); if (!(rr && rr.ok)) curRef = null; } catch (x) { curRef = null; } }
     const opened = curRef ? true : await openChat(c.n);
     if (!opened) { await failed('não consegui abrir a conversa'); return; }
