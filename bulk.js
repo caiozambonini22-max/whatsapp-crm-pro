@@ -468,7 +468,7 @@
         const seen = new Set(); let tg = ((src && src.chats) || []).filter(c => c.labels.includes(lab)).filter(c => { const k = norm(c.n); if (seen.has(k)) return false; seen.add(k); return true; }).map(c => ({ n: c.n, state: 'pending', id: c.id || '' }));
         if (!tg.length) return alert('Nenhum contato na lista "' + lab + '".');
         const o2 = Object.assign({}, j0.opts || {}); if (o2.shuffle) { for (let i = tg.length - 1; i > 0; i--) { const k = Math.floor(Math.random() * (i + 1)); [tg[i], tg[k]] = [tg[k], tg[i]]; } }
-        if (!confirm('Criar o disparo "' + lab + '" com ' + tg.length + ' contatos, mesmo script e ritmo do atual?' + (mode === 'now' ? '\n\nO disparo que está rodando será PAUSADO.' : '\n\nEle começa sozinho quando o atual terminar.'))) return;
+        if (document.documentElement.dataset.wcrmAuto !== '1' && !confirm('Criar o disparo "' + lab + '" com ' + tg.length + ' contatos, mesmo script e ritmo do atual?' + (mode === 'now' ? '\n\nO disparo que está rodando será PAUSADO.' : '\n\nEle começa sozinho quando o atual terminar.'))) return;
         const job = { id: 'j' + Date.now(), name: lab, steps: JSON.parse(JSON.stringify(j0.steps || [])), stepGap: j0.stepGap, stepGapMax: j0.stepGapMax, seed: Math.floor(Math.random() * 997), opts: o2, queue: mode === 'queue', contacts: tg };
         post({ type: 'BULK_START', job }); await sleep(700); await loadAll(); jobOpen = job.id; return render();
       }
@@ -519,7 +519,7 @@
     { const bad = camp.steps.findIndex(s => /^(label_add|label_rm|tab_add|tab_rm)$/.test(s.type) && !(s.name || '').trim()); if (bad >= 0) return alert('Na ação ' + (bad + 1) + ' (' + UTIL[camp.steps[bad].type] + ') escolha a ' + (camp.steps[bad].type.startsWith('label') ? 'etiqueta' : 'aba') + ' na lista.'); }
     const o = camp.opts;
     if (o.shuffle) { for (let i = targets.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [targets[i], targets[j]] = [targets[j], targets[i]]; } }
-    if (!o.dryRun && !confirm('Vai ENVIAR de verdade para ' + targets.length + ' contato(s), 1 por vez, com intervalo de ' + o.minSec + '–' + o.maxSec + ' s (limite ' + o.perHour + '/hora e ' + o.perDay + '/dia).\n\nMantenha o computador ligado e o WhatsApp Web aberto. Continuar?')) return;
+    if (!o.dryRun && document.documentElement.dataset.wcrmAuto !== '1' && !confirm('Vai ENVIAR de verdade para ' + targets.length + ' contato(s), 1 por vez, com intervalo de ' + o.minSec + '–' + o.maxSec + ' s (limite ' + o.perHour + '/hora e ' + o.perDay + '/dia).\n\nMantenha o computador ligado e o WhatsApp Web aberto. Continuar?')) return;
     const job = { id: 'j' + Date.now(), name: camp.name || (g ? g.name : 'Campanha'), steps: JSON.parse(JSON.stringify(camp.steps)), stepGap: camp.stepGap, stepGapMax: camp.stepGapMax, seed: Math.floor(Math.random() * 997), opts: Object.assign({}, o), queue: !!o.queue && !o.dryRun, contacts: targets.map(c => ({ n: c.n, state: 'pending', id: c.id || '' })) };
     post({ type: 'BULK_START', job }); await sleep(600); await loadAll(); jobOpen = job.id; hideModal(); sel.clear(); step = 1; setView('report');
   }
