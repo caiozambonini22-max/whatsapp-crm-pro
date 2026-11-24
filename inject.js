@@ -456,8 +456,9 @@
         var lpm = mod(req, 'WAWebLinkPreviewChatAction');
         if (lpm && typeof lpm.getLinkPreview === 'function') {
           var host = ''; try { host = new URL(um[0]).hostname; } catch (eu) { }
-          var pr = await Promise.race([Promise.resolve(lpm.getLinkPreview({ url: um[0], domain: host }, chat)), new Promise(function (r) { setTimeout(function () { r('timeout'); }, 8000); })]);
-          if (pr && pr !== 'timeout' && pr.data) { opts = { linkPreview: pr.data }; pv = 'ok'; } else pv = pr === 'timeout' ? 'demorou >8s' : 'sem prévia para este link';
+          var lurl = um[0]; if (/chat\.whatsapp\.com\//i.test(lurl)) { window.__wcrmLpBust = window.__wcrmLpBust || Date.now().toString(36); lurl += (lurl.indexOf('?') < 0 ? '?' : '&') + 'wb=' + window.__wcrmLpBust; }  // v7.16: o WhatsApp guarda o card por URL; variar a URL força nome/capa atuais do grupo
+          var pr = await Promise.race([Promise.resolve(lpm.getLinkPreview({ url: lurl, domain: host }, chat)), new Promise(function (r) { setTimeout(function () { r('timeout'); }, 8000); })]);
+          if (pr && pr !== 'timeout' && pr.data) { if (lurl !== um[0]) { try { pr.data.matchedText = um[0]; } catch (em) { } } opts = { linkPreview: pr.data }; pv = 'ok'; } else pv = pr === 'timeout' ? 'demorou >8s' : 'sem prévia para este link';
         }
       } catch (ep) { pv = 'erro: ' + String(ep && ep.message || ep); }
     }
