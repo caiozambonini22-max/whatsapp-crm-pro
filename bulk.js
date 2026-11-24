@@ -117,7 +117,7 @@
     cats = {}; Object.entries(st.cats || {}).forEach(([k, v]) => { if (k !== 'all') cats[k] = (v && v.l) || k; }); Object.keys(DEF_CATS).forEach(k => { if (!cats[k] && (st.msgs || []).some(m => m.cat === k)) cats[k] = DEF_CATS[k]; });
     quickList = (st.msgs || []).map(m => ({ id: m.id, label: m.label || ('#' + m.id), cat: m.cat || '', type: m.type || 'msg', kinds: [...new Set((m.actions || []).map(a => a.k))], n: (m.actions || []).length }));
     const rtv = (await sget('wcrm_rt')) || {}; rt = rtv; const c = (await sget('wcrm_cfg')) || {}; cfgW = { winStart: c.winStart || '09:00', winEnd: c.winEnd || '19:00' };
-    const ui = await sget('wcrm_bulk_ui'); if (ui && ui.opts && !loadAll.done) { camp.opts = Object.assign({}, DEF_OPTS, ui.opts, { dryRun: true, startAt: 0 }); if (ui.stepGap != null) camp.stepGap = ui.stepGap; if (ui.stepGapMax != null) camp.stepGapMax = ui.stepGapMax; if (Array.isArray(ui.steps) && ui.steps.length && !camp.steps.length) camp.steps = ui.steps; if (ui.name && !camp.name) camp.name = ui.name; if (ui.groupId && !camp.groupId) camp.groupId = ui.groupId; } loadAll.done = true;
+    const ui = await sget('wcrm_bulk_ui'); if (ui && ui.opts && !loadAll.done) { camp.opts = Object.assign({}, DEF_OPTS, ui.opts, { dryRun: true, startAt: 0, queue: false }); if (ui.stepGap != null) camp.stepGap = ui.stepGap; if (ui.stepGapMax != null) camp.stepGapMax = ui.stepGapMax; if (Array.isArray(ui.steps) && ui.steps.length && !camp.steps.length) camp.steps = ui.steps; if (ui.name && !camp.name) camp.name = ui.name; if (ui.groupId && !camp.groupId) camp.groupId = ui.groupId; } loadAll.done = true;
   }
   const saveUi = () => { try { chrome.storage.local.set({ wcrm_bulk_ui: { opts: camp.opts, stepGap: camp.stepGap, stepGapMax: camp.stepGapMax, steps: camp.steps, name: camp.name, groupId: camp.groupId } }); } catch (e) {} };
 
@@ -315,6 +315,7 @@
       '<label class="l" style="margin-top:10px">Pular quem está nestas abas do CRM</label><div class="tabsel">' + (tabsAll.length ? tabsAll.map(t => '<label class="tchip"><input type="checkbox" data-xt="' + esc(t.name) + '" ' + ((o.excludeTabs || []).includes(t.name) ? 'checked' : '') + '> ' + esc(t.name) + '</label>').join('') : '<span style="font-size:12px;color:#6b7791">Sem abas no CRM.</span>') + '</div>' +
       '<div style="font-size:12px;color:#6b7791;margin-top:6px">Os limites contam junto com o Follow Up. Grupos e contatos bloqueados nunca recebem.</div></div></details></div>' +
       '<div class="card" style="border:2px solid ' + (o.dryRun ? '#f59e0b' : '#16a34a') + '"><h3>' + (o.dryRun ? '🧪 Modo teste LIGADO' : '🚀 Envio REAL') + '</h3>' + chk('bm-dry', o.dryRun, '<b>Modo teste</b> — simula tudo e NÃO envia nada') +
+      chk('bm-queue', o.queue, '<b>Entrar na fila</b> — começa sozinho quando o disparo atual terminar (não pausa o que está rodando)') +
       '<input type="text" id="bm-name" placeholder="Nome da campanha (ex.: Black November)" value="' + esc(camp.name) + '" style="margin-top:8px"></div>' +
       '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px;position:sticky;bottom:-20px;background:#f4f6fb;padding:12px 0 4px;border-top:1px solid #e3e8f2"><button class="btn gray" id="bm-cancel">Voltar</button><button class="btn ' + (o.dryRun ? '' : 'green') + '" id="bm-go" style="font-size:15px;padding:12px 28px">' + (o.dryRun ? '🧪 Iniciar TESTE (sem enviar)' : '▶ Iniciar disparo') + '</button></div></div></div>';
   }
@@ -332,7 +333,7 @@
     const st = g('bm-start').value; o.startAt = st ? new Date(st).getTime() : 0;
     o.onlyKnown = g('bm-known').checked; o.shuffle = g('bm-shuf').checked; o.skipRecentHours = n('bm-rec', 0); o.skipActiveMin = n('bm-act', 0);
     o.excludeTabs = [...root.querySelectorAll('[data-xt]')].filter(x => x.checked).map(x => x.dataset.xt);
-    o.dryRun = g('bm-dry').checked; camp.name = g('bm-name').value;
+    o.dryRun = g('bm-dry').checked; o.queue = !!(g('bm-queue') && g('bm-queue').checked); camp.name = g('bm-name').value;
   }
   function refreshRisk() {
     readModal(); const rk = riskOf(camp.opts, targetsNow().length); const g = id => document.getElementById(id);
@@ -349,7 +350,7 @@
     const c = j.contacts || []; const n = s => c.filter(x => x.state === s).length;
     return { total: c.length, sent: n('sent'), err: n('error'), skip: n('skipped'), pend: n('pending') };
   }
-  function pillOf(j) { const m = { running: ['p-run', 'Enviando'], paused: ['p-pause', 'Pausado'], done: ['p-done', 'Concluído'], stopped: ['p-stop', 'Parado'] }[j.status] || ['p-done', j.status]; return '<span class="pill ' + m[0] + '">' + m[1] + '</span>'; }
+  function pillOf(j) { const m = { running: ['p-run', 'Enviando'], paused: ['p-pause', 'Pausado'], queued: ['p-pause', 'Na fila'], done: ['p-done', 'Concluído'], stopped: ['p-stop', 'Parado'] }[j.status] || ['p-done', j.status]; return '<span class="pill ' + m[0] + '">' + m[1] + '</span>'; }
   const mmss = ms => { const t = Math.max(0, Math.ceil(ms / 1000)), m = Math.floor(t / 60), s = t % 60; return m + ':' + String(s).padStart(2, '0'); };
   function cdHtml(j, s) {
     const o = j.opts || {}; const left = o.batchEvery ? Math.max(0, (j.pauseAt || o.batchEvery) - s.sent) : 0;
@@ -371,8 +372,9 @@
       const s = jobStats(j0); const pct = s.total ? Math.round((s.sent + s.err + s.skip) / s.total * 100) : 0;
       $bd.innerHTML = head + '<button class="btn gray sm" id="bk-back">← voltar</button><div class="card" style="margin-top:10px"><h3>' + esc(j0.name || 'Campanha') + ' ' + pillOf(j0) + (j0.opts && j0.opts.dryRun ? ' <span class="pill p-pause">🧪 teste</span>' : '') + '</h3>' +
         '<div class="bar"><i style="width:' + pct + '%"></i></div><div style="margin:8px 0;font-size:13px">' + pct + '% · ✅ ' + s.sent + ' enviados · ❌ ' + s.err + ' erros · ⏭ ' + s.skip + ' pulados · ⏳ ' + s.pend + ' na fila' + (j0.status === 'running' ? cdHtml(j0, s) : '') + '</div>' +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (j0.status === 'running' ? '<button class="btn" data-ctrl="pause">⏸ Pausar</button>' : (j0.status === 'paused' ? '<button class="btn green" data-ctrl="resume">▶ Retomar</button>' : '')) + (s.err ? '<button class="btn gray" data-ctrl="retry">↻ Tentar de novo os erros</button>' : '') + (['running', 'paused'].includes(j0.status) ? '<button class="btn red" data-ctrl="stop">⏹ Parar</button>' : '') + '<button class="btn gray" id="bk-csv">⬇ Baixar relatório</button></div>' +
-        (['running', 'paused'].includes(j0.status) ? (() => { const oo = j0.opts || {}; const ws = oo.customWindow ? oo.winStart : '07:00', we = oo.customWindow ? oo.winEnd : '20:00'; return '<div style="margin-top:12px;padding:10px;border:1px solid #2a3942;border-radius:10px"><b>⏰ Ajustar com o disparo rodando</b><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;font-size:13px">Das <input type="time" id="ed-ws" value="' + ws + '"> até <input type="time" id="ed-we" value="' + we + '"> · máx/dia <input type="number" id="ed-pd" min="1" style="width:70px" value="' + (oo.perDay || 150) + '"> · máx/hora <input type="number" id="ed-ph" min="1" style="width:60px" value="' + (oo.perHour || 30) + '"> <label><input type="checkbox" id="ed-all"' + (oo.allDays ? ' checked' : '') + '> todos os dias</label> <button class="btn green sm" id="ed-save">Salvar</button></div></div>'; })() : '') + '</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (j0.status === 'running' ? '<button class="btn" data-ctrl="pause">⏸ Pausar</button>' : (j0.status === 'paused' ? '<button class="btn green" data-ctrl="resume">▶ Retomar</button>' : '')) + (s.err ? '<button class="btn gray" data-ctrl="retry">↻ Tentar de novo os erros</button>' : '') + (['running', 'paused', 'queued'].includes(j0.status) ? '<button class="btn red" data-ctrl="stop">⏹ Parar</button>' : '') + '<button class="btn gray" id="bk-csv">⬇ Baixar relatório</button></div>' +
+        '<div style="margin-top:12px;padding:10px;border:1px solid #2a3942;border-radius:10px"><b>⧉ Repetir este disparo (mesmo script e ritmo) para outra lista</b><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;font-size:13px">' + ((src && src.labels && src.labels.length) ? '<select id="dup-lab">' + src.labels.map(l => '<option>' + esc(l.name) + '</option>').join('') + '</select> <select id="dup-mode"><option value="now">começar agora (pausa o atual)</option><option value="queue">entrar na fila (começa quando o atual terminar)</option></select> <button class="btn green sm" id="dup-go">Criar</button>' : '<button class="btn gray sm" id="dup-load">Carregar minhas listas</button>') + '</div></div>' +
+        (['running', 'paused', 'queued'].includes(j0.status) ? (() => { const oo = j0.opts || {}; const ws = oo.customWindow ? oo.winStart : '07:00', we = oo.customWindow ? oo.winEnd : '20:00'; return '<div style="margin-top:12px;padding:10px;border:1px solid #2a3942;border-radius:10px"><b>⏰ Ajustar com o disparo rodando</b><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;font-size:13px">Das <input type="time" id="ed-ws" value="' + ws + '"> até <input type="time" id="ed-we" value="' + we + '"> · máx/dia <input type="number" id="ed-pd" min="1" style="width:70px" value="' + (oo.perDay || 150) + '"> · máx/hora <input type="number" id="ed-ph" min="1" style="width:60px" value="' + (oo.perHour || 30) + '"> <label><input type="checkbox" id="ed-all"' + (oo.allDays ? ' checked' : '') + '> todos os dias</label> <button class="btn green sm" id="ed-save">Salvar</button></div></div>'; })() : '') + '</div>' +
         '<table class="tbl"><tr><th>Contato</th><th>Situação</th><th>Detalhe</th><th>Horário</th></tr>' + j0.contacts.map(c => '<tr><td style="text-align:left">' + esc(c.n) + '</td><td>' + ({ sent: c.simulated ? '🧪 simulado' : '✅ enviado', error: '❌ erro', skipped: '⏭ pulado', pending: '⏳ fila' }[c.state] || c.state) + '</td><td style="text-align:left;font-size:12px">' + esc(c.why || c.text || '') + '</td><td>' + (c.at ? fmt(c.at) : '') + '</td></tr>').join('') + '</table>';
       return;
     }
@@ -460,6 +462,16 @@
     if (view === 'report') {
       const o = q('[data-open]'); if (o) { jobOpen = o.dataset.open; return render(); }
       if (q('#bk-back')) { jobOpen = null; return render(); }
+      if (q('#dup-load')) { src = await askSources(); return render(); }
+      if (q('#dup-go')) {
+        const lab = document.getElementById('dup-lab').value, mode = document.getElementById('dup-mode').value; const j0 = bulk.jobs.find(x => x.id === jobOpen); if (!j0) return;
+        const seen = new Set(); let tg = ((src && src.chats) || []).filter(c => c.labels.includes(lab)).filter(c => { const k = norm(c.n); if (seen.has(k)) return false; seen.add(k); return true; }).map(c => ({ n: c.n, state: 'pending', id: c.id || '' }));
+        if (!tg.length) return alert('Nenhum contato na lista "' + lab + '".');
+        const o2 = Object.assign({}, j0.opts || {}); if (o2.shuffle) { for (let i = tg.length - 1; i > 0; i--) { const k = Math.floor(Math.random() * (i + 1)); [tg[i], tg[k]] = [tg[k], tg[i]]; } }
+        if (!confirm('Criar o disparo "' + lab + '" com ' + tg.length + ' contatos, mesmo script e ritmo do atual?' + (mode === 'now' ? '\n\nO disparo que está rodando será PAUSADO.' : '\n\nEle começa sozinho quando o atual terminar.'))) return;
+        const job = { id: 'j' + Date.now(), name: lab, steps: JSON.parse(JSON.stringify(j0.steps || [])), stepGap: j0.stepGap, stepGapMax: j0.stepGapMax, seed: Math.floor(Math.random() * 997), opts: o2, queue: mode === 'queue', contacts: tg };
+        post({ type: 'BULK_START', job }); await sleep(700); await loadAll(); jobOpen = job.id; return render();
+      }
       if (q('#ed-save')) { const g = id => document.getElementById(id) || {}; post({ type: 'BULK_CTRL', id: jobOpen, op: 'setopts', opts: { useWindow: true, customWindow: true, winStart: g('ed-ws').value || '07:00', winEnd: g('ed-we').value || '20:00', perDay: Math.max(1, +g('ed-pd').value || 150), perHour: Math.max(1, +g('ed-ph').value || 30), allDays: !!g('ed-all').checked } }); await sleep(600); await loadAll(); return render(); }
       const c = q('[data-ctrl]'); if (c) { post({ type: 'BULK_CTRL', id: jobOpen, op: c.dataset.ctrl }); await sleep(500); await loadAll(); return render(); }
       if (q('#bk-csv')) { const j = bulk.jobs.find(x => x.id === jobOpen); if (j) download('relatorio-' + (j.name || 'campanha') + '.csv', [['Contato', 'Situação', 'Detalhe', 'Horário']].concat(j.contacts.map(c => [c.n, c.state + (c.simulated ? ' (simulado)' : ''), c.why || c.text || '', c.at ? fmt(c.at) : '']))); return; }
@@ -508,7 +520,7 @@
     const o = camp.opts;
     if (o.shuffle) { for (let i = targets.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [targets[i], targets[j]] = [targets[j], targets[i]]; } }
     if (!o.dryRun && !confirm('Vai ENVIAR de verdade para ' + targets.length + ' contato(s), 1 por vez, com intervalo de ' + o.minSec + '–' + o.maxSec + ' s (limite ' + o.perHour + '/hora e ' + o.perDay + '/dia).\n\nMantenha o computador ligado e o WhatsApp Web aberto. Continuar?')) return;
-    const job = { id: 'j' + Date.now(), name: camp.name || (g ? g.name : 'Campanha'), steps: JSON.parse(JSON.stringify(camp.steps)), stepGap: camp.stepGap, stepGapMax: camp.stepGapMax, seed: Math.floor(Math.random() * 997), opts: Object.assign({}, o), contacts: targets.map(c => ({ n: c.n, state: 'pending' })) };
+    const job = { id: 'j' + Date.now(), name: camp.name || (g ? g.name : 'Campanha'), steps: JSON.parse(JSON.stringify(camp.steps)), stepGap: camp.stepGap, stepGapMax: camp.stepGapMax, seed: Math.floor(Math.random() * 997), opts: Object.assign({}, o), queue: !!o.queue && !o.dryRun, contacts: targets.map(c => ({ n: c.n, state: 'pending', id: c.id || '' })) };
     post({ type: 'BULK_START', job }); await sleep(600); await loadAll(); jobOpen = job.id; hideModal(); sel.clear(); step = 1; setView('report');
   }
 
