@@ -87,7 +87,7 @@
   const bar = document.createElement('div'); bar.id = 'wcrm-topbar';
   bar.innerHTML = `<img class="tb-logo" src="${getURL('icons/icon128.png')}" alt=""><button class="tb-btn" id="wcrm-tb-funnel" title="Filtro Funil"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg></button><span class="tb-mode" id="wcrm-mode"></span><div class="tb-chips" id="wcrm-chips"><span class="tb-empty">Carregando…</span></div>
     <button class="tb-btn" id="wcrm-tb-add" title="Nova aba" style="display:none">＋</button>
-    <button class="tb-btn" id="wcrm-tb-refresh" title="Atualizar">↻</button><button class="tb-btn" id="wcrm-tb-sales" title="Vendas marcadas (etiqueta virtual)">💰</button><button class="tb-btn" id="wcrm-tb-menu" title="Menu">≡</button>`;
+    <button class="tb-btn" id="wcrm-tb-refresh" title="Atualizar">↻</button><button class="tb-btn" id="wcrm-tb-calls" title="Recusar ligações automaticamente">📞</button><button class="tb-btn" id="wcrm-tb-sales" title="Vendas marcadas (etiqueta virtual)">💰</button><button class="tb-btn" id="wcrm-tb-menu" title="Menu">≡</button>`;
   document.body.appendChild(bar);
   const reopen = document.createElement('div'); reopen.id = 'wcrm-tabopen'; reopen.textContent = '⌄ etiquetas e abas'; reopen.title = 'Mostrar barra';
   document.body.appendChild(reopen);
@@ -403,6 +403,17 @@
     ghosts.forEach(g => setTab(g.n, g.tab, false, 'remove'));
     toast('🧹 ' + ghosts.length + ' contato(s) fantasma removido(s)');
   }
+
+  // ── 📵 recusar ligações automaticamente + mensagem pronta ──
+  const CALL_DEF = 'Opa, tudo bem? No momento não estamos recebendo ligações. Pode deixar sua mensagem aqui, por áudio ou texto, que já vamos te responder! 😊';
+  const callCfg = () => { try { const c = JSON.parse(lsGet('wcrm_calls') || '{}'); return { on: !!c.on, text: c.text || CALL_DEF }; } catch (e) { return { on: false, text: CALL_DEF }; } };
+  const callPush = () => { const c = callCfg(); window.postMessage({ tag: 'WCRM_CONTENT', kind: 'CALLCFG', on: c.on, text: c.text }, '*'); const b = document.getElementById('wcrm-tb-calls'); if (b) { b.textContent = c.on ? '📵' : '📞'; b.style.background = c.on ? '#dc2626' : ''; b.title = c.on ? 'Ligações: RECUSANDO automaticamente (clique para ajustar)' : 'Recusar ligações automaticamente'; } };
+  document.getElementById('wcrm-tb-calls').addEventListener('click', e => {
+    const c = callCfg();
+    popAt(e.currentTarget, '<div class="ttl">📵 Recusar ligações</div><label style="display:flex;gap:8px;align-items:center;margin:8px 0;font-size:13px"><input type="checkbox" id="wcrm-call-on" ' + (c.on ? 'checked' : '') + '> <b>Recusar ligações automaticamente</b></label><div style="font-size:12px;opacity:.8;margin-bottom:4px">Mensagem enviada a quem ligou:</div><textarea id="wcrm-call-text" rows="5" style="width:300px;max-width:80vw;background:#0b141a;color:#fff;border:1px solid #2a3942;border-radius:8px;padding:8px;font:13px sans-serif">' + esc(c.text) + '</textarea><div style="display:flex;gap:8px;margin-top:8px"><button id="wcrm-call-save" class="tb-btn" style="padding:6px 12px;background:#16a34a;color:#fff">Salvar</button><span style="font-size:11px;opacity:.7;align-self:center">Envia 1 vez por pessoa a cada 10 min.</span></div>', 'right');
+    const sv = document.getElementById('wcrm-call-save'); sv.onclick = () => { lsSet('wcrm_calls', JSON.stringify({ on: document.getElementById('wcrm-call-on').checked, text: document.getElementById('wcrm-call-text').value.trim() || CALL_DEF })); callPush(); closePop(); toast(callCfg().on ? '📵 Ligações serão recusadas automaticamente' : '📞 Ligações liberadas'); };
+  });
+  setTimeout(callPush, 2500); setInterval(callPush, 60000);
   // menu ≡
   function popAt(el, html, align) {
     pop.innerHTML = html; pop.style.display = 'block';

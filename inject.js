@@ -568,9 +568,54 @@ function oggSalt(u8) {
     send({ kind: 'SNAPSHOT', snap: snap });
   }
 
+
+  // ── ligações: recusa sozinho + manda a mensagem pronta (liga/desliga pela extensão) ──
+  var callCfg = { on: false, text: '' }, callSeen = {}, callSent = {}, callPrimed = false;
+  function callList() {
+    var out = [];
+    try {
+      var C = mod(getReq(), 'WAWebCallCollection'); var col = C && (C.CallCollection || C.default || C); if (!col) return out;
+      var add = function (m) { if (m && typeof m === 'object' && out.indexOf(m) < 0) out.push(m); };
+      try { (col.getModelsArray ? col.getModelsArray() : []).forEach(add); } catch (e) { }
+      try { var po = col.pendingOffers; if (po) { if (po.forEach) po.forEach(function (v) { add(v); }); else Object.keys(po).forEach(function (k) { add(po[k]); }); } } catch (e) { }
+      add(col.activeCall);
+    } catch (e) { }
+    return out;
+  }
+  function callPeer(m) {
+    var p = m.peerJid || m.peerWid || m.from || m.peer || (m.attributes && (m.attributes.peerJid || m.attributes.from)) || m.sender || '';
+    try { if (p && typeof p === 'object') p = p._serialized || (p.user && (p.user + '@' + p.server)) || String(p); } catch (e) { }
+    return String(p || '');
+  }
+  function callDeclineDom() {
+    try {
+      var btns = Array.prototype.slice.call(document.querySelectorAll('button,[role=button],div[tabindex]'));
+      var b = btns.find(function (x) { var t = ((x.getAttribute('aria-label') || '') + ' ' + (x.innerText || '') + ' ' + (x.getAttribute('data-testid') || '')).toLowerCase(); return /(^|\s)(recusar|rejeitar|decline|reject)(\s|$)/.test(t) && x.offsetParent; });
+      if (b) { b.click(); return true; }
+    } catch (e) { }
+    return false;
+  }
+  async function callHandle(m) {
+    var id = String(m.id && (m.id._serialized || m.id) || m.callId || ''); if (!id || callSeen[id]) return; callSeen[id] = Date.now();
+    var incoming = m.isIncoming != null ? !!m.isIncoming : (m.outgoing != null ? !m.outgoing : (m.isOutgoing != null ? !m.isOutgoing : true));
+    try { console.log('[WCRM] chamada detectada', JSON.stringify({ id: id.slice(0, 8), incoming: incoming, keys: Object.keys(m).slice(0, 25), state: m.state || m.status || null })); } catch (e) { }
+    if (!incoming || !callCfg.on) return;
+    var done = false, how = '';
+    for (var i = 0; i < 6 && !done; i++) { if (callDeclineDom()) { done = true; how = 'tela'; break; } await new Promise(function (r) { setTimeout(r, 250); }); }
+    if (!done) { var fns = ['reject', 'decline', 'rejectCall', 'declineCall', 'end', 'hangup']; for (var j = 0; j < fns.length && !done; j++) { try { if (typeof m[fns[j]] === 'function') { await m[fns[j]](); done = true; how = fns[j]; } } catch (e) { } } }
+    if (!done) { try { var Rj = mod(getReq(), 'WAWebVoipRejectCallWithReasonEnc'); if (Rj && Rj.rejectCallWithReasonEnc) { await Rj.rejectCallWithReasonEnc(m, 'declined'); done = true; how = 'rejectEnc'; } } catch (e) { how = 'rejectEnc-falhou: ' + (e && e.message); } }
+    console.log('[WCRM] recusar ligação:', done ? 'ok via ' + how : 'NÃO consegui recusar (' + how + ')');
+    var peer = callPeer(m); var now = Date.now();
+    if (peer && callCfg.text && (!callSent[peer] || now - callSent[peer] > 600000)) {
+      callSent[peer] = now;
+      try { var r = await sendTextDirect({ chat: peer, text: callCfg.text, preview: false }); console.log('[WCRM] mensagem de ligação:', r && r.ok ? 'enviada' : (r && r.reason)); } catch (e) { console.log('[WCRM] mensagem de ligação falhou', e && e.message); }
+    }
+  }
+  setInterval(function () { try { if (!callCfg.on) return; if (!callPrimed) { callList().forEach(function (m) { var i0 = String(m.id && (m.id._serialized || m.id) || m.callId || ''); if (i0) callSeen[i0] = Date.now(); }); callPrimed = true; return; } callList().forEach(function (m) { callHandle(m); }); var k = Object.keys(callSeen); if (k.length > 200) k.slice(0, 100).forEach(function (x) { delete callSeen[x]; }); } catch (e) { } }, 800);
   window.addEventListener('message', async function (e) {
     if (e.source !== window || !e.data || e.data.tag !== 'WCRM_CONTENT') return;
     var d = e.data;
+    if (d.kind === 'CALLCFG') { if (!callCfg.on) callPrimed = false; callCfg = { on: !!d.on, text: String(d.text || '') }; if (!d.on) callPrimed = false; return; }
     if (d.kind === 'SYNC') push(true);
     try { if (d.chat && typeof d.chat === 'string' && d.kind !== 'SYNC' && d.kind !== 'LISTINFO') { var wid = await warmChat(d.chat); if (wid) d.chat = wid; } } catch (ew) { }
     if (d.kind === 'OPEN' || d.kind === 'OPEN_NUMBER' || d.kind === 'READ' || d.kind === 'LISTINFO' || d.kind === 'FILTER' || d.kind === 'ACTIVE' || d.kind === 'ACT' || d.kind === 'SENDMEDIA' || d.kind === 'SENDTEXT' || d.kind === 'PROBE' || d.kind === 'LIDMAP' || d.kind === 'RECENT' || d.kind === 'SALESLABELS') {
