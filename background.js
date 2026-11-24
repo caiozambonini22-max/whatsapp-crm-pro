@@ -1,5 +1,6 @@
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === 'wcrm_autobackup') { doBackup(); return; }
+  if (alarm.name === 'wcrm_kick' || alarm.name === 'wcrm_updcheck') return;
   chrome.notifications.create({ type:'basic', iconUrl:'icons/icon48.png',
     title:'⚡ WhatsApp CRM Pro', message: alarm.name.replace(/^[^_]+_/,''), priority:2 });
 });
@@ -47,3 +48,14 @@ async function checkUpdate() {
     } else { chrome.storage.local.remove('wcrm_upd_new'); chrome.action.setBadgeText({ text: '' }); }
   } catch (e) {}
 }
+
+// ── Disparo em segundo plano: timers das abas escondidas são cronometrados aqui ──
+const kports = new Set();
+chrome.runtime.onConnect.addListener(p => {
+  if (p.name !== 'wcrm-keep') return;
+  kports.add(p); p.onDisconnect.addListener(() => kports.delete(p));
+  p.onMessage.addListener(m => { if (m && m.t === 'sleep') setTimeout(() => { try { p.postMessage({ t: 'fire', id: m.id }); } catch (e) { } }, Math.min(+m.ms || 0, 20000)); });
+});
+setInterval(() => { try { chrome.runtime.getPlatformInfo(() => { }); } catch (e) { } kports.forEach(p => { try { p.postMessage({ t: 'kick' }); } catch (e) { } }); }, 5000);
+chrome.alarms.create('wcrm_kick', { periodInMinutes: 0.5 });
+chrome.alarms.onAlarm.addListener(a => { if (a.name === 'wcrm_kick') chrome.tabs.query({ url: 'https://web.whatsapp.com/*' }, ts => ts.forEach(t => chrome.tabs.sendMessage(t.id, { t: 'kick' }, () => void chrome.runtime.lastError))); });
