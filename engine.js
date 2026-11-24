@@ -774,9 +774,21 @@
   // muda aba do CRM e CONFIRMA que o painel aplicou (tenta de novo se não confirmar)
   const tabWaiters = {};
   window.addEventListener('message', e => { const d = e.data; if (d && d.type === 'SET_TAB_RESULT' && tabWaiters[d.rid]) { tabWaiters[d.rid](d); } });
+  // v7.15: se o painel do CRM sumiu (iframe), recria um escondido — o disparo não pode parar por isso
+  async function ensurePanel() {
+    let f = document.getElementById('wcrm-iframe'); if (f && f.contentWindow) return f;
+    try {
+      f = document.createElement('iframe'); f.id = 'wcrm-iframe'; f.src = chrome.runtime.getURL('crm.html');
+      f.style.cssText = 'position:fixed;left:-9999px;top:0;width:380px;height:600px;border:0;opacity:0;pointer-events:none';
+      document.body.appendChild(f);
+      await new Promise(r => { const to = setTimeout(r, 8000); f.addEventListener('load', () => { clearTimeout(to); r(); }); });
+      await sleep(1500);
+    } catch (e) {}
+    return document.getElementById('wcrm-iframe');
+  }
   async function setTabSafe(contact, mode, tab) {
     for (let a = 0; a < 3; a++) {
-      const f = document.getElementById('wcrm-iframe'); if (!(f && f.contentWindow)) { await sleep(1500); continue; }
+      const f = await ensurePanel(); if (!(f && f.contentWindow)) { await sleep(1500); continue; }
       const rid = 't' + Date.now() + Math.random().toString(36).slice(2, 5);
       const msg = { type: 'SET_TAB', rid, contact, tab: mode === 'clear' ? '' : tab, mode }; if (mode === 'add') msg.newTab = tab;
       const res = await new Promise(res => { const to = setTimeout(() => { delete tabWaiters[rid]; res(null); }, 5000); tabWaiters[rid] = d => { clearTimeout(to); delete tabWaiters[rid]; res(d); }; f.contentWindow.postMessage(msg, '*'); });
@@ -833,7 +845,7 @@
         if (ls.length) { const r = await applyLabelsUI([], ls); if (!r.ok) await addAlert('label', enr.contact, 'Não consegui tirar todas as etiquetas: ' + r.why); else await addLog('Todas as etiquetas removidas de "' + enr.contact + '"'); }
       }
       else if (t === 'tab_add' || t === 'tab_rm' || t === 'tab_rmall') {
-        const f = document.getElementById('wcrm-iframe');
+        const f = await ensurePanel();
         if (!(f && f.contentWindow)) { await fail('Painel do CRM não carregado — não consegui mudar a aba', 'Não consegui mudar a aba de "' + enr.contact + '": o painel do CRM não está carregado (F5 no WhatsApp).'); return { ok: false }; }
         const r = await setTabSafe(enr.contact, t === 'tab_add' ? 'add' : t === 'tab_rm' ? 'remove' : 'clear', st.name);
         const lbl = t === 'tab_add' ? 'adicionar em' : t === 'tab_rm' ? 'tirar de' : 'limpar abas';
