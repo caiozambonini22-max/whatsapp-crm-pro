@@ -407,13 +407,25 @@
   // ── 📵 recusar ligações automaticamente + mensagem pronta ──
   const CALL_DEF = 'Opa, tudo bem? No momento não estamos recebendo ligações. Pode deixar sua mensagem aqui, por áudio ou texto, que já vamos te responder! 😊';
   const callCfg = () => { try { const c = JSON.parse(lsGet('wcrm_calls') || '{}'); return { on: !!c.on, text: c.text || CALL_DEF }; } catch (e) { return { on: false, text: CALL_DEF }; } };
-  const callPush = () => { const c = callCfg(); window.postMessage({ tag: 'WCRM_CONTENT', kind: 'CALLCFG', on: c.on, text: c.text }, '*'); const b = document.getElementById('wcrm-tb-calls'); if (b) { b.textContent = c.on ? '📵' : '📞'; b.style.background = c.on ? '#dc2626' : ''; b.title = c.on ? 'Ligações: RECUSANDO automaticamente (clique para ajustar)' : 'Recusar ligações automaticamente'; } };
+  const callBlk = () => { try { const a = JSON.parse(lsGet('wcrm_callblock') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
+  const callPush = () => { const c = callCfg(); const bl = callBlk(); window.postMessage({ tag: 'WCRM_CONTENT', kind: 'CALLCFG', on: c.on, text: c.text, block: [].concat.apply([], bl.map(x => x.ids || [])) }, '*'); updateCallBtn(); const b = document.getElementById('wcrm-tb-calls'); if (b) { b.textContent = c.on ? '📵' : '📞'; b.style.background = c.on ? '#dc2626' : ''; b.title = c.on ? 'Ligações: RECUSANDO automaticamente (clique para ajustar)' : 'Recusar ligações automaticamente'; } };
   document.getElementById('wcrm-tb-calls').addEventListener('click', e => {
     const c = callCfg();
     popAt(e.currentTarget, '<div class="ttl">📵 Recusar ligações</div><label style="display:flex;gap:8px;align-items:center;margin:8px 0;font-size:13px"><input type="checkbox" id="wcrm-call-on" ' + (c.on ? 'checked' : '') + '> <b>Recusar ligações automaticamente</b></label><div style="font-size:12px;opacity:.8;margin-bottom:4px">Mensagem enviada a quem ligou:</div><textarea id="wcrm-call-text" rows="5" style="width:300px;max-width:80vw;background:#0b141a;color:#fff;border:1px solid #2a3942;border-radius:8px;padding:8px;font:13px sans-serif">' + esc(c.text) + '</textarea><div style="display:flex;gap:8px;margin-top:8px"><button id="wcrm-call-save" class="tb-btn" style="padding:6px 12px;background:#16a34a;color:#fff">Salvar</button><span style="font-size:11px;opacity:.7;align-self:center">Envia 1 vez por pessoa a cada 10 min.</span></div>', 'right');
     const sv = document.getElementById('wcrm-call-save'); sv.onclick = () => { lsSet('wcrm_calls', JSON.stringify({ on: document.getElementById('wcrm-call-on').checked, text: document.getElementById('wcrm-call-text').value.trim() || CALL_DEF })); callPush(); closePop(); toast(callCfg().on ? '📵 Ligações serão recusadas automaticamente' : '📞 Ligações liberadas'); };
   });
   setTimeout(callPush, 2500); setInterval(callPush, 60000);
+  function updateCallBtn() { const b = document.getElementById('wcrm-cbtn'); if (!b) return; const n = norm(me() || ''); const on = !!n && callBlk().some(x => norm(x.name) === n); b.textContent = on ? '📵' : '📞'; b.style.background = on ? '#dc2626' : ''; b.style.color = on ? '#fff' : ''; b.title = on ? 'Ligações deste contato: RECUSANDO (clique para liberar)' : 'Recusar ligações deste contato'; }
+  document.addEventListener('click', async e => {
+    const cb = e.target.closest && e.target.closest('#wcrm-cbtn'); if (!cb) return;
+    const r = await W().bridgeCall('ACTIVE', {}, 4000); if (!r || !r.ok) return toast('Abra uma conversa primeiro');
+    const nm = me() || r.name || ''; const list = callBlk(); const idx = list.findIndex(x => norm(x.name) === norm(nm));
+    if (idx >= 0) { list.splice(idx, 1); toast('📞 Ligações de ' + nm + ' liberadas'); }
+    else { const ids = [r.phone, r.lid].filter(Boolean).map(String); if (r.id) ids.push(String(r.id).split('@')[0]); list.push({ name: nm, ids: [...new Set(ids)] }); toast('📵 Vou recusar as ligações de ' + nm + (callCfg().on ? '' : ' (e mandar a mensagem pronta)')); }
+    lsSet('wcrm_callblock', JSON.stringify(list)); callPush();
+  }, true);
+  setInterval(updateCallBtn, 1500);
+
   // menu ≡
   function popAt(el, html, align) {
     pop.innerHTML = html; pop.style.display = 'block';
@@ -521,6 +533,7 @@
   strip.innerHTML = `<button id="wcrm-abtn" title="Abas (do CRM) — mover esta conversa">📂<span id="wcrm-alabel" style="font-size:12px;font-weight:700;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><i id="wcrm-abadge" style="display:none">1</i></button>
     <button id="wcrm-lbtn" title="Etiquetas do WhatsApp desta conversa">🏷️<i id="wcrm-lbadge" style="display:none">0</i></button>
     <button id="wcrm-vbtn" title="Marcar esta conversa como VENDA de hoje (etiqueta virtual do CRM)">💰<span id="wcrm-vlabel" style="font-size:12px;font-weight:700"></span></button>
+    <button id="wcrm-cbtn" title="Recusar ligações deste contato">📞</button>
     <span class="hint">⠿ arraste o cabeçalho da conversa para uma aba</span><button class="min" id="wcrm-strip-min" title="Minimizar">▴</button>`;
   document.body.appendChild(strip);
   function curTabs() { const n = norm(me()); return (barData.tabs || []).filter(x => (x.contacts || []).some(c => norm(c) === n)).map(x => x.name); }
