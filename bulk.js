@@ -352,6 +352,37 @@
   }
   function pillOf(j) { const m = { running: ['p-run', 'Enviando'], paused: ['p-pause', 'Pausado'], queued: ['p-pause', 'Na fila'], done: ['p-done', 'Concluído'], stopped: ['p-stop', 'Parado'] }[j.status] || ['p-done', j.status]; return '<span class="pill ' + m[0] + '">' + m[1] + '</span>'; }
   const mmss = ms => { const t = Math.max(0, Math.ceil(ms / 1000)), m = Math.floor(t / 60), s = t % 60; return m + ':' + String(s).padStart(2, '0'); };
+  // v7.16: previsão de término (usa o ritmo real da última hora e meia, janela de horário e limite por dia)
+  function etaHtml(j, s) {
+    try {
+      const o = j.opts || {}; const rem = s.pend; if (!rem) return '';
+      const now = Date.now(), cs = (j.contacts || []).filter(x => x.state === 'sent' && x.at);
+      const recent = cs.filter(x => now - x.at < 90 * 60e3);
+      let rate = recent.length >= 8 ? recent.length / 1.5 : 0;
+      const avgS = ((+o.minSec || 40) + (+o.maxSec || 60)) / 2; const theo = 3600 / (avgS + (+j.stepGap || 0) * 2 + 8) * 0.9;
+      if (!rate) rate = theo; rate = Math.max(5, Math.min(rate, +o.perHour || 999));
+      const ws = o.customWindow ? o.winStart : cfgW.winStart, we = o.customWindow ? o.winEnd : cfgW.winEnd;
+      const mm = x => { const m = /(\d+):(\d+)/.exec(x || ''); return m ? (+m[1]) * 60 + (+m[2]) : 0; };
+      const a = mm(ws), b = mm(we); const useW = o.useWindow !== false;
+      const dayKey = d => d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate();
+      const tk = dayKey(new Date(now)); let todaySent = cs.filter(x => dayKey(new Date(x.at)) === tk).length;
+      const cap = +o.perDay || 99999;
+      let t = now, left = rem, curDay = tk, dayCnt = todaySent, guard = 0;
+      while (left > 0 && guard++ < 60 * 24 * 7) {
+        const d = new Date(t), k = dayKey(d); if (k !== curDay) { curDay = k; dayCnt = 0; }
+        const mins = d.getHours() * 60 + d.getMinutes();
+        const ok = (!useW || (mins >= a && mins < b)) && (o.allDays || d.getDay() !== 0 || !useW) && dayCnt < cap;
+        if (ok) { const inc = Math.min(rate / 60, left); left -= inc; dayCnt += inc; }
+        t += 60000;
+      }
+      if (left > 0) return '';
+      const d = new Date(t), days = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+      const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      const dt = String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+      const same = dayKey(d) === tk;
+      return '<div style="margin-top:8px;padding:10px 12px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;font-size:13.5px;line-height:1.6">🏁 <b>Previsão de término: ' + (same ? 'hoje' : days[d.getDay()] + ' ' + dt) + ' às ' + hm + '</b><br><span style="color:#065f46">' + rem + ' contatos restantes · ritmo atual ≈ ' + Math.round(rate) + '/h · janela ' + ws + '–' + we + ' · atualiza sozinha</span></div>';
+    } catch (e) { return ''; }
+  }
   function cdHtml(j, s) {
     const o = j.opts || {}; const left = o.batchEvery ? Math.max(0, (j.pauseAt || o.batchEvery) - s.sent) : 0;
     const dry = o.dryRun ? ' <i style="color:#92400e">(teste: tempos 10× mais rápidos)</i>' : '';
@@ -371,7 +402,7 @@
     if (j0) {
       const s = jobStats(j0); const pct = s.total ? Math.round((s.sent + s.err + s.skip) / s.total * 100) : 0;
       $bd.innerHTML = head + '<button class="btn gray sm" id="bk-back">← voltar</button><div class="card" style="margin-top:10px"><h3>' + esc(j0.name || 'Campanha') + ' ' + pillOf(j0) + (j0.opts && j0.opts.dryRun ? ' <span class="pill p-pause">🧪 teste</span>' : '') + '</h3>' +
-        '<div class="bar"><i style="width:' + pct + '%"></i></div><div style="margin:8px 0;font-size:13px">' + pct + '% · ✅ ' + s.sent + ' enviados · ❌ ' + s.err + ' erros · ⏭ ' + s.skip + ' pulados · ⏳ ' + s.pend + ' na fila' + (j0.status === 'running' ? cdHtml(j0, s) : '') + '</div>' +
+        '<div class="bar"><i style="width:' + pct + '%"></i></div><div style="margin:8px 0;font-size:13px">' + pct + '% · ✅ ' + s.sent + ' enviados · ❌ ' + s.err + ' erros · ⏭ ' + s.skip + ' pulados · ⏳ ' + s.pend + ' na fila' + (['running', 'paused'].includes(j0.status) ? etaHtml(j0, s) : '') + (j0.status === 'running' ? cdHtml(j0, s) : '') + '</div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (j0.status === 'running' ? '<button class="btn" data-ctrl="pause">⏸ Pausar</button>' : (j0.status === 'paused' ? '<button class="btn green" data-ctrl="resume">▶ Retomar</button>' : '')) + (s.err ? '<button class="btn gray" data-ctrl="retry">↻ Tentar de novo os erros</button>' : '') + (['running', 'paused', 'queued'].includes(j0.status) ? '<button class="btn red" data-ctrl="stop">⏹ Parar</button>' : '') + '<button class="btn gray" id="bk-csv">⬇ Baixar relatório</button></div>' +
         '<div style="margin-top:12px;padding:10px;border:1px solid #2a3942;border-radius:10px"><b>⧉ Repetir este disparo (mesmo script e ritmo) para outra lista</b><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;font-size:13px">' + ((src && src.labels && src.labels.length) ? '<select id="dup-lab">' + src.labels.map(l => '<option>' + esc(l.name) + '</option>').join('') + '</select> <select id="dup-mode"><option value="now">começar agora (pausa o atual)</option><option value="queue">entrar na fila (começa quando o atual terminar)</option></select> <button class="btn green sm" id="dup-go">Criar</button>' : '<button class="btn gray sm" id="dup-load">Carregar minhas listas</button>') + '</div></div>' +
         (['running', 'paused', 'queued'].includes(j0.status) ? (() => { const oo = j0.opts || {}; const ws = oo.customWindow ? oo.winStart : '07:00', we = oo.customWindow ? oo.winEnd : '20:00'; return '<div style="margin-top:12px;padding:10px;border:1px solid #2a3942;border-radius:10px"><b>⏰ Ajustar com o disparo rodando</b><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;font-size:13px">Das <input type="time" id="ed-ws" value="' + ws + '"> até <input type="time" id="ed-we" value="' + we + '"> · intervalo entre contatos <input type="number" id="ed-iv" min="10" style="width:60px" value="' + Math.round(((oo.minSec || 40) + (oo.maxSec || 70)) / 2) + '"> s · espera entre ações <input type="number" id="ed-sg" min="0" style="width:50px" value="' + Math.round(+j0.stepGap || 0) + '"> s · máx/dia <input type="number" id="ed-pd" min="1" style="width:70px" value="' + (oo.perDay || 150) + '"> · máx/hora <input type="number" id="ed-ph" min="1" style="width:60px" value="' + (oo.perHour || 30) + '"> <label><input type="checkbox" id="ed-all"' + (oo.allDays ? ' checked' : '') + '> todos os dias</label> <button class="btn green sm" id="ed-save">Salvar</button></div></div>'; })() : '') + '</div>' +
