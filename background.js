@@ -12,7 +12,9 @@ chrome.notifications.onClicked.addListener(() => {
 });
 chrome.runtime.onMessage.addListener(msg => {
   if (msg && msg.type === 'NOTIFY') {
-    chrome.notifications.create({ type:'basic', iconUrl:'icons/icon48.png', title: msg.title || '⚡ WhatsApp CRM Pro', message: msg.message || '', priority:2 });
+    // v7.18: avisos só aparecem se o botão "Avisos" estiver ligado E o envio automático estiver ligado (padrão: desligado)
+    chrome.storage.local.get('wcrm_cfg', o => { const c = (o && o.wcrm_cfg) || {}; if (c.notifOn !== true || !c.on) return;
+      chrome.notifications.create({ type:'basic', iconUrl:'icons/icon48.png', title: msg.title || '⚡ WhatsApp CRM Pro', message: msg.message || '', priority:2 }); });
   }
 });
 chrome.runtime.onInstalled.addListener(() => console.log('WhatsApp CRM Pro v4.31'));

@@ -275,6 +275,7 @@
   async function addAlert(kind, contact, text, extra) {
     await mutateRt(r => { r.alerts = [Object.assign({ id: Date.now() + '' + Math.floor(Math.random() * 999), at: Date.now(), kind, contact, text }, extra || {})].concat(r.alerts || []).slice(0, 60); });
     try { chrome.runtime.sendMessage({ type: 'NOTIFY', title: kind === 'replied' ? '💬 ' + contact + ' respondeu!' : '⚠️ Escada: ' + contact, message: (text || '').slice(0, 160) }); } catch (e) {}
+    const cfgN = await getCfg().catch(() => ({})); if (cfgN.notifOn !== true || !cfgN.on) return;   // v7.18: sem popup quando Avisos/envio estão desligados
     try { root.__wcrm && root.__wcrm.toast(kind === 'replied' ? '💬 ' + contact + ' respondeu — follow-up parado' : '⚠️ ' + contact + ': ' + (text || '').slice(0, 60)); } catch (e) {}
   }
 
@@ -1265,7 +1266,7 @@
       if (!bulkBooted) {
         bulkBooted = true;
         if (job.hb && nowHb - job.hb > 120000) {
-          if ((job.opts || {}).autoResume) { await mutateBulk(x => { const j = x.jobs.find(y => y.id === job.id); if (j) { j.hb = nowHb; j.nextAt = nowHb + 20000 + Math.random() * 40000; j.longPause = false; } }); await addLog('📣 Disparo "' + job.name + '" retomado sozinho após interrupção'); return; }
+          if ((job.opts || {}).autoResume && nowHb - job.hb < 30 * 60e3) { await mutateBulk(x => { const j = x.jobs.find(y => y.id === job.id); if (j) { j.hb = nowHb; j.nextAt = nowHb + 20000 + Math.random() * 40000; j.longPause = false; } }); await addLog('📣 Disparo "' + job.name + '" retomado sozinho após interrupção'); return; }
           await mutateBulk(x => { const j = x.jobs.find(y => y.id === job.id); if (j) { j.status = 'paused'; j.interrupted = true; j.waitWhy = ''; } }); await addLog('📣 Disparo "' + job.name + '" estava rodando e foi interrompido — aguardando você retomar'); return;
         }
       }

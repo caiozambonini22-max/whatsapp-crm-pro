@@ -116,6 +116,7 @@
     let lastN = -1, lastKey = '';
     async function chk() {
       try {
+        const cfg0 = (await sget(K.cfg)) || {}; if (cfg0.notifOn !== true || !cfg0.on) { pill.className = ''; lastN = -1; lastKey = ''; return; }   // v7.18: bolinha só com Avisos ligado
         const enrs = (await sget(K.enr)) || [], rt = (await sget(K.rt)) || {};
         const c = s => enrs.filter(e => e.state === s).length;
         const errN = c('error'), askN = (rt.alerts || []).filter(a => a.kind === 'replied' && a.ask && enrs.some(e => e.id === a.enrId && e.state === 'asked')).length + c('approval'), staleN = c('stale');
@@ -189,6 +190,7 @@
     const tabs = [['list', 'Follow Ups'], ['queue', 'Fila' + ((cnt('stale') + cnt('error')) ? '<b>' + (cnt('stale') + cnt('error')) + '</b>' : '')], ['alerts', 'Avisos' + (al ? '<b>' + al + '</b>' : '')], ['settings', 'Ajustes']];
     const on = cache.cfg.on;
     $hd.innerHTML = '<h2>Follow Up</h2><div class="fu-tabs">' + tabs.map(t => '<div class="fu-tab' + (view === t[0] || (view === 'form' && t[0] === 'list') ? ' on' : '') + '" data-v="' + t[0] + '">' + t[1] + '</div>').join('') + '</div>'
+      + '<div class="tog' + (cache.cfg.notifOn ? ' on' : '') + '" data-a="notif" title="Liga/desliga a bolinha amarela e as notificações do Windows (só funcionam com o envio automático ligado)"><i></i>Avisos: <b>' + (cache.cfg.notifOn ? 'LIGADOS' : 'desligados') + '</b></div>'
       + '<div class="tog' + (on ? ' on' : '') + '" data-a="master" title="Liga/desliga TODO envio automático"><i></i>Envio automático: <b>' + (on ? 'LIGADO' : 'desligado') + '</b></div><button class="fu-x" data-a="close">✕</button>';
   }
 
@@ -396,6 +398,7 @@
     const tab = e.target.closest('.fu-tab'); if (tab) { view = tab.dataset.v; draft = null; await load(); render(); return; }
     const b = e.target.closest('[data-a]'); if (!b) return; const a = b.dataset.a, id = b.dataset.id;
     if (a === 'close') return close();
+    if (a === 'notif') { await mutateCfg(c => { c.notifOn = !c.notifOn; }); toast(cache.cfg.notifOn ? '🔔 Avisos LIGADOS' : '🔕 Avisos desligados'); return render(); }
     if (a === 'master') { await mutateCfg(c => { c.on = !c.on; }); toast(cache.cfg.on ? '▶ Envio automático LIGADO' : '⏸ Envio automático desligado'); return render(); }
     if (a === 'new') { draft = newRule(); editing = false; menuOpen = false; sec = 'funnel'; view = 'form'; return render(); }
     if (a === 'edit') { draft = JSON.parse(JSON.stringify(cache.cfg.rules.find(r => r.id === id))); draft.action = { steps: stepsOf(draft.action) }; draft.safety = safeOf(draft); editing = true; menuOpen = false; sec = 'funnel'; view = 'form'; return render(); }
