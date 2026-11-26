@@ -13,7 +13,7 @@
     if (l.origin === 'meta_ads') return `<div class="adc">📢 Veio do anúncio: <b>${esc(l.ad_title || '(sem título)')}</b>${l.ad_id ? `<br><span class="mut">ID ${esc(l.ad_id)}</span>` : ''}${l.first_msg_at ? `<span class="mut"> · clique em ${new Date(l.first_msg_at).toLocaleDateString('pt-BR')}</span>` : ''}</div>`;
     return `<div class="adc warn">Origem: <b>${esc(ORIG[l.origin] || l.origin)}</b>, sem anúncio identificado. O evento vai pra Meta sem o clique do anúncio, então não conta como resultado de campanha.</div>`;
   }
-  let hidden = false, cfg = null, chat = { phone: '', push: '', name: '' }, lead = null, events = [], busy = false, showSale = false, reqSeq = 0, ask = null;
+  let hidden = false, cfg = null, chat = { phone: '', push: '', name: '' }, lead = null, events = [], busy = false, showSale = false, newSale = false, reqSeq = 0, ask = null;
   const EVT = { qualificado: 'AddToCart', checkout: 'InitiateCheckout', comprou: 'Purchase' };
   const PREV = { qualificado: 'contato', checkout: 'qualificado', comprou: 'checkout' };
   let winId = null, ai = null, aiInfo = '', aiBusy = false, aiSeq = 0, sug = null, sugBusy = false;
@@ -223,7 +223,7 @@
     h += `<div class="acts">
       <button data-st="qualificado" class="${ORDER[stg] >= 1 ? 'on' : ''}">Qualificado</button>
       <button data-st="checkout" class="${ORDER[stg] >= 2 ? 'on' : ''}">Quase fechando</button>
-      <button data-act="sale" class="sale">💰 ${stg === 'comprou' ? 'Editar venda' : 'Venda'}</button></div>
+      <button data-act="sale" class="sale">💰 ${stg === 'comprou' ? 'Editar venda' : 'Venda'}</button>${stg === 'comprou' ? '<button data-act="newsale" class="sale" title="Cliente comprou DE NOVO: lança uma venda nova e manda outro Purchase pra Meta">➕ Nova venda</button>' : ''}</div>
       <div style="display:flex;justify-content:space-between;margin-top:6px">${stg === 'perdido' ? '<span class="mut">✗ Marcado como perdido</span>' : (stg !== 'comprou' ? '<a data-act="lost" style="color:#f15c6d">✗ Perdido</a>' : '<span></span>')}<span><a data-act="hist" title="Conversa inteira salva no Track (sem precisar do celular)">📜 Histórico</a> · <a data-act="ficha">📋 Ficha</a></span></div>`;
     if (ask) {
       h += ask.lost
@@ -235,9 +235,9 @@
     if (showSale) {
       const f = k => esc(l[k] == null ? '' : l[k]);
       h += `<div class="g">
-        <label>Valor (R$) *<input data-f="sale_value" class="money" inputmode="numeric" value="${fmtMoney(l.sale_value)}" placeholder="0,00"></label>
-        <label>Data da venda<input data-f="sale_at" type="datetime-local" value="${toLocal(l.sale_at)}"></label>
-        <label class="full">Produto<input data-f="product" value="${f('product')}" placeholder="Ex: X11 Pro 47mm"></label>
+        <label>Valor (R$) *<input data-f="sale_value" class="money" inputmode="numeric" value="${newSale ? '' : fmtMoney(l.sale_value)}" placeholder="0,00"></label>
+        <label>Data da venda<input data-f="sale_at" type="datetime-local" value="${toLocal(newSale ? null : l.sale_at)}"></label>
+        <label class="full">Produto<input data-f="product" value="${newSale ? '' : f('product')}" placeholder="Ex: X11 Pro 47mm"></label>
         <label class="full">Nome completo<input data-f="full_name" value="${esc(l.full_name || l.push_name || chat.push || '')}"></label>
         <label>CEP<input data-f="zip" inputmode="numeric" value="${f('zip')}"></label>
         <label>E-mail<input data-f="email" type="email" value="${f('email')}"></label>
@@ -246,7 +246,7 @@
         <label>Nascimento<input data-f="birth" type="date" value="${f('birth')}"></label>
         <label>Sexo<select data-f="gender"><option value="">—</option><option value="f" ${l.gender === 'f' ? 'selected' : ''}>Feminino</option><option value="m" ${l.gender === 'm' ? 'selected' : ''}>Masculino</option></select></label>
       </div>
-      <div class="acts"><button data-act="cancel">Cancelar</button><button data-act="save" class="sale">✅ Confirmar venda</button></div>`;
+      <div class="acts"><button data-act="cancel">Cancelar</button><button data-act="save" class="sale">${newSale ? '✅ Lançar nova venda' : '✅ Confirmar venda'}</button></div>`;
     }
     if (events.length) h += `<div class="ev">${events.slice(0, 3).map(e => `<div class="${e.ok ? 'ok' : 'no'}">${e.ok ? '✓' : '✗'} ${esc(e.event_name)} · ${new Date(e.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>`).join('')}</div>`;
     if (err) h += `<div class="ev no">${esc(err)}</div>`;
@@ -282,9 +282,18 @@
     if (v.sale_at) body.sale_at = new Date(v.sale_at).toISOString();
     for (const k of ['product', 'full_name', 'zip', 'email', 'city', 'state', 'birth', 'gender']) if (v[k]) body[k] = v[k];
     if (body.full_name && !lead?.full_name && body.full_name === (lead?.push_name || chat.push)) delete body.full_name; // só o apelido do WhatsApp
-    if (lead && lead.stage === 'comprou') body.resend = false;
+    if (newSale) {
+      // v7.19: RECOMPRA — nova venda do mesmo cliente: manda novo Purchase pra Meta
+      if (!confirm('Lançar NOVA venda de ' + brl(val) + ' pra este cliente?\n\nIsso manda um novo evento Purchase pra Meta. A venda anterior (' + brl(lead && lead.sale_value) + ') continua no histórico de eventos.')) return;
+      body.resend = true; body.new_sale = true; body.repurchase = true;
+      if (!body.sale_at) body.sale_at = new Date().toISOString();
+      body.prev_sale_value = lead && lead.sale_value; body.prev_sale_at = lead && lead.sale_at;
+    } else if (lead && lead.stage === 'comprou') body.resend = false;
     const ok = await setStage('comprou', body);
-    if (ok) { showSale = false; }
+    if (ok) {
+      if (newSale) { try { const k = 'wcrm_sales_' + (chat.phone || chat.lid || ''); chrome.storage.local.get(k, o => { const a = (o && o[k]) || []; a.push({ at: Date.now(), value: val, product: body.product || '', sale_at: body.sale_at }); chrome.storage.local.set({ [k]: a.slice(-50) }); }); } catch (e) { } }
+      showSale = false; newSale = false;
+    }
   }
   async function viaCep() {
     const el = document.querySelector('#trk [data-f=zip]'); const c = (el?.value || '').replace(/\D/g, ''); if (c.length !== 8) return;
@@ -312,11 +321,12 @@
     if (a === 'cfg') { if (confirm('Desconectar o Zambonini Track desta extensão?')) { cfg = null; chrome.storage.local.remove('wcrm_track'); render(); } }
     if (a === 'refresh') load();
     if (a === 'sales') salesOpen();
-    if (a === 'sale') { ask = null; showSale = false; render(); openWin(true); }
+    if (a === 'sale') { ask = null; showSale = false; newSale = false; render(); openWin(true); }
+    if (a === 'newsale') { ask = null; newSale = true; showSale = true; render(); }
     if (a === 'ficha') openWin(false);
     if (a === 'hist') openWin(false, true);
     if (a === 'lost') { ask = { lost: true, to: 'perdido' }; render(); }
-    if (a === 'cancel') { showSale = false; render(); }
+    if (a === 'cancel') { showSale = false; newSale = false; render(); }
     if (a === 'no') { ask = null; render(); }
     if (a === 'yes' && ask) { const q = ask; ask = null; setStage(q.to); }
     if (a === 'save') saveSale();
@@ -329,7 +339,7 @@
     const ph = String(e.data.phone || '').replace(/\D/g, '') || (e.data.lid ? '' : '');
     const changed = ph !== chat.phone;
     chat = { phone: ph, lid: String(e.data.lid || '').replace(/\D/g, ''), push: e.data.push || '', name: e.data.name || '', group: !!e.data.group };
-    if (changed) { lead = null; events = []; showSale = false; ask = null; ai = null; aiInfo = ''; sug = null; sugBusy = false; aiSeq++; renderAI(); }
+    if (changed) { lead = null; events = []; showSale = false; newSale = false; ask = null; ai = null; aiInfo = ''; sug = null; sugBusy = false; aiSeq++; renderAI(); }
     load();
   });
   // mudou o Status do contato no CRM -> acompanha no Track
