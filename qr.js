@@ -91,7 +91,9 @@
     if (CATS.wsimp) delete CATS.wsimp;
     try { if (keys.length) await new Promise(r => chrome.storage.local.remove(keys, r)); await new Promise(r => chrome.storage.local.set({ wcrm_wsclean: 1 }, r)); } catch (e) {}
     try { renderPills(); renderMsgs(); saveAutoBackup(); } catch (e) {} if (had.length) console.log('[WCRM] removidas ' + had.length + ' respostas importadas do WaSpeed'); })();
-  const catList = () => Object.entries(CATS).filter(([k]) => k !== 'all');
+  // v7.22: ordem das categorias é guardada em CATS[k].o (numérico) e persiste junto com os dados
+  const catRank = (k, i) => (CATS[k] && typeof CATS[k].o === 'number') ? CATS[k].o : 1e6 + i;
+  const catList = () => Object.entries(CATS).filter(([k]) => k !== 'all').map((e, i) => [e, i]).sort((a, b) => catRank(a[0][0], a[1]) - catRank(b[0][0], b[1])).map(x => x[0]);
   const catColor = k => (CATS[k] && CATS[k].c) || '#8aa0ad';
   const closeMenus = () => document.querySelectorAll('.qr-menu').forEach(m => m.remove());
   document.addEventListener('click', e => { if (!e.target.closest('.qr-menu')) closeMenus(); }, true);
@@ -136,7 +138,8 @@
     });
     // categorias vazias também aparecem (para poder editar/excluir)
     if (activeFilter === 'all' && !q && typeFilter === 'all') catList().forEach(([k]) => { if (!grp[k]) grp[k] = []; });
-    const keys = Object.keys(grp).sort((a, b) => (a === '__nocat') - (b === '__nocat'));
+    const _ord = catList().map(x => x[0]); const _rk = k => k === '__top' ? -1 : k === '__nocat' ? 1e9 : (_ord.indexOf(k) < 0 ? 1e8 : _ord.indexOf(k));
+    const keys = Object.keys(grp).sort((a, b) => _rk(a) - _rk(b));
     if (!keys.length) { body.innerHTML = '<div class="empty"><div>🔍</div>Nenhuma resposta rápida. Use o botão ＋ para criar.</div>'; return; }
     body.innerHTML = keys.map(k => {
       const items = grp[k]; const c = k === '__top' ? '#ff8a65' : k === '__nocat' ? '#8aa0ad' : catColor(k); const nm = k === '__top' ? 'Mais usadas' : k === '__nocat' ? 'Sem categoria' : CATS[k].l;
@@ -209,6 +212,37 @@
     };
     document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
     document.addEventListener('click', e => { if (suppress) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+  })();
+  // v7.22: arrastar CATEGORIAS (pelo cabeçalho) pra mudar a ordem
+  (function catDrag() {
+    const body = $q('msgs-body'); let st = null, sup = false;
+    const cs = document.createElement('style');
+    cs.textContent = '.qg-h{cursor:grab}.qg.cat-before{box-shadow:0 -3px 0 0 var(--acc)}.qg.cat-after{box-shadow:0 3px 0 0 var(--acc)}.qg.cat-dragging{opacity:.4}#qr-cghost{position:fixed;z-index:99999;pointer-events:none;background:#1f2326;border:1px solid var(--acc);border-radius:8px;padding:6px 12px;font-size:13px;color:#e9edef;box-shadow:0 6px 20px #000a}';
+    document.head.appendChild(cs);
+    const clr = () => body.querySelectorAll('.cat-before,.cat-after').forEach(e => e.classList.remove('cat-before', 'cat-after'));
+    body.addEventListener('pointerdown', e => {
+      if (selMode || e.button !== 0 || e.pointerType === 'touch') return;
+      if (e.target.closest('button,input,select,textarea,[data-editcat]')) return;
+      const h = e.target.closest('.qg-h'); if (!h) return; const g = h.closest('.qg'); const k = g && g.dataset.cat; if (!k || k.indexOf('__') === 0) return;
+      st = { k, x: e.clientX, y: e.clientY, on: false, g, tgt: null };
+    });
+    document.addEventListener('pointermove', e => {
+      if (!st) return;
+      if (!st.on) { if (Math.abs(e.clientX - st.x) + Math.abs(e.clientY - st.y) < 8) return; st.on = true; st.g.classList.add('cat-dragging'); const gh = document.createElement('div'); gh.id = 'qr-cghost'; gh.textContent = '🗂️ ' + ((CATS[st.k] || {}).l || ''); document.body.appendChild(gh); st.ghost = gh; }
+      st.ghost.style.left = (e.clientX + 12) + 'px'; st.ghost.style.top = (e.clientY + 8) + 'px';
+      clr(); st.tgt = null; const el = document.elementFromPoint(e.clientX, e.clientY); const tg = el && body.contains(el) ? el.closest('.qg') : null;
+      if (tg && tg.dataset.cat !== st.k && tg.dataset.cat.indexOf('__') !== 0) { const r = tg.getBoundingClientRect(); const after = e.clientY > r.top + r.height / 2; st.tgt = { k: tg.dataset.cat, after }; tg.classList.add(after ? 'cat-after' : 'cat-before'); }
+    });
+    const end = e => {
+      if (!st) return; const s2 = st; st = null; if (s2.ghost) s2.ghost.remove(); s2.g.classList.remove('cat-dragging'); clr();
+      if (!s2.on) return; sup = true; setTimeout(() => { sup = false; }, 0);
+      if (!s2.tgt || e.type === 'pointercancel') return;
+      const ord = catList().map(x => x[0]).filter(k => k !== s2.k); let i = ord.indexOf(s2.tgt.k); if (i < 0) return; ord.splice(s2.tgt.after ? i + 1 : i, 0, s2.k);
+      ord.forEach((k, n) => { if (CATS[k]) CATS[k].o = n * 10; });
+      renderMsgs(); try { renderPills(); } catch (x) {} try { saveAutoBackup(); } catch (x) {} toast('↕ Categoria movida: ' + ((CATS[s2.k] || {}).l || ''));
+    };
+    document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
+    document.addEventListener('click', e => { if (sup) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
   })();
   // clique em cabeçalho/itens da lista (captura antes do handler antigo)
   $q('msgs-body').addEventListener('click', e => {
