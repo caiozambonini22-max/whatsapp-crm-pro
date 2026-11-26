@@ -1412,7 +1412,11 @@
     const box = document.createElement('div'); box.id = 'wcrm-ac'; document.body.appendChild(box);
     const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const hidden = new Set();
-    let busyDraw = false;
+    let busyDraw = false, manualOpen = false;
+    // v7.21: as janelinhas só aparecem sozinhas se "Avisos" estiver LIGADO; senão ficam atrás deste botãozinho (clique pra ver)
+    const bdg = document.createElement('div'); bdg.id = 'wcrm-acb'; bdg.style.cssText = 'position:fixed;right:14px;bottom:96px;z-index:2147482000;display:none;background:#171b1f;color:#e9edef;border:1px solid var(--wcrm-acc,#d4af37);border-radius:22px;padding:7px 12px;font:700 13px system-ui,Segoe UI,sans-serif;cursor:pointer;box-shadow:0 4px 16px #000a;user-select:none';
+    document.body.appendChild(bdg);
+    bdg.addEventListener('click', () => { manualOpen = !manualOpen; draw(); });
     async function draw() {
       if (busyDraw) return; busyDraw = true;
       try {
@@ -1423,7 +1427,11 @@
           if (a.kind === 'replied' && a.ask && enr.state === 'asked') cards.push({ a, kind: 'ask' });
           else if (a.kind === 'approve' && enr.state === 'approval') cards.push({ a, kind: 'apv' });
         }
-        box.style.display = cards.length ? 'flex' : 'none';
+        const cfgA = await getCfg().catch(() => ({})); const auto = cfgA.notifOn === true && cfgA.on !== false; const showBox = cards.length && (auto || manualOpen);
+        box.style.display = showBox ? 'flex' : 'none';
+        bdg.style.display = cards.length && !auto ? 'block' : 'none'; bdg.textContent = manualOpen ? '✕ Fechar avisos' : '🔔 ' + cards.length + ' aviso' + (cards.length > 1 ? 's' : '');
+        if (cards.length && !auto) box.style.bottom = '140px'; else box.style.bottom = '96px';
+        if (!cards.length) manualOpen = false;
         box.innerHTML = cards.slice(0, 4).map(({ a, kind }) => '<div class="ac" data-id="' + esc(a.id) + '" data-enr="' + esc(a.enrId) + '" data-n="' + esc(a.contact) + '">'
           + '<div class="t"><span>' + (kind === 'ask' ? '💬' : '✅') + '</span><b>' + esc(a.contact) + (kind === 'ask' ? ' respondeu' : ' — aprovar envio') + '</b><button class="x" data-x="1" title="Dispensar">✕</button></div>'
           + (a.ruleName ? '<div class="r">Follow up: ' + esc(a.ruleName) + (kind === 'ask' ? ' · envio pausado' : '') + '</div>' : '')
