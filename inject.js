@@ -192,6 +192,17 @@
   }
 
   // dados para a lista própria de abas/etiquetas (nome, última mensagem, hora, não lidas, foto)
+  // v7.24: exporta contatos (nome + telefone + etiquetas) pra CSV — só leitura, não envia nada
+  function exportRows(d) {
+    var s = snapshot(); if (!s.ok) return s;
+    if (d.meta) return { ok: true, labels: s.labels.map(function (l) { return { name: l.name, count: l.count }; }), total: (s.all || []).length };
+    var want = d.labels && d.labels.length ? d.labels : null, seen = {}, rows = [], nophone = 0;
+    function phoneOf(id, ph) { if (ph) return String(ph).replace(/\D/g, ''); if (/@c\.us$/.test(id)) return id.split('@')[0]; var cn = contactName(id); return cn.ph || ''; }
+    function add(id, nm, ph, labs) { if (!id || /@g\.us$/.test(id) || /broadcast/.test(id) || seen[id]) return; seen[id] = 1; var p = phoneOf(id, ph); if (!p) nophone++; rows.push({ name: nm || '', phone: p, labels: labs || '' }); }
+    (s.chats || []).forEach(function (c) { if (want && !c.labels.some(function (l) { return want.indexOf(l) >= 0; })) return; add(c.id, c.name, c.ph, c.labels.join(' | ')); });
+    if (!want) (s.all || []).forEach(function (a) { add(a.id, a.n, a.ph, ''); });
+    return { ok: true, rows: rows, nophone: nophone };
+  }
   function listInfo(d) {
     var s = stores(); if (s.err) return { ok: false, reason: s.err };
     var out = [], miss = [];
@@ -621,8 +632,8 @@ function oggSalt(u8) {
     if (d.kind === 'CALLCFG') { if (!callCfg.on && !(callCfg.block || []).length) callPrimed = false; callCfg = { on: !!d.on, text: String(d.text || ''), block: d.block || [] }; if (!d.on && !(d.block || []).length) callPrimed = false; return; }
     if (d.kind === 'SYNC') push(true);
     try { if (d.chat && typeof d.chat === 'string' && d.kind !== 'SYNC' && d.kind !== 'LISTINFO') { var wid = await warmChat(d.chat); if (wid) d.chat = wid; } } catch (ew) { }
-    if (d.kind === 'OPEN' || d.kind === 'OPEN_NUMBER' || d.kind === 'READ' || d.kind === 'LISTINFO' || d.kind === 'FILTER' || d.kind === 'ACTIVE' || d.kind === 'ACT' || d.kind === 'SENDMEDIA' || d.kind === 'SENDTEXT' || d.kind === 'PROBE' || d.kind === 'LIDMAP' || d.kind === 'RECENT' || d.kind === 'SALESLABELS') {
-      var rr; try { rr = d.kind === 'OPEN' ? await openChat(d) : d.kind === 'OPEN_NUMBER' ? await openNumber(d) : d.kind === 'READ' ? readChat(d) : d.kind === 'LISTINFO' ? listInfo(d) : d.kind === 'FILTER' ? await filterList(d) : d.kind === 'ACT' ? await actChat(d) : d.kind === 'SENDMEDIA' ? await sendMediaDirect(d) : d.kind === 'SENDTEXT' ? await sendTextDirect(d) : d.kind === 'PROBE' ? probeMedia() : d.kind === 'LIDMAP' ? lidMap() : d.kind === 'RECENT' ? recentMsgs(d) : d.kind === 'SALESLABELS' ? salesLabels(d) : activeChat(d); } catch (err) { rr = { ok: false, reason: String(err && err.message || err) }; }
+    if (d.kind === 'OPEN' || d.kind === 'OPEN_NUMBER' || d.kind === 'READ' || d.kind === 'LISTINFO' || d.kind === 'FILTER' || d.kind === 'ACTIVE' || d.kind === 'ACT' || d.kind === 'SENDMEDIA' || d.kind === 'SENDTEXT' || d.kind === 'PROBE' || d.kind === 'LIDMAP' || d.kind === 'RECENT' || d.kind === 'SALESLABELS' || d.kind === 'EXPORT') {
+      var rr; try { rr = d.kind === 'OPEN' ? await openChat(d) : d.kind === 'OPEN_NUMBER' ? await openNumber(d) : d.kind === 'READ' ? readChat(d) : d.kind === 'LISTINFO' ? listInfo(d) : d.kind === 'FILTER' ? await filterList(d) : d.kind === 'ACT' ? await actChat(d) : d.kind === 'SENDMEDIA' ? await sendMediaDirect(d) : d.kind === 'SENDTEXT' ? await sendTextDirect(d) : d.kind === 'PROBE' ? probeMedia() : d.kind === 'LIDMAP' ? lidMap() : d.kind === 'RECENT' ? recentMsgs(d) : d.kind === 'SALESLABELS' ? salesLabels(d) : d.kind === 'EXPORT' ? exportRows(d) : activeChat(d); } catch (err) { rr = { ok: false, reason: String(err && err.message || err) }; }
       send({ kind: 'RESULT', reqId: d.reqId, result: rr });
     }
     if (d.kind === 'APPLY') { var r = await apply(d); r = r || {}; send({ kind: 'APPLY_RESULT', reqId: d.reqId, result: r }); setTimeout(function () { push(false); }, 600); }

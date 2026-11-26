@@ -435,9 +435,35 @@
   }
   const closePop = () => { pop.style.display = 'none'; pop.innerHTML = ''; };
   document.addEventListener('mousedown', e => { if (pop.style.display !== 'none' && !pop.contains(e.target) && !e.target.closest('#wcrm-strip, #wcrm-topbar')) closePop(); }, true);
+  // v7.24: exportar contatos em CSV (nome, telefone, etiquetas) — pra usar em outro número/ferramenta
+  async function exportDialog() {
+    let meta = null; try { meta = await W().bridgeCall('EXPORT', { meta: true }, 15000); } catch (x) {}
+    if (!(meta && meta.ok)) { toast('⚠️ Não consegui ler as etiquetas agora'); return; }
+    const old = document.getElementById('wcrm-exp'); if (old) old.remove();
+    const bx = document.createElement('div'); bx.id = 'wcrm-exp';
+    bx.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#000a;display:flex;align-items:center;justify-content:center;font-family:Segoe UI,Arial,sans-serif';
+    const labs = (meta.labels || []).slice().sort((a, b) => b.count - a.count);
+    bx.innerHTML = '<div style="background:#171b1f;color:#e9edef;border:1px solid #d4af37;border-radius:14px;padding:18px 20px;width:min(460px,92vw);max-height:84vh;display:flex;flex-direction:column;gap:10px">'
+      + '<div style="font-weight:800;font-size:16px">📤 Exportar contatos (CSV)</div><div style="font-size:12.5px;color:#9fb0ba">Marque as etiquetas. Sem marcar nada = TODAS as conversas individuais (' + meta.total + '). Só lê, não envia nada.</div>'
+      + '<div style="overflow:auto;border:1px solid #2a3238;border-radius:10px;padding:6px;flex:1">' + labs.map(l => '<label style="display:flex;gap:8px;align-items:center;padding:5px 6px;cursor:pointer"><input type="checkbox" value="' + String(l.name).replace(/"/g, '&quot;') + '"><span style="flex:1">' + String(l.name).replace(/[<>&]/g, '') + '</span><b style="color:#d4af37">' + l.count + '</b></label>').join('') + '</div>'
+      + '<div id="wcrm-exp-st" style="font-size:12.5px;color:#9fb0ba;min-height:16px"></div><div style="display:flex;gap:8px;justify-content:flex-end"><button id="wcrm-exp-x" style="background:#242b31;color:#e9edef;border:1px solid #384046;border-radius:9px;padding:9px 16px;cursor:pointer">Fechar</button><button id="wcrm-exp-go" style="background:#d4af37;color:#111;border:0;border-radius:9px;padding:9px 18px;font-weight:800;cursor:pointer">⬇ Baixar CSV</button></div></div>';
+    document.body.appendChild(bx);
+    bx.addEventListener('mousedown', e => { if (e.target === bx) bx.remove(); });
+    bx.querySelector('#wcrm-exp-x').onclick = () => bx.remove();
+    bx.querySelector('#wcrm-exp-go').onclick = async () => {
+      const st = bx.querySelector('#wcrm-exp-st'); const chosen = [...bx.querySelectorAll('input:checked')].map(i => i.value); st.textContent = 'Lendo contatos…';
+      let r = null; try { r = await W().bridgeCall('EXPORT', { labels: chosen }, 60000); } catch (x) {}
+      if (!(r && r.ok)) { st.textContent = '⚠️ Falhou: ' + ((r && r.reason) || 'sem resposta'); return; }
+      const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+      const rows = r.rows || []; const csv = '\ufeff' + 'nome;telefone;etiquetas\r\n' + rows.map(x => [q(x.name), q(x.phone), q(x.labels)].join(';')).join('\r\n');
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      const nm = (chosen.length ? chosen.join('_').replace(/[^\w-]+/g, '-').slice(0, 40) : 'todos'); a.download = 'contatos_' + nm + '_' + new Date().toISOString().slice(0, 10) + '.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+      st.textContent = '✅ ' + rows.length + ' contatos baixados' + (r.nophone ? ' · ' + r.nophone + ' sem telefone (só nome)' : '') + '. Veja na pasta Downloads.';
+    };
+  }
   document.getElementById('wcrm-tb-menu').addEventListener('click', e => {
     popAt(e.currentTarget, `<div class="it" data-m="tabs"><span class="ck">${mode === 'tabs' ? '✓' : ''}</span>📂 Abas (do CRM)</div><div class="it" data-m="labels"><span class="ck">${mode === 'labels' ? '✓' : ''}</span>🏷️ Etiquetas (do WhatsApp)</div>
-      <div class="it" data-m="strip"><span class="ck">${document.documentElement.classList.contains('wcrm-strip') ? '✓' : ''}</span>▭ Barra da conversa</div><div class="it" data-m="left"><span class="ck">${document.documentElement.classList.contains('wcrm-left') ? '✓' : ''}</span>▍Menu da esquerda</div><div class="it" data-m="ghost"><span class="ck"></span>🧹 Limpar contatos fantasma das abas</div><div class="it" data-m="hide"><span class="ck"></span>⌃ Ocultar exibição</div>`, 'right');
+      <div class="it" data-m="strip"><span class="ck">${document.documentElement.classList.contains('wcrm-strip') ? '✓' : ''}</span>▭ Barra da conversa</div><div class="it" data-m="left"><span class="ck">${document.documentElement.classList.contains('wcrm-left') ? '✓' : ''}</span>▍Menu da esquerda</div><div class="it" data-m="ghost"><span class="ck"></span>🧹 Limpar contatos fantasma das abas</div><div class="it" data-m="export"><span class="ck"></span>📤 Exportar contatos (CSV)</div><div class="it" data-m="hide"><span class="ck"></span>⌃ Ocultar exibição</div>`, 'right');
   });
   document.getElementById('wcrm-tb-funnel').addEventListener('click', e => {
     popAt(e.currentTarget, `<div class="it" data-m="tabs"><span class="ck">${mode === 'tabs' ? '✓' : ''}</span>📂 Abas</div><div class="it" data-m="labels"><span class="ck">${mode === 'labels' ? '✓' : ''}</span>🏷️ Etiquetas</div><div class="it" data-m="hide"><span class="ck"></span>⬇ Ocultar Exibição</div>`, 'left');
@@ -501,6 +527,7 @@
     else if (m === 'strip') { setStrip(!document.documentElement.classList.contains('wcrm-strip')); closePop(); }
     else if (m === 'left') { setLeft(!document.documentElement.classList.contains('wcrm-left')); closePop(); }
     else if (m === 'ghost') { closePop(); cleanGhosts(); }
+    else if (m === 'export') { closePop(); exportDialog(); }
     else if (m === 'hide') { setBar(false); closePop(); }
     else if (it.dataset.tab !== undefined) {
       const who = me(); const tn = it.dataset.tab;
