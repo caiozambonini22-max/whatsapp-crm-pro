@@ -1427,9 +1427,9 @@
           if (a.kind === 'replied' && a.ask && enr.state === 'asked') cards.push({ a, kind: 'ask' });
           else if (a.kind === 'approve' && enr.state === 'approval') cards.push({ a, kind: 'apv' });
         }
-        const cfgA = await getCfg().catch(() => ({})); const auto = cfgA.notifOn === true && cfgA.on !== false; const showBox = cards.length && (auto || manualOpen);
+        const cfgA = await getCfg().catch(() => ({})); const auto = cfgA.notifOn === true && cfgA.on !== false; const showBox = cards.length && auto;
         box.style.display = showBox ? 'flex' : 'none';
-        bdg.style.display = cards.length && !auto ? 'block' : 'none'; bdg.textContent = manualOpen ? '✕ Fechar avisos' : '🔔 ' + cards.length + ' aviso' + (cards.length > 1 ? 's' : '');
+        bdg.style.display = 'none';   // v7.23: sem botãozinho; as janelas só existem se Avisos estiver ligado bdg.textContent = manualOpen ? '✕ Fechar avisos' : '🔔 ' + cards.length + ' aviso' + (cards.length > 1 ? 's' : '');
         if (cards.length && !auto) box.style.bottom = '140px'; else box.style.bottom = '96px';
         if (!cards.length) manualOpen = false;
         box.innerHTML = cards.slice(0, 4).map(({ a, kind }) => '<div class="ac" data-id="' + esc(a.id) + '" data-enr="' + esc(a.enrId) + '" data-n="' + esc(a.contact) + '">'
