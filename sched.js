@@ -95,6 +95,38 @@
           + '<td style="text-align:right;white-space:nowrap"><button class="ib" data-a="now" title="Enviar agora">🚀</button><button class="ib" data-a="edit" title="Editar">✏️</button><button class="ib" data-a="del" title="Excluir">🗑</button></td></tr>';
       }).join('') + '</tbody></table>' + (!rep && arr.some(it => it.missedAt) ? '<div class="hint">Algum agendamento passou do horário com o computador desligado — o envio automático só acontece até 6h depois.</div>' : '');
   }
+  // v7.20: prévia de como a mensagem vai aparecer na conversa (balão verde, igual ao WhatsApp)
+  const pvCss = document.createElement('style');
+  pvCss.textContent = '#wcrm-sc .pv{margin-top:12px;border-radius:12px;padding:14px 12px;background:#0b141a url(\'data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22><circle cx=%2220%22 cy=%2220%22 r=%221%22 fill=%22%23ffffff10%22/></svg>\');border:1px solid #2a3942}'
+    + '#wcrm-sc .pv .pvt{font-size:11px;color:#8a979f;margin-bottom:8px}#wcrm-sc .pv .bb{margin-left:auto;max-width:78%;width:fit-content;background:#005c4b;color:#e9edef;border-radius:9px 0 9px 9px;padding:4px;font-size:14px;line-height:1.35;box-shadow:0 1px 1px rgba(0,0,0,.4)}'
+    + '#wcrm-sc .pv .bb img,#wcrm-sc .pv .bb video{display:block;max-width:100%;max-height:300px;border-radius:7px;margin:0 auto}#wcrm-sc .pv .bt{padding:4px 6px 0;white-space:pre-wrap;word-break:break-word}'
+    + '#wcrm-sc .pv .bm{display:flex;justify-content:flex-end;gap:4px;font-size:11px;color:#ffffff99;padding:2px 6px 2px}#wcrm-sc .pv .bm i{font-style:normal;color:#53bdeb}'
+    + '#wcrm-sc .pv .doc{display:flex;align-items:center;gap:8px;background:#0000002e;border-radius:7px;padding:10px;font-size:13px}#wcrm-sc .pv .vn{display:flex;align-items:center;gap:8px;padding:8px 10px;min-width:210px}'
+    + '#wcrm-sc .pv .vn b{flex:1;height:4px;border-radius:2px;background:repeating-linear-gradient(90deg,#ffffff88 0 2px,transparent 2px 5px)}#wcrm-sc .pv .empty{color:#8a979f;font-size:12.5px;padding:6px}';
+  document.documentElement.appendChild(pvCss);
+  function waFmt(t) {
+    let x = esc(t || '').replace(/#primeiroNome/gi, 'Nome');
+    x = x.replace(/```([\s\S]+?)```/g, '<code>$1</code>').replace(/(^|[\s(])\*([^*\n]+)\*(?=$|[\s).,!?:;])/g, '$1<b>$2</b>').replace(/(^|[\s(])_([^_\n]+)_(?=$|[\s).,!?:;])/g, '$1<i>$2</i>').replace(/(^|[\s(])~([^~\n]+)~(?=$|[\s).,!?:;])/g, '$1<s>$2</s>');
+    x = x.replace(/(https?:\/\/[^\s<]+)/g, '<span style="color:#53bdeb;text-decoration:underline">$1</span>');
+    return x;
+  }
+  function previewInner() {
+    const d = draft, m = d.media, tm = esc(d.time || '--:--');
+    const meta = '<div class="bm">' + tm + ' <i>✓✓</i></div>';
+    let inner = '';
+    if (d.kind === 'quick') return '<div class="empty">A prévia da resposta rápida aparece quando ela é enviada.</div>';
+    if (d.kind === 'audio') inner = m ? '<div class="vn">▶ <b></b><span style="font-size:11px">🎙</span></div>' : '';
+    else if (d.kind === 'media') {
+      if (m) {
+        const isImg = m.type === 'image' || /^image/.test(m.mime || ''), isVid = m.type === 'video' || /^video/.test(m.mime || '');
+        inner = isImg ? '<img src="' + m.dataUrl + '">' : isVid ? '<video src="' + m.dataUrl + '" muted></video>' : '<div class="doc">📄 <span>' + esc(m.name || 'documento') + '</span></div>';
+        if (d.text) inner += '<div class="bt">' + waFmt(d.text) + '</div>';
+      }
+    } else if (d.text) inner = '<div class="bt">' + waFmt(d.text) + '</div>';
+    if (!inner) return '<div class="empty">Escolha o arquivo ou digite a mensagem para ver a prévia.</div>';
+    return '<div class="bb">' + inner + meta + '</div>';
+  }
+  function previewHtml() { return '<div class="pv"><div class="pvt">👁 Prévia — assim vai aparecer na conversa (horário de envio ' + esc(draft.time || '') + ')</div><div id="sc-pv">' + previewInner() + '</div></div>'; }
   function formHtml() {
     const d = draft; const q = (st.msgs || []);
     const body = d.kind === 'text' ? '<label class="f">Mensagem</label><textarea id="sc-text" placeholder="Digite a mensagem… (aceita #primeiroNome)">' + esc(d.text) + '</textarea>'
@@ -111,7 +143,7 @@
     return '<div class="bd"><div class="who">Para: ' + esc(d.contact || chatName || '—') + '</div>'
       + '<label class="f">Título (opcional)</label><input type="text" id="sc-title" value="' + esc(d.title) + '" placeholder="Ex.: Cobrar retorno">'
       + '<div class="tabs"><div data-k="text" class="' + (d.kind === 'text' ? 'on' : '') + '">Criar texto</div><div data-k="media" class="' + (d.kind === 'media' ? 'on' : '') + '">Mídia</div><div data-k="audio" class="' + (d.kind === 'audio' ? 'on' : '') + '">Áudio</div><div data-k="quick" class="' + (d.kind === 'quick' ? 'on' : '') + '">Selecionar mensagem rápida</div></div>'
-      + body
+      + body + previewHtml()
       + '<div class="row2"><div><label class="f">Data</label><input type="date" id="sc-date" value="' + esc(d.date) + '"></div><div><label class="f">Hora</label><input type="time" id="sc-time" value="' + esc(d.time) + '"></div></div>'
       + '<label class="f">Recorrência</label>' + recSel + cust + days + until
       + '</div><div class="ft"><button class="sec" data-a="cancel">Cancelar</button><button class="pri" data-a="save">' + (editId ? 'Salvar' : 'Criar') + '</button></div>';
@@ -131,6 +163,8 @@
   function wireForm() {
     if (view !== 'form') return;
     root.querySelectorAll('.tabs div').forEach(t => t.addEventListener('click', () => { readForm(); const k = t.dataset.k; if (k !== draft.kind) { draft.kind = k; if (k !== 'media' && k !== 'audio') draft.media = null; else if (draft.media && ((k === 'audio') !== (draft.media.type === 'audio'))) draft.media = null; } render(); }));
+    { const upd = () => { readForm(); const pv = root.querySelector('#sc-pv'); if (pv) pv.innerHTML = previewInner(); };
+      ['#sc-text', '#sc-time'].forEach(q => { const el = root.querySelector(q); if (el) { el.addEventListener('input', upd); el.addEventListener('change', upd); } }); }
     const sel = root.querySelector('#sc-rec'); if (sel) sel.addEventListener('change', () => { readForm(); render(); });
     const un = root.querySelector('#sc-un'); if (un) un.addEventListener('change', () => { readForm(); render(); });
     root.querySelectorAll('.dchips span').forEach(c => c.addEventListener('click', () => { readForm(); const i = +c.dataset.dow; const a = draft.rec.days || (draft.rec.days = []); const k = a.indexOf(i); if (k >= 0) a.splice(k, 1); else a.push(i); render(); }));
